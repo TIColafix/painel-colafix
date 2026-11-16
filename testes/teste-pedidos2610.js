@@ -4,7 +4,8 @@ const H=require('./harness'); const {seedManut}=require('./manut-seed'); const r
 (async()=>{ const {d}=seedManut(); const D=d.docs, t=new Date().toISOString(), cp=(x=>new Date(x.getTime()-x.getTimezoneOffset()*6e4).toISOString().slice(0,7))(new Date());
  D['chamados/os-00011']={numero:11,linha:'Linha 2',equip:'Ensacadeira',defeito:'x',impacto:'parou',nome:'Ana',status:'Aberta',criado:t};
  D['pedmat/m1']={ordem:'5001',num:'5001',linha:'Linha 1',item:'CIM01 CIMENTO',qtd:5,um:'sc',urgente:true,status:'aberto',em:t};
- Object.assign(D['ordens/5001'],{produto:'RJ1001 - REJUNTE FLEXIVEL CINZA 5KG',ensaca:'9001'});
+ Object.assign(D['ordens/5001'],{produto:'RJ1001 - REJUNTE FLEXIVEL CINZA 5KG',ensaca:'9001',rdb:{ent:{em:t,recebidoPor:'Ana'}}});
+ Object.assign(D['ordens/5002'],{ensaca:'9002'}); /* ensacado sem rancho entregue: não avisa */
  D['entregas/eold']={ordem:'5001',num:'5001',linha:'Linha 1',em:'2026-10-20T15:00:00.000Z',por:'uDONA',qtd:100};
  D['entregas/enew']={ordem:'5001',num:'5001',linha:'Linha 1',em:t,por:'uDONA',qtd:300};
  D['pcpbase/meta']={em:t,hist:[]}; D['pcpbase/perfil']={}; D['pcpbase/vendas']={mensal:{RJ1001:{[cp]:[200,100]}}}; D['pcpbase/prev']={mes:{[cp]:{RJ1001:3000}},est:{[cp]:{RJ1001:1000}}};
@@ -15,10 +16,10 @@ const H=require('./harness'); const {seedManut}=require('./manut-seed'); const r
  let s=await sino(); ok('Sino da administradora sem o aviso da manutenção, com "Ensacado para apontar"', !/máquina parada/i.test(s)&&/Ensacado para apontar/.test(s), s.replace(/\n/g,' | ').slice(0,300));
  await p.evaluate(()=>__T.go('meudia')); await H.dorme(800); s=await p.evaluate(()=>document.getElementById('view').innerText);
  ok('Meu dia: sem "Chamado com máquina parada" nem "Material urgente"; com "Apontar o ensacado 9001"', !/máquina parada/i.test(s)&&!/Material urgente/.test(s)&&/Apontar o ensacado 9001 no sistema/.test(s), s.slice(0,500).replace(/\n/g,' | '));
- await p.evaluate(()=>__T.go('programacao')); await H.dorme(900); s=await p.evaluate(()=>(document.querySelector('.ens-c')||{}).innerText||'');
- ok('Programação: "ENSACADO PARA APONTAR" com o ensacado 9001, ordem 5001 e só o apontamento novo (300)', /ENSACADO PARA APONTAR/.test(s)&&/Ensacado 9001/.test(s)&&/ordem 5001/.test(s)&&/300 /.test(s)&&/1 apontamento/.test(s), s.replace(/\n/g,' | '));
+ await p.evaluate(()=>__T.go('programacao')); await H.dorme(900); await p.evaluate(()=>{ const c=document.querySelector('.ens-c'); if(c) c.open=true; }); await H.dorme(200); s=await p.evaluate(()=>{ const c=document.querySelector('.ens-c'); return c?c.innerText+'#'+c.querySelector('summary').getBoundingClientRect().height:''; });
+ ok('Programação: faixa fina "1 ensacado para apontar" (o almox entregou), ensacado 9001 da ordem 5001 e não o 9002 (rancho não entregue)', /1 ensacado para apontar/.test(s)&&/almox entregou/.test(s)&&/Ensacado 9001/.test(s)&&/ordem 5001/.test(s)&&/entregue hoje/.test(s)&&!/9002/.test(s)&&+s.split('#').pop()<48, s.replace(/\n/g,' | '));
  await p.click('[data-act="ens-ok"]'); await H.dorme(1200);
- const ds=await p.evaluate(()=>JSON.parse(localStorage.getItem('__srv')).docs); ok('"Apontei" grava ensAp no apontamento e o aviso some', ds['entregas/enew'].ensAp&&ds['entregas/enew'].ensAp.por==='uDONA'&&!ds['entregas/eold'].ensAp&&!(await p.$('.ens-c')), JSON.stringify(ds['entregas/enew'].ensAp));
+ const ds=await p.evaluate(()=>JSON.parse(localStorage.getItem('__srv')).docs); ok('"Apontei" grava ensAp na ordem e o aviso some', ds['ordens/5001'].ensAp&&ds['ordens/5001'].ensAp.por==='uDONA'&&!(await p.$('.ens-c')), JSON.stringify(ds['ordens/5001'].ensAp));
  await p.evaluate(()=>{ __T.S().esw.sit='todas'; __T.go('anlest'); }); await H.dorme(1500); s=await p.evaluate(()=>{ const r=document.querySelector('tr[data-c="RJ1001"]'); return r?r.innerText:''; });
  ok('Estoques: ao lado da previsão "feito 400 · tinha 1.000" (painel 400 > Focco 200)', /3\.000/.test(s)&&/feito 400 · tinha 1\.000/.test(s), s.replace(/\n/g,' | '));
  await p.evaluate(()=>__T.go('medicao')); await H.dorme(700); await p.evaluate(()=>{ const b=document.getElementById('m-salvar'); b.disabled=false; b.click(); }); await H.dorme(400);

@@ -40,7 +40,8 @@ function admNav(){ const nl=$('#navlist'); if(!nl) return; const ms=modsVis(), p
     const xs=g.ms.map(id=>por[id]).filter(Boolean); xs.forEach(m=>usados.add(m.id)); if(!xs.length) return; if(xs.length===1){ h+=um(xs[0]); return; }
     const ab=xs.some(m=>cur(m.id));
     h+=`<button class="navbtn gxn-nb gxg-gr" ${alvo(xs[0])} ${ab?'data-aberto="1"':''}>${ic(g.ic||xs[0].ic)}<span>${esc(g.g)}</span></button>`
-      +(ab?`<div class="gxg-sub">${xs.map(m=>`<button class="navbtn gxg-si" ${alvo(m)} ${cur(m.id)?'aria-current="page"':''}><span>${esc(m.nome)}</span></button>`).join('')}</div>`:''); });
+      /* 16/11 ("Inventário não está aparecendo pra mim"): os itens do grupo aparecem sempre, não só com o grupo aberto */
+      +`<div class="gxg-sub">${xs.map(m=>`<button class="navbtn gxg-si" ${alvo(m)} ${cur(m.id)?'aria-current="page"':''}><span>${esc(m.nome)}</span></button>`).join('')}</div>`; });
   ms.filter(m=>!usados.has(m.id)).forEach(m=>{ h+=um(m); });
   /* RH aberto: os grupos do RH embaixo do item (como no menu do próprio RH) */
   if(S.mod==='rh'&&!fora){ const k=h.indexOf('data-mod="rh"'); if(k>=0){ const fim=h.indexOf('</button>',k)+9, gAt=rhgDe(S.view);

@@ -23,6 +23,10 @@ const hoje=(()=>{ const d=new Date(), p=n=>String(n).padStart(2,'0'); return d.g
   await p.fill('[data-iem="pal"][data-c="90002"]','2'); await p.fill('[data-iem="av"][data-c="90002"]','11'); await H.dorme(1200);
   L=await p.evaluate(()=>Painel.emailContagem.linhas());
   ok('Paletes × múltiplo + avulsos: 2 × 60 + 11 = 131', L[1].fis===131&&L[1].fonte==='digitado', JSON.stringify(L[1]));
+  await p.fill('[data-iem="sis"][data-c="90002"]','125'); await H.dorme(1200);
+  L=await p.evaluate(()=>Painel.emailContagem.linhas());
+  ok('Sistema digitado vale no lugar do saldo do Focco (outro sistema): 125, diferença +6', L[1].sis===125&&L[1].dif===6, JSON.stringify(L[1]));
+  ok('O que foi digitado fica guardado no aparelho (volta ao recarregar)', await p.evaluate(h=>{ const g=JSON.parse(localStorage.getItem('colafix.iem.'+h)||'{}'); return g.fis&&g.fis['90002']&&g.fis['90002'].sis==='125'; },hoje));
   const tx=await p.evaluate(()=>Painel.emailContagem.texto());
   ok('Texto igual ao e-mail de sempre', /Segue a contagem na data de hoje:/.test(tx)&&/Hoje temos em estoque CIMENTO TESTE 50 KG \(90001\)\nFísico = 654 sacos\nSistema = 650 sacos\n Obs: Não encontrei a causa da divergência/.test(tx), tx);
   const u=await p.evaluate(()=>Painel.emailContagem.owa());

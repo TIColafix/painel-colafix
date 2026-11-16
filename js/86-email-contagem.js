@@ -8,11 +8,14 @@
    - Enviar: "Criar o e-mail no Outlook" (rascunho pelo login da Microsoft, como o e-mail ao financeiro dos PJ), "Abrir no Outlook"
      (Outlook na internet com o texto) ou "Copiar". O site não manda e-mail sozinho (sem servidor). Prefixo `iem`. */
 S.iem=S.iem||{fis:{},obs:{},add:'',edit:false};
+/* 16/11 ("é um outro sistema, eu que coloco a quantidade que tem no sistema"): o Sistema também é digitado; o digitado no dia fica guardado no aparelho */
+(function(){ try{ const g=JSON.parse(localStorage.getItem('colafix.iem.'+hojeStr())||'null'); if(g){ S.iem.fis=g.fis||{}; S.iem.obs=g.obs||{}; } }catch(e){} })();
+function iemGuarda(){ try{ localStorage.setItem('colafix.iem.'+hojeStr(),JSON.stringify({fis:S.iem.fis,obs:S.iem.obs})); }catch(e){} }
 function iemCfg(){ const c=(S.cfg&&S.cfg.invEmail)||{}; return {itens:Array.isArray(c.itens)?c.itens.map(String):[],para:c.para||'',cc:c.cc||'',ult:c.ult||null}; }
 const iemN=v=>(Math.round(+v||0)).toLocaleString('pt-BR');
 function iemDesc(c){ const it=(typeof itemDe==='function'&&itemDe(c))||{}; return it.descricao||((((S.anl.base||{}).itens||{}).l||{})[c]||{}).d||c; }
 function iemPal(c){ const it=(typeof itemDe==='function'&&itemDe(c))||{}; return +it.palete||0; }
-function iemSis(c){ const l=(((S.anl.base||{}).itens||{}).l||{})[c]; return l?(+l.a3||0)+(+l.a30||0):null; }
+function iemSis(c){ const t=(S.iem.fis[c]||{}).sis; if(t!==undefined&&t!=='') return +t; const l=(((S.anl.base||{}).itens||{}).l||{})[c]; return l?(+l.a3||0)+(+l.a30||0):null; }
 function iemContado(c){ /* a contagem de hoje mais recente com o item */
   let m=null; const h=hojeStr(); (typeof invdConfHoje==='function'?invdConfHoje():[]).forEach(cf=>{ if(!cf||cf.excluida||(cf.dia||String(cf.em||'').slice(0,10))!==h) return;
     const it=(cf.itens||{})[c]; if(!it) return; if(!m||String(cf.em||'')>String(m.em||'')) m={q:(+it.almox3||0)+(+it.almox30||0),em:cf.em,por:cf.porNome||cf.nomeUsuario||''}; }); return m; }
@@ -42,14 +45,14 @@ function iemCard(){ let pode=false; try{ pode=viewOk('anlinvd'); }catch(e){} if(
   const linha=x=>`<tr><td class="l"><b>${esc(x.d)}</b><small class="xf-de">${esc(x.c)}${x.pal?' · palete de '+iemN(x.pal):' · sem múltiplo de palete em Ajustes › Itens'} <a href="#" data-act="iem-tira" data-v="${esc(x.c)}">tirar</a></small></td>
     <td class="l"><div class="iem-fis"><label>Paletes<input class="txt" inputmode="numeric" data-iem="pal" data-c="${esc(x.c)}" value="${esc((X.fis[x.c]||{}).pal??'')}" placeholder="0"${x.pal?'':' disabled'}></label><label>Sacos avulsos<input class="txt" inputmode="numeric" data-iem="av" data-c="${esc(x.c)}" value="${esc((X.fis[x.c]||{}).av??'')}" placeholder="0"></label></div>
       <small class="xf-de">${x.fonte==='contagem'?'da contagem de hoje'+(x.cont.por?' · '+esc(x.cont.por):'')+(x.cont.em?' às '+new Date(x.cont.em).toTimeString().slice(0,5):'')+' (digite para trocar)':x.fonte==='digitado'?'digitado agora':'ninguém contou hoje: digite paletes e avulsos'}</small></td>
-    <td><b class="num">${x.fis==null?'—':iemN(x.fis)}</b></td><td><b class="num">${x.sis==null?'—':iemN(x.sis)}</b></td>
+    <td><b class="num">${x.fis==null?'—':iemN(x.fis)}</b></td><td><input class="txt iem-sis" inputmode="numeric" data-iem="sis" data-c="${esc(x.c)}" value="${esc((X.fis[x.c]||{}).sis??'')}" placeholder="${x.sis==null?'digite':esc(iemN(x.sis))}" aria-label="Quantidade no sistema"></td>
     <td><span class="${x.dif==null?'':x.dif<0?'cm-neg':x.dif>0?'ivd-pos':''}">${x.dif==null?'—':x.dif===0?'igual':invdS(x.dif)}</span></td>
     <td class="l"><input class="txt iem-obs" data-iem="obs" data-c="${esc(x.c)}" value="${esc(x.obs)}"></td></tr>`;
   const lista=iemTodos().filter(i=>!C.itens.includes(String(i.codigo))).slice(0,1500);
   const add=`<div class="iem-add"><input class="txt" id="iem-add" list="iem-dl" placeholder="Acrescentar item (código ou nome) e Enter" value="${esc(X.add||'')}"><datalist id="iem-dl">${lista.map(i=>`<option value="${esc(i.codigo)}">${esc(i.descricao||i.nome||'')}</option>`).join('')}</datalist><button class="btn sec" data-act="iem-addok">Acrescentar</button></div>`;
   const falta=L.filter(x=>x.fis==null).length;
   return `<section class="card cm-s iem"><div class="iem-h"><div><div class="cm-q">E-MAIL DA CONTAGEM DO DIA</div>
-     <p class="cm-r" style="margin:4px 0 0">${C.itens.length?`${C.itens.length} ${C.itens.length===1?'item':'itens'} · sistema = saldo do Focco ${sdT?'de '+esc(sdT):'(nenhum importado)'}${feito?` · <b>mandado hoje</b> às ${esc(new Date(C.ult.em).toTimeString().slice(0,5))}${C.ult.por?' por '+esc(C.ult.por):''}`:''}`:'Escolha os itens que vão no e-mail (ex.: os cimentos) e os destinatários. Depois é só conferir e mandar todo dia.'}</p></div>
+     <p class="cm-r" style="margin:4px 0 0">${C.itens.length?`${C.itens.length} ${C.itens.length===1?'item':'itens'} · sistema = o que você digita${sdT?' (sem digitar, vale o saldo do Focco de '+esc(sdT)+')':''}${feito?` · <b>mandado hoje</b> às ${esc(new Date(C.ult.em).toTimeString().slice(0,5))}${C.ult.por?' por '+esc(C.ult.por):''}`:''}`:'Escolha os itens que vão no e-mail (ex.: os cimentos) e os destinatários. Depois é só conferir e mandar todo dia.'}</p></div>
      <button class="btn sec" data-act="iem-cfg">${X.edit?'Fechar os ajustes':'Itens e destinatários'}</button></div>
    ${X.edit||!C.itens.length?`<div class="iem-aj"><label>Para<input class="txt" id="iem-para" value="${esc(C.para)}" placeholder="email1@…; email2@…"></label><label>Cópia<input class="txt" id="iem-cc" value="${esc(C.cc)}" placeholder="opcional"></label><button class="btn" data-act="iem-salva">Salvar destinatários</button></div>${add}`:''}
    ${C.itens.length?`<div class="cm-tw"><table class="cm-t iem-t"><thead><tr><th class="l">Item</th><th class="l">Paletes e avulsos</th><th>Físico</th><th>Sistema</th><th>Diferença</th><th class="l">Obs</th></tr></thead><tbody>${L.map(linha).join('')}</tbody></table></div>
@@ -61,7 +64,7 @@ function iemCard(){ let pode=false; try{ pode=viewOk('anlinvd'); }catch(e){} if(
 (function(){ const o=S.extViews&&S.extViews.anlinvd; if(!o) return; S.extViews.anlinvd=()=>{ const h=o(); const i=h.indexOf('<div class="cm">'); return i<0?h+iemCard():h.slice(0,i)+'<div class="cm">'+iemCard()+h.slice(i+16); }; })();
 NAV_EXTRA.push(()=>{ try{ if(!viewOk('anlinvd')) return []; const C=iemCfg(), d=new Date(); if(!C.itens.length||d.getDay()===0||d.getDay()===6||d.getHours()<8) return [];
   if(C.ult&&C.ult.dia===hojeStr()) return []; return [{n:'',t:'E-mail da contagem de hoje ainda não foi mandado',s:C.itens.length+' itens · Divergências do inventário',acao:'anlinvd',c:'warn'}]; }catch(e){ return []; } });
-function iemLe(){ const X=S.iem; document.querySelectorAll('[data-iem]').forEach(el=>{ const c=el.dataset.c, k=el.dataset.iem; if(k==='obs') X.obs[c]=el.value; else { X.fis[c]=X.fis[c]||{}; X.fis[c][k]=el.value.replace(/\D/g,''); } }); }
+function iemLe(){ const X=S.iem; document.querySelectorAll('[data-iem]').forEach(el=>{ const c=el.dataset.c, k=el.dataset.iem; if(k==='obs') X.obs[c]=el.value; else { X.fis[c]=X.fis[c]||{}; X.fis[c][k]=el.value.replace(/\D/g,''); } }); iemGuarda(); }
 document.addEventListener('input',ev=>{ const el=ev.target; if(!el||!el.dataset) return; if(el.id==='iem-add'){ S.iem.add=el.value; return; } if(!el.dataset.iem) return;
   iemLe(); if(el.dataset.iem==='obs') return; clearTimeout(S.iem._t); S.iem._t=setTimeout(()=>{ if(typeof rerenderSeguro==='function') rerenderSeguro(); else render(); },700); });
 document.addEventListener('keydown',ev=>{ if(ev.key==='Enter'&&ev.target&&ev.target.id==='iem-add'){ ev.preventDefault(); const b=document.querySelector('[data-act="iem-addok"]'); if(b) b.click(); } });
@@ -91,4 +94,4 @@ if(window.Painel) Painel.emailContagem={linhas:()=>iemCfg().itens.map(iemLinha),
 .iem-h{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
 .iem-aj,.iem-add{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:12px 0 0}.iem-aj label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);flex:1 1 220px}
 .iem-add input{flex:1 1 280px}.iem-t td{vertical-align:top}.iem-fis{display:flex;gap:8px}.iem-fis label{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--muted)}.iem-fis input{width:86px}
-.iem-obs{width:100%;min-width:200px}.iem-bt{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-end;margin-top:12px}`; document.head.appendChild(s); })();
+.iem-obs{width:100%;min-width:200px}.iem-sis{width:96px;text-align:right}.iem-bt{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-end;margin-top:12px}`; document.head.appendChild(s); })();

@@ -7,7 +7,7 @@ const TVN={ri:0,rt0:Date.now()};
 function tvnFonte(){ if(document.getElementById('tvn-font')) return; try{ const l=document.createElement('link'); l.id='tvn-font'; l.rel='stylesheet'; l.href='https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100,400;100,500;100,600;100,700;100,800&display=swap'; document.head.appendChild(l); }catch(e){} }
 function tvnEsc(){ return document.documentElement.getAttribute('data-theme')==='dark'||(document.body.classList.contains('tv')&&typeof tvEscuro==='function'&&tvEscuro()); }
 function tvnLogos(){ const claro=(document.querySelector('.brand img')||{}).src||'';
-  return `<img class="tvn-logo" src="${tvnEsc()?'icons/logo-colafix-escuro.png':esc(claro)}" alt="Colafix"><img class="tvn-ass" src="icons/assinatura.png" alt="Assinatura da marca">`; }
+  return `<img class="tvn-logo" src="${tvnEsc()?'icons/logo-colafix-escuro.png':esc(claro)}" alt="Colafix">`; }
 function tvnStat(v,r,c){ return `<div class="tvn-st"><b class="${c||''}">${v}</b><span>${r}</span></div>`; }
 function tvnEtq(c,t){ return `<span class="tvn-etq ${c}">${esc(t)}</span>`; }
 function tvnCab(tit,sub,stats,nota){ const h=new Date();

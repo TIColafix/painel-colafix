@@ -19,7 +19,7 @@
   a.id = 'abertura'; a.className = escuro ? 'ab-esc' : 'ab-clr'; a.setAttribute('aria-hidden', 'true');
   /* a logo da Colafix se monta: "Cola" se desenha da esquerda para a direita e o "fix" entra; o V da Lys fica pequeno, embaixo */
   a.innerHTML = '<div class="ab-c"><div class="ab-logo"><img class="ab-cola" src="icons/logo-cola.png" alt=""><img class="ab-fix" src="' + fix + '" alt=""></div>' +
-    '<div class="ab-ass"><img class="ab-v" src="icons/assinatura.png" alt=""><div class="ab-frase">Painel de Operação</div></div></div>';
+    '<div class="ab-ass"><div class="ab-frase">Painel de Operação</div></div></div>';
   document.body.appendChild(a);
   setTimeout(function () { a.classList.add('sai'); }, 2150);
   setTimeout(function () { if (a.parentNode) a.parentNode.removeChild(a); }, 2650);

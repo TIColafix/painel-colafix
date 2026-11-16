@@ -1,12 +1,12 @@
 /* Painel Colafix · 34-gestor-pdf.js (22/10)
    Relatórios do gestor (dia e mês) em PDF de verdade (jsPDF, baixa o arquivo; sem janela de impressão),
-   com a logo da Colafix e a da Lys (icons/assinatura.png), números em quadros, gráficos e tabelas. */
+   com a logo da Colafix (a da Lys saiu em 17/11/2026), números em quadros, gráficos e tabelas. */
 "use strict";
 const GPDF={W:210,H:297,M:14,cor:{pet:[20,63,84],pet2:[27,81,104],ink:[20,63,84],mut:[85,102,111],lin:[221,228,233],soft:[243,246,248],zeb:[248,250,251],ok:[60,138,99],warn:[173,132,50],crit:[181,71,63],cinza:[201,211,218],teal:[31,110,128],red:[227,49,45]}};
 let _gpImg=null;
 async function gpImgs(){ if(_gpImg) return _gpImg; const ld=src=>new Promise(res=>{ const i=new Image(); i.onload=()=>{ try{ const c=document.createElement('canvas'); c.width=i.naturalWidth; c.height=i.naturalHeight; c.getContext('2d').drawImage(i,0,0); res({d:c.toDataURL('image/png'),w:i.naturalWidth,h:i.naturalHeight}); }catch(e){ res(null); } }; i.onerror=()=>res(null); i.src=src; });
   const claro=(document.querySelector('.brand img')||{}).src||'';
-  const [esc1,lys,cl]=await Promise.all([ld('icons/logo-colafix-escuro.png'),ld('icons/assinatura.png'),claro?ld(claro):Promise.resolve(null)]);
+  const [esc1,lys,cl]=await Promise.all([ld('icons/logo-colafix-escuro.png'),Promise.resolve(null),claro?ld(claro):Promise.resolve(null)]);
   _gpImg={escuro:esc1,lys,claro:cl}; return _gpImg; }
 function gpNovo(tit,sub,img){ const J=window.jspdf&&window.jspdf.jsPDF; if(!J) throw new Error('O gerador de PDF não carregou. Confira a internet e tente de novo.');
   const doc=new J({unit:'mm',format:'a4',orientation:'portrait'}); const C=GPDF.cor, W=GPDF.W, M=GPDF.M;

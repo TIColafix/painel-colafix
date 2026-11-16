@@ -6,10 +6,10 @@ const semRobo=()=>Object.defineProperty(navigator,'webdriver',{get:()=>false}); 
 (async()=>{ fs.mkdirSync('/tmp/sh',{recursive:true}); const {d}=seedManut(x=>x);
  let B=await H.abrir({viewport:{width:1280,height:800}}); let p=B.page; await B.ctx.addInitScript(semRobo); await H.preparar(p,d);
  await p.goto(H.BASE); await H.dorme(150);
- ok('Na 1ª abertura aparece por cima de tudo, com a logo da Colafix em duas partes (Cola e fix) e o V pequeno', await p.evaluate(()=>{ const a=document.getElementById('abertura'); return !!a&&getComputedStyle(a).position==='fixed'&&!!a.querySelector('.ab-cola')&&!!a.querySelector('.ab-fix')&&!!a.querySelector('.ab-v')&&/Painel de Operação/.test(a.innerText); }));
+ ok('Na 1ª abertura aparece por cima de tudo, com a logo da Colafix em duas partes (Cola e fix) e o V pequeno', await p.evaluate(()=>{ const a=document.getElementById('abertura'); return !!a&&getComputedStyle(a).position==='fixed'&&!!a.querySelector('.ab-cola')&&!!a.querySelector('.ab-fix')&&!a.querySelector('.ab-v')&&/Painel de Operação/.test(a.innerText); }));
  ok('Não bloqueia o clique (pointer-events: none)', await p.evaluate(()=>getComputedStyle(document.getElementById('abertura')).pointerEvents==='none'));
  await H.dorme(250); const imgs=await p.evaluate(()=>[...document.querySelectorAll('#abertura img')].map(i=>i.complete&&i.naturalWidth>0));
- ok('As três imagens carregaram', imgs.length===3&&imgs.every(Boolean), JSON.stringify(imgs));
+ ok('As duas imagens da logo carregaram (sem a da Lys)', imgs.length===2&&imgs.every(Boolean), JSON.stringify(imgs));
  for(const [ms,n] of [[500,'1'],[1300,'2'],[1900,'3']]){ await H.dorme(Math.max(0,ms-(n==='1'?400:n==='2'?500:1300))); await p.screenshot({path:'/tmp/sh/abertura-'+n+'.png'}); }
  await H.dorme(1100);
  ok('Some sozinha depois da animação', await p.evaluate(()=>!document.getElementById('abertura')));

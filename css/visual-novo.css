@@ -52,6 +52,5 @@ tbody tr:hover>td{background:var(--surface-2)}
 /* 26/10 · logo no tema escuro: sem a placa branca, usa a logo com o "fix" branco.
    Só troca o desenho na tela (content); o src continua o da logo clara, que os PDFs e impressões usam. */
 :root[data-theme="dark"] .brand img:not(.assin),:root[data-theme="dark"] .mob-brand img:not(.assin){content:url(../icons/logo-colafix-escuro.png);background:none!important;padding:0!important;border-radius:0}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]) .brand img:not(.assin),:root:not([data-theme="light"]) .mob-brand img:not(.assin){content:url(../icons/logo-colafix-escuro.png);background:none!important;padding:0!important;border-radius:0}
-}
+/* 17/11: sem a troca pelo "modo escuro do aparelho": no tema Automático o painel continua claro (as cores de cima valem
+   para tudo que não é data-theme="dark"), e a logo escura sumia o "fix" no fundo branco. Só o tema Escuro troca a logo. */

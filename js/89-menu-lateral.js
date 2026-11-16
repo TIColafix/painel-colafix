@@ -30,10 +30,9 @@ document.head.insertAdjacentHTML('beforeend',`<style id="sm-css">
 @media (min-width:901px){
  body.side-min .side{width:68px;padding-left:6px;padding-right:6px}
  body.side-min .side .brand{justify-content:center;padding-left:0;padding-right:0}
- body.side-min .side .brand{flex-direction:column;gap:6px}
+ body.side-min .side .brand{flex-direction:column;gap:5px;margin:0 -6px;width:auto}
  body.side-min .side .brand>*:not(img){display:none!important}
  body.side-min .side .brand>img:not(.assin){display:block!important;width:56px;max-width:56px;height:auto;margin:0 auto}
- body.side-min .side .brand .assin{display:block!important;width:18px;height:auto;margin:0 auto}
  body.side-min .side .modulo,body.side-min .side #gxs,body.side-min .side .gxg-sub{display:none}
  body.side-min .side .navbtn{justify-content:center;padding-left:0;padding-right:0;gap:0}
  body.side-min .side .navbtn>span:not(.sm-ar),body.side-min .side .navbtn small,body.side-min .side .navbtn .badge{display:none}

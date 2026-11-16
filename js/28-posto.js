@@ -55,7 +55,7 @@ function poAbreOrdem(id){ const T=S.tt; T.hub={oid:id,cands:[id],rancho:''};
 /* ---------- desenho ---------- */
 function poCab(tit){ const T=S.tt, h=new Date(), e=cqEsc(); const logo=e?'icons/logo-colafix-escuro.png':((document.querySelector('.brand img')||{}).src||'');
   const quem=T.p?`<div class="cq-pe"><span>${esc(String(T.p.nome||'?')[0])}</span><div><b>${esc(T.p.nome)}</b><small>${T.p.papel==='tecnico'?'Técnico da manutenção':(T.p.semCracha?'sem crachá':'Operador'+(T.p.linha&&T.p.linha!=='*'?' · '+esc(T.p.linha):''))}</small></div></div>`:'';
-  return `<header class="cq-cab"><img class="cq-logo" src="${esc(logo)}" alt="Colafix"><img class="cq-ass" src="icons/assinatura.png" alt="Assinatura da marca"><i class="cq-sep"></i><div class="cq-tt">${esc(tit)}</div><div class="cq-dir">${quem}<div class="cq-clk" data-rtv-clk>${pad(h.getHours())}:${pad(h.getMinutes())}</div></div></header>`; }
+  return `<header class="cq-cab"><img class="cq-logo" src="${esc(logo)}" alt="Colafix"><i class="cq-sep"></i><div class="cq-tt">${esc(tit)}</div><div class="cq-dir">${quem}<div class="cq-clk" data-rtv-clk>${pad(h.getHours())}:${pad(h.getMinutes())}</div></div></header>`; }
 function poPagina(tit,corpo){ return `<div class="cq po${cqEsc()?' esc':''}">${poCab(tit)}<main class="cq-main">${corpo}</main></div>`; }
 const poMsg=()=>S.tt.msg?`<div class="cq-msg" role="alert">${esc(S.tt.msg)}</div>`:'';
 function poRod(txt,act,lab){ return `<div class="cq-rod"><span>${txt}</span><button class="cq-sec" data-act="${act||'po-volta'}">${lab||'Voltar (Esc)'}</button></div>`; }

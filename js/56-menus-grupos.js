@@ -48,7 +48,8 @@ function admNav(){ const nl=$('#navlist'); if(!nl) return; const ms=modsVis(), p
     const sub=RHG.map(g=>{ const v=g.vs?((g.vs.find(t=>sbOk(t[0]))||[])[0]):g.v; if(!v||!sbOk(v)) return ''; const nome=g.g||(VIEWS[v]&&VIEWS[v].nome)||v;
       return `<button class="navbtn gxg-si" data-go="${v}" ${gAt===g?'aria-current="page"':''}><span>${esc(nome)}</span></button>`; }).join('');
     h=h.slice(0,fim)+`<div class="gxg-sub">${sub}</div>`+h.slice(fim); } }
-  nl.innerHTML=h; nl.dataset.sbg='adm'; gxsMonta(nl); }
+  /* 16/11: só troca o menu quando mudou de verdade (antes era refeito a cada dado que chegava) */
+  if(nl.__h!==h||nl.dataset.sbg!=='adm'||!nl.firstElementChild){ nl.innerHTML=h; nl.__h=h; } nl.dataset.sbg='adm'; gxsMonta(nl); }
 /* ---------------- RH ---------------- */
 /* 02/11 (Juliana): "não tem necessidade de aba terceirizados — os que o RH controla são só os PJ": a tela rhterc sai do menu (continua abrindo pelos avisos) */
 if(typeof TELA_SEM_MENU!=='undefined') TELA_SEM_MENU.rhterc=1;

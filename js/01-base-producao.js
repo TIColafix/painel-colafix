@@ -194,7 +194,7 @@ function abas(){ const m=modAtual(); if(!modDe(S.view)||mTabs(m).length<2) retur
   return `<nav class="tabs" aria-label="${esc(m.nome)}">${mTabs(m).map(v=>`<button class="tab" data-go="${v}" ${S.view===v?'aria-current="page"':''}>${ic(VIEWS[v].ic,18)}${VIEWS[v].nome}${v==='aprogramar'&&(prevAtivas().length+aProgramar().length)?` <span class="pill warn num" style="padding:1px 8px">${prevAtivas().length+aProgramar().length}</span>`:''}</button>`).join('')}</nav>`; }
 function renderNav(){
   const m=modAtual();
-  $('#navlist').innerHTML = modsVis().map(x=>`<button class="navbtn" data-mod="${x.id}" ${S.mod===x.id&&S.view!=='ajustes'&&S.view!=='itens'&&S.view!=='acessos'?'aria-current="page"':''}>${ic(x.ic)}${x.nome}</button>`).join('');
+  if(!S._navSkip) $('#navlist').innerHTML = modsVis().map(x=>`<button class="navbtn" data-mod="${x.id}" ${S.mod===x.id&&S.view!=='ajustes'&&S.view!=='itens'&&S.view!=='acessos'?'aria-current="page"':''}>${ic(x.ic)}${x.nome}</button>`).join('');
   $('#nav-ajustes').innerHTML = ic('ajuste')+'Ajustes';
   $('#mob-aj').innerHTML = ic('ajuste',22);
   acsNavAjusta();

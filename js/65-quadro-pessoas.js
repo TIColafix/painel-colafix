@@ -4,13 +4,15 @@
    - Colunas = linhas/setores (dá para criar, renomear, mudar de lugar e apagar). Começa com as linhas do painel + setores comuns.
    - Pessoas: escolhidas da lista do RH (presença do Face ID publicada pelo RH: cadastro ativo, sem CPF) ou digitadas.
    - Arrastar o nome de uma coluna para outra (ou para outra posição na mesma coluna); no celular, tocar no nome e escolher.
-   - Cada pessoa: Fica (verde) · Em dúvida (âmbar) · Sai (vermelho), e uma observação curta (ex.: "Empilhadeira").
+   - Cada pessoa: Fica (verde) · Em dúvida (âmbar) · Em espera (azul) · Não efetivo (roxo) · Sai (vermelho), e uma observação curta (ex.: "Empilhadeira").
+   - Os números do alto filtram: tocar destaca só quem está naquela situação (S.qd.fil).
    - Imprimir/PDF: "Só a distribuição" (para o mural, sem as decisões) ou "Com as decisões".
    Dados: gxquadro/atual {cols:[{id,nome,ps:[{id,n,obs,st}]}], em, por, porNome} — coleção protegida no firestore.rules
    (só a dona e quem tem a Visão do gestor; publicar as regras). */
 "use strict";
-S.qd={dados:null,sub:false,sel:null,q:'',add:null,ed:null,salv:0,drag:null,rasc:''};
-const QD_ST={fica:{t:'Fica',c:'ok'},duv:{t:'Em dúvida',c:'warn'},sai:{t:'Sai',c:'crit'}};
+S.qd={dados:null,sub:false,sel:null,q:'',add:null,ed:null,salv:0,drag:null,rasc:'',fil:''};
+/* situações (16/11/2026, pedido do Marcelo: "em espera" e "não efetivo"). i = símbolo do botão; pl = como aparece nos números e na impressão */
+const QD_ST={fica:{t:'Fica',c:'ok',i:'✓',pl:'ficam'},duv:{t:'Em dúvida',c:'warn',i:'?',pl:'em dúvida'},esp:{t:'Em espera',c:'esp',i:'◷',pl:'em espera'},nef:{t:'Não efetivo',c:'nef',i:'NE',pl:'não efetivos'},sai:{t:'Sai',c:'crit',i:'✕',pl:'saem'}};
 const QD_PADRAO=['Rejunte','Fixcol','Área líquida','Almoxarifado','Expedição','Argamassa geral','Premix','Cargas rejunte'];
 function qdId(){ return Math.random().toString(36).slice(2,9); }
 function qdPode(){ try{ return !!(S.acs&&S.acs.dono)||viewOk('gxqd'); }catch(e){ return false; } }
@@ -38,11 +40,11 @@ function qdPessoasRH(){ const ds=((S.gxPres&&S.gxPres.docs)||[]).slice().sort((a
       if(!x.s&&p.s) x.s=p.s; if(!x.e&&p.e) x.e=p.e; if(p.n.split(/\s+/).length>x.n.split(/\s+/).length) x.n=p.n; }); }
   return L.sort((a,b)=>a.n.localeCompare(b.n,'pt-BR')); }
 function qdOnde(n){ for(const c of qdD().cols){ if(c.ps.some(p=>qdMesma(p.n,n))) return c.nome; } return null; }
-function qdTot(){ const t={n:0,fica:0,duv:0,sai:0,sem:0}; qdD().cols.forEach(c=>c.ps.forEach(p=>{ t.n++; if(p.st&&t[p.st]!=null) t[p.st]++; else t.sem++; })); return t; }
+function qdTot(){ const t={n:0,fica:0,duv:0,esp:0,nef:0,sai:0,sem:0}; qdD().cols.forEach(c=>c.ps.forEach(p=>{ t.n++; if(p.st&&t[p.st]!=null) t[p.st]++; else t.sem++; })); return t; }
 function qdCard(c,p,i){ const st=QD_ST[p.st];
-  return `<div class="qd-p ${p.st?'st-'+p.st:''} ${S.qd.sel===p.id?'sel':''}" draggable="true" data-qdp="${esc(p.id)}" data-qdc="${esc(c.id)}">
-    <span class="qd-n">${i+1}</span><button class="qd-nm" data-act="qd-sel" data-v="${esc(p.id)}" title="Mover, marcar ou anotar">${esc(p.n)}${p.obs?`<small>${esc(p.obs)}</small>`:''}</button>
-    <span class="qd-sts">${Object.entries(QD_ST).map(([k,v])=>`<button class="qd-st ${v.c} ${p.st===k?'on':''}" data-act="qd-st" data-v="${esc(p.id)}" data-st="${k}" title="${v.t}" aria-label="${v.t}" aria-pressed="${p.st===k}">${k==='fica'?'✓':k==='sai'?'✕':'?'}</button>`).join('')}</span></div>`; }
+  return `<div class="qd-p ${p.st?'st-'+p.st:'st-sem'} ${S.qd.sel===p.id?'sel':''}" draggable="true" data-qdp="${esc(p.id)}" data-qdc="${esc(c.id)}">
+    <span class="qd-n">${i+1}</span><button class="qd-nm" data-act="qd-sel" data-v="${esc(p.id)}" title="Mover, marcar ou anotar">${esc(p.n)}${p.obs?`<small>${esc(p.obs)}</small>`:''}${st&&(p.st==='esp'||p.st==='nef')?`<em class="qd-tag ${st.c}">${st.t}</em>`:''}</button>
+    <span class="qd-sts">${Object.entries(QD_ST).map(([k,v])=>`<button class="qd-st ${v.c} ${p.st===k?'on':''}" data-act="qd-st" data-v="${esc(p.id)}" data-st="${k}" title="${v.t}" aria-label="${v.t}" aria-pressed="${p.st===k}">${v.i}</button>`).join('')}</span></div>`; }
 function qdSelPainel(){ const id=S.qd.sel; if(!id) return ''; let col=null,p=null; qdD().cols.forEach(c=>c.ps.forEach(x=>{ if(x.id===id){ col=c; p=x; } })); if(!p){ S.qd.sel=null; return ''; }
   return `<div class="qd-sp card"><div class="qd-sph"><div><div class="eyebrow">${esc(col.nome)}</div><h3>${esc(p.n)}</h3></div><button class="btn sec" data-act="qd-fecha">Fechar</button></div>
     <label><span>Situação</span><div class="seg">${Object.entries(QD_ST).map(([k,v])=>`<button aria-pressed="${p.st===k}" data-act="qd-st" data-v="${esc(p.id)}" data-st="${k}">${v.t}</button>`).join('')}<button aria-pressed="${!p.st}" data-act="qd-st" data-v="${esc(p.id)}" data-st="">Sem marcar</button></div></label>
@@ -58,33 +60,34 @@ function qdAddPainel(){ const cid=S.qd.add; if(!cid) return ''; const col=qdD().
     <div class="qd-rh">${rh.length?(lis.length?lis.map(p=>{ const on=qdOnde(p.n); return `<button class="qd-rp ${on?'ja':''}" data-act="qd-addrh" data-v="${esc(p.n)}"><b>${esc(p.n)}</b><small>${esc([p.s,p.e].filter(Boolean).join(' · '))}${on?` · já está em ${esc(on)}`:''}</small></button>`; }).join(''):'<div class="sub">Ninguém com esse nome no RH. Use o botão acima para pôr do jeito que digitou.</div>')
       :'<div class="sub">A lista do RH aparece quando o RH já publicou a presença do Face ID. Por enquanto, digite o nome.</div>'}</div></div>`; }
 function vGxQuadro(){ qdAssina(); try{ if(typeof gxpAssina==='function') gxpAssina(); }catch(e){} const D=qdD(), t=qdTot();
-  const k=(v,l,c)=>`<div class="qd-k ${c||''}"><b>${v}</b><span>${l}</span></div>`;
-  const cols=D.cols.map((c,ci)=>{ const sai=c.ps.filter(p=>p.st==='sai').length, fica=c.ps.filter(p=>p.st==='fica').length;
+  const k=(v,l,c,f)=>`<button class="qd-k ${c||''} ${S.qd.fil===f?'on':''}" data-act="qd-fil" data-v="${f}" aria-pressed="${S.qd.fil===f}" title="${f?'Mostrar em destaque só quem está assim (toque de novo para ver todos)':'Ver todos'}"><b>${v}</b><span>${l}</span></button>`;
+  const cols=D.cols.map((c,ci)=>{ const cnt=Object.entries(QD_ST).map(([k,v])=>{ const n=c.ps.filter(p=>p.st===k).length; return n?`<i class="qd-ci ${v.c}">${n} ${k==='fica'?'fica':k==='sai'?'sai':v.t.toLowerCase()}</i>`:''; }).join('');
     return `<section class="qd-c" data-qdcol="${esc(c.id)}"><header>${S.qd.ed===c.id?`<input class="txt qd-cn" id="qd-cn" maxlength="40" value="${esc(c.nome)}"><button class="btn" data-act="qd-cnok">OK</button>`
-      :`<button class="qd-ct" data-act="qd-ced" data-v="${esc(c.id)}" title="Renomear">${esc(c.nome)}</button><span class="qd-cc">${c.ps.length}${sai?` · <i class="t-crit">${sai} sai</i>`:''}${fica?` · <i class="t-ok">${fica} fica</i>`:''}</span>`}</header>
+      :`<button class="qd-ct" data-act="qd-ced" data-v="${esc(c.id)}" title="Renomear">${esc(c.nome)}</button><span class="qd-cc">${c.ps.length}</span>${cnt?`<div class="qd-cst">${cnt}</div>`:''}`}</header>
       <div class="qd-ps" data-qdcol="${esc(c.id)}">${c.ps.map((p,i)=>qdCard(c,p,i)).join('')||'<div class="qd-vz">Arraste alguém para cá</div>'}</div>
       <footer><button class="lnk" data-act="qd-add" data-v="${esc(c.id)}">+ Pôr pessoa</button><span style="flex:1"></span>
         <button class="lnk" data-act="qd-cesq" data-v="${esc(c.id)}" ${ci===0?'disabled':''} title="Mudar a coluna para a esquerda" aria-label="Mudar a coluna para a esquerda">‹</button><button class="lnk" data-act="qd-cdir" data-v="${esc(c.id)}" ${ci===D.cols.length-1?'disabled':''} title="Mudar a coluna para a direita" aria-label="Mudar a coluna para a direita">›</button>
         <button class="lnk t-crit" data-act="qd-cx" data-v="${esc(c.id)}">${S.qd.cx===c.id?(c.ps.length?'Tem pessoas: tire antes':'Toque de novo'):'Apagar'}</button></footer></section>`; }).join('');
   const quando=D.em?`Salvo ${dm(D.em.slice(0,10))} às ${hora(D.em)}${D.porNome?' por '+esc(D.porNome):''}`:'Ainda não salvo';
   return `${banner()}${gxCab('VISÃO DO GESTOR','Quadro de pessoas',`<button class="btn sec" data-act="qd-imp" data-v="dist">Imprimir só a distribuição</button><button class="btn" data-act="qd-imp" data-v="dec">Imprimir com as decisões</button>`)}
-    <div class="sub" style="margin:-6px 0 12px">Arraste os nomes entre as colunas, como no quadro branco. Marque quem fica (✓), quem está em dúvida (?) e quem sai (✕). Só você e a administradora veem este quadro. · <span id="qd-salvo">${quando}</span></div>
-    <div class="qd-ks">${k(t.n,'no quadro')}${k(t.fica,'ficam','ok')}${k(t.duv,'em dúvida','warn')}${k(t.sai,'saem','crit')}${k(t.sem,'sem marcar')}<span style="flex:1"></span><button class="btn sec" data-act="qd-col">+ Nova coluna</button></div>
+    <div class="sub" style="margin:-6px 0 12px">Arraste os nomes entre as colunas, como no quadro branco. Marque quem fica (✓), está em dúvida (?), está em espera (◷), não é efetivo (NE) ou sai (✕). Toque num número para destacar só aquelas pessoas. Só você e a administradora veem este quadro. · <span id="qd-salvo">${quando}</span></div>
+    <div class="qd-ks">${k(t.n,'no quadro','','')}${Object.entries(QD_ST).map(([q,v])=>k(t[q],v.pl,v.c,q)).join('')}${k(t.sem,'sem marcar','','sem')}<span style="flex:1"></span><button class="btn sec" data-act="qd-col">+ Nova coluna</button></div>
     ${qdSelPainel()}${qdAddPainel()}
-    <div class="qd-g">${cols}</div>`; }
+    ${S.qd.fil?`<div class="qd-filav">Mostrando em destaque: <b>${esc(S.qd.fil==='sem'?'Sem marcar':(QD_ST[S.qd.fil]||{}).t||'')}</b> · <button class="lnk" data-act="qd-fil" data-v="">ver todos</button></div>`:''}
+    <div class="qd-g ${S.qd.fil?'fil fil-'+esc(S.qd.fil):''}">${cols}</div>`; }
 /* ---------- impressão (janela própria, A4 deitada) ---------- */
 function qdImprimir(dec){ const D=qdD(), t=qdTot(), w=window.open('','_blank'); if(!w){ toast('O navegador bloqueou a janela de impressão. Libere pop-ups para o painel.'); return; }
   let logo=''; try{ logo=(document.querySelector('.brand img')||{}).src||''; }catch(e){}
-  const mk=p=>!dec||!p.st?'':p.st==='fica'?'<b class="f">✓ fica</b>':p.st==='sai'?'<b class="s">✕ sai</b>':'<b class="d">? dúvida</b>';
+  const mk=p=>!dec||!p.st||!QD_ST[p.st]?'':`<b class="${p.st}">${QD_ST[p.st].i} ${QD_ST[p.st].t.toLowerCase()}</b>`;
   const box=c=>`<div class="b"><h2>${esc(c.nome)} <small>${c.ps.length}</small></h2><ol>${c.ps.map(p=>`<li class="${dec&&p.st==='sai'?'x':''}"><span>${esc(p.n)}${p.obs?` <i>– ${esc(p.obs)}</i>`:''}</span>${mk(p)}</li>`).join('')||'<li class="v">—</li>'}</ol></div>`;
   w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Quadro de pessoas</title><style>
     @page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{font:11pt Arial,Helvetica,sans-serif;color:#143F54;margin:0}
     .t{display:flex;align-items:center;gap:14px;border-bottom:2px solid #143F54;padding-bottom:6px;margin-bottom:8px}.t img{height:34px}.t h1{font-size:17pt;margin:0}.t p{margin:2px 0 0;color:#5E6E77;font-size:9pt}
     .g{columns:4;column-gap:8mm}.b{break-inside:avoid;margin:0 0 6mm;border-top:3px solid #143F54;padding-top:3px}h2{font-size:12pt;margin:0 0 3px;text-transform:uppercase}h2 small{color:#5E6E77;font-weight:400}
     ol{margin:0;padding-left:20px}li{padding:2px 0;border-bottom:1px solid #E3E8EC;display:flex;justify-content:space-between;gap:6px}li i{color:#5E6E77;font-style:normal;font-size:9pt}li.v{list-style:none;color:#aaa}
-    li.x span{text-decoration:line-through;color:#8a8a8a}b{font-size:8.5pt;white-space:nowrap}.f{color:#2F6E4F}.s{color:#B5473F}.d{color:#A86A16}
+    li.x span{text-decoration:line-through;color:#8a8a8a}b{font-size:8.5pt;white-space:nowrap}.fica{color:#2F6E4F}.sai{color:#B5473F}.duv{color:#A86A16}.esp{color:#2B6A87}.nef{color:#6B4E9B}
     .r{margin-top:4mm;font-size:9pt;color:#5E6E77}</style></head><body>
-    <div class="t">${logo?`<img src="${logo}" alt="Colafix">`:''}<div><h1>Quadro de pessoas${dec?' · decisões':''}</h1><p>${t.n} pessoas · ${D.cols.length} setores${dec?` · ficam ${t.fica} · em dúvida ${t.duv} · saem ${t.sai}`:''} · ${new Date().toLocaleDateString('pt-BR')}</p></div></div>
+    <div class="t">${logo?`<img src="${logo}" alt="Colafix">`:''}<div><h1>Quadro de pessoas${dec?' · decisões':''}</h1><p>${t.n} pessoas · ${D.cols.length} setores${dec?Object.entries(QD_ST).map(([q,v])=>` · ${v.pl} ${t[q]}`).join(''):''} · ${new Date().toLocaleDateString('pt-BR')}</p></div></div>
     <div class="g">${D.cols.map(box).join('')}</div>${dec?'<div class="r">Documento interno da gestão.</div>':''}
     <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`); w.document.close(); }
 /* ---------- ações ---------- */
@@ -98,6 +101,7 @@ document.addEventListener('click',e=>{ const b=e.target.closest('[data-act^="qd-
   if(a!=='qd-tira') S.qd.tira=null; if(a!=='qd-cx') S.qd.cx=null;
   if(a==='qd-sel'){ qdLeObs(); S.qd.sel=S.qd.sel===v?null:v; S.qd.add=null; render(); return; }
   if(a==='qd-fecha'){ qdLeObs(); S.qd.sel=null; S.qd.add=null; S.qd.q=''; render(); return; }
+  if(a==='qd-fil'){ S.qd.fil=S.qd.fil===v?'':(v||''); render(); return; }
   if(a==='qd-st'){ const x=qdAcha(v); if(x){ const st=b.dataset.st||''; x.p.st=x.p.st===st&&b.closest('.qd-p')?'':st; qdGrava(); render(); } return; }
   if(a==='qd-mv'){ qdLeObs(); qdMove(S.qd.sel,v); render(); return; }
   if(a==='qd-sobe'||a==='qd-desce'){ const x=qdAcha(S.qd.sel); if(x){ const j=x.i+(a==='qd-sobe'?-1:1); if(j>=0&&j<x.c.ps.length){ x.c.ps.splice(x.i,1); x.c.ps.splice(j,0,x.p); qdGrava(); } render(); } return; }
@@ -142,8 +146,14 @@ window.Painel=window.Painel||{}; window.Painel.quadro={dados:()=>qdD(),tot:qdTot
 document.head.insertAdjacentHTML('beforeend',`<style id="qd-css">
 .qd-ks{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
 .qd-k{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 14px;min-width:96px}.qd-k b{display:block;font-size:22px}.qd-k span{font-size:12px;color:var(--muted)}
-.qd-k.ok b{color:var(--ok)}.qd-k.warn b{color:var(--warn)}.qd-k.crit b{color:var(--crit)}
-.qd-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;align-items:start}
+.qd-k{font:inherit;color:inherit;text-align:left;cursor:pointer}.qd-k:hover{border-color:var(--teal)}.qd-k.on{outline:2px solid var(--teal);border-color:var(--teal)}
+.qd-k.ok b{color:var(--ok)}.qd-k.warn b{color:var(--warn)}.qd-k.crit b{color:var(--crit)}.qd-k.esp b{color:var(--pc-info,var(--teal))}.qd-k.nef b{color:var(--qd-nef)}
+:root{--qd-nef:#6B4E9B}:root[data-theme="dark"]{--qd-nef:#B79BE0}
+.qd-filav{margin:-4px 0 10px;font-size:13px;color:var(--muted)}
+.qd-g.fil .qd-p{opacity:.28}.qd-g.fil-fica .st-fica,.qd-g.fil-duv .st-duv,.qd-g.fil-esp .st-esp,.qd-g.fil-nef .st-nef,.qd-g.fil-sai .st-sai,.qd-g.fil-sem .st-sem{opacity:1}
+.qd-c header{flex-wrap:wrap}.qd-cst{flex-basis:100%;display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11.5px}.qd-ci{font-style:normal}.qd-ci.ok{color:var(--ok)}.qd-ci.warn{color:var(--warn)}.qd-ci.crit{color:var(--crit)}.qd-ci.esp{color:var(--pc-info,var(--teal))}.qd-ci.nef{color:var(--qd-nef)}
+.qd-tag{display:inline-block;margin-top:2px;font-style:normal;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:999px}.qd-tag.esp{background:var(--pc-info-bg,var(--teal-tint));color:var(--pc-info,var(--teal))}.qd-tag.nef{background:color-mix(in srgb,var(--qd-nef) 14%,transparent);color:var(--qd-nef)}
+.qd-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;align-items:start}
 .qd-c{background:var(--surface);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-height:120px}
 .qd-c header{display:flex;align-items:center;gap:6px;padding:10px 12px 6px;border-bottom:2px solid var(--teal-strong,#143F54)}
 .qd-ct{background:none;border:0;padding:0;font:inherit;font-weight:700;font-size:15px;color:var(--ink,#143F54);text-transform:uppercase;cursor:pointer;text-align:left;flex:1}
@@ -153,13 +163,13 @@ document.head.insertAdjacentHTML('beforeend',`<style id="qd-css">
 .qd-vz{color:var(--muted);font-size:12px;text-align:center;padding:12px 4px;border:1px dashed var(--line);border-radius:8px}
 .qd-p{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:8px;border:1px solid var(--line);background:var(--ground);cursor:grab;border-left:4px solid transparent}
 .qd-p.drag{opacity:.4}.qd-p.sel{outline:2px solid var(--teal)}
-.qd-p.st-fica{border-left-color:var(--ok)}.qd-p.st-duv{border-left-color:var(--warn)}.qd-p.st-sai{border-left-color:var(--crit)}
+.qd-p.st-fica{border-left-color:var(--ok)}.qd-p.st-duv{border-left-color:var(--warn)}.qd-p.st-sai{border-left-color:var(--crit)}.qd-p.st-esp{border-left-color:var(--pc-info,var(--teal))}.qd-p.st-nef{border-left-color:var(--qd-nef)}
 .qd-p.st-sai .qd-nm{text-decoration:line-through;color:var(--muted)}
 .qd-n{font-size:12px;color:var(--muted);width:16px;text-align:right}
 .qd-nm{flex:1;min-width:0;background:none;border:0;padding:2px 0;font:inherit;text-align:left;cursor:pointer;color:inherit;font-weight:500}
 .qd-nm small{display:block;color:var(--muted);font-size:11px;font-weight:400}
-.qd-sts{display:flex;gap:2px}.qd-st{width:24px;height:24px;border-radius:6px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:12px;line-height:1;color:var(--muted);padding:0}
-.qd-st.ok.on{background:var(--ok);border-color:var(--ok);color:#fff}.qd-st.warn.on{background:var(--warn);border-color:var(--warn);color:#fff}.qd-st.crit.on{background:var(--crit);border-color:var(--crit);color:#fff}
+.qd-sts{display:flex;gap:2px;flex:none}.qd-st{width:22px;height:24px;border-radius:6px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:12px;line-height:1;color:var(--muted);padding:0}
+.qd-st.ok.on{background:var(--ok);border-color:var(--ok);color:#fff}.qd-st.warn.on{background:var(--warn);border-color:var(--warn);color:#fff}.qd-st.crit.on{background:var(--crit);border-color:var(--crit);color:#fff}.qd-st.esp.on{background:var(--pc-info,var(--teal));border-color:var(--pc-info,var(--teal));color:#fff}.qd-st.nef{font-size:9.5px;font-weight:700}.qd-st.nef.on{background:var(--qd-nef);border-color:var(--qd-nef);color:#fff}
 .qd-ins{height:3px;background:var(--teal);border-radius:2px}
 .qd-c footer{display:flex;align-items:center;gap:8px;padding:6px 10px 8px;border-top:1px solid var(--line);font-size:13px}
 .qd-sp{position:fixed;top:72px;right:16px;bottom:16px;width:min(400px,calc(100vw - 32px));z-index:60;display:flex;flex-direction:column;gap:12px;overflow:auto;box-shadow:0 12px 40px rgba(20,63,84,.22)}.qd-sph{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.qd-sph h3{margin:2px 0 0}

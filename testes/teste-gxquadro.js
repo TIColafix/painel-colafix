@@ -47,8 +47,20 @@ const H=require('./harness'); const {seedManut}=require('./manut-seed'); const r
  await H.dorme(1200);
  s=await p.evaluate(()=>window.__mockDocs?null:null); const salvo=await p.evaluate(async()=>{ const x=await Painel.db().collection('gxquadro').doc('atual').get(); return x.exists?x.data():null; });
  ok('Quadro salvo em gxquadro/atual', !!salvo&&salvo.cols.some(c=>c.ps.some(x=>x.n==='ANA TESTE PRIMEIRA'&&x.st==='sai'&&x.obs==='Empilhadeira')), JSON.stringify(salvo&&salvo.cols.slice(0,2)));
+ // situações novas (16/11): em espera e não efetivo
+ { const ids=await p.evaluate(()=>[...document.querySelectorAll('.qd-p')].slice(0,2).map(e=>e.dataset.qdp));
+   await p.click(`.qd-p[data-qdp="${ids[0]}"] [data-act="qd-st"][data-st="esp"]`); await H.dorme(400);
+   await p.click(`.qd-p[data-qdp="${ids[1]}"] [data-act="qd-st"][data-st="nef"]`); await H.dorme(400);
+   const r=await p.evaluate(ids=>({t:window.Painel.quadro.tot(),tag:(document.querySelector(`.qd-p[data-qdp="${ids[0]}"] .qd-tag`)||{}).textContent,k:[...document.querySelectorAll('.qd-k')].map(e=>e.innerText.replace(/\s+/g,' ')).join('|')}),ids);
+   ok('Marca "Em espera" e "Não efetivo" (selo no cartão e nos números)', r.t.esp===1&&r.t.nef===1&&r.tag==='Em espera'&&/em espera/.test(r.k)&&/não efetivos/.test(r.k), JSON.stringify(r));
+   await p.click('.qd-k[data-v="esp"]'); await H.dorme(300);
+   const f=await p.evaluate(ids=>({g:document.querySelector('.qd-g').className,op:[...document.querySelectorAll('.qd-p')].map(e=>getComputedStyle(e).opacity)}),ids);
+   ok('Tocar no número destaca só quem está em espera', /fil-esp/.test(f.g)&&f.op.filter(o=>o==='1').length===1, JSON.stringify(f));
+   await p.click('.qd-k[data-v="esp"]'); await H.dorme(300);
+   ok('Tocar de novo volta a mostrar todos', !(await p.evaluate(()=>/fil/.test(document.querySelector('.qd-g').className))));
+   await H.dorme(800); }
  // imprimir
  for(const [v,dec] of [['dist',false],['dec',true]]){ const [pop]=await Promise.all([p.waitForEvent('popup'),p.click(`[data-act="qd-imp"][data-v="${v}"]`)]); await pop.waitForLoadState(); await H.dorme(300);
-   const t=await pop.evaluate(()=>document.body.innerText); ok('Imprimir '+(dec?'com as decisões':'só a distribuição'), /ANA TESTE PRIMEIRA/.test(t)&&(dec?/sai/.test(t):!/✕ sai|fica|dúvida/.test(t)), t.slice(0,200)); await pop.close(); }
+   const t=await pop.evaluate(()=>document.body.innerText); ok('Imprimir '+(dec?'com as decisões':'só a distribuição'), /ANA TESTE PRIMEIRA/.test(t)&&(dec?/◷ em espera/.test(t)&&/NE não efetivo/.test(t):!/✕ sai|fica|dúvida/.test(t)), t.slice(0,200)); await pop.close(); }
  ok('Sem erros no console', !erros.length, erros.join(' | '));
  console.log(res.every(r=>r.ok)?'PASSOU tudo ('+res.length+')':'FALHOU ('+res.filter(r=>!r.ok).length+')'); await B.browser.close(); process.exit(0); })().catch(e=>{ console.error('ERRO',e); process.exit(1); });

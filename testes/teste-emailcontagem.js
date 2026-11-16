@@ -20,6 +20,9 @@ const hoje=(()=>{ const d=new Date(), p=n=>String(n).padStart(2,'0'); return d.g
   let L=await p.evaluate(()=>Painel.emailContagem.linhas());
   ok('Físico do 1º item vem da contagem de hoje (654) e o sistema do Focco (650)', L[0].fis===654&&L[0].sis===650&&L[0].fonte==='contagem'&&/Não encontrei a causa/.test(L[0].obs), JSON.stringify(L[0]));
   ok('2º item sem contagem: físico em branco, sistema = Almox 3 + 30 (123)', L[1].fis==null&&L[1].sis===123, JSON.stringify(L[1]));
+  await p.click('[data-iem="av"][data-c="90002"]'); await p.keyboard.type('26'); await H.dorme(150);
+  ok('Físico soma na hora, ainda com o cursor no campo (26 avulsos = 26)', await p.evaluate(()=>{ const e=document.querySelector('[data-iem-fis="90002"]'); return e&&e.textContent.trim()==='26'&&document.activeElement&&document.activeElement.dataset.iem==='av'; }), await p.evaluate(()=>(document.querySelector('[data-iem-fis="90002"]')||{}).textContent));
+  await p.fill('[data-iem="av"][data-c="90002"]','');
   await p.fill('[data-iem="pal"][data-c="90002"]','2'); await p.fill('[data-iem="av"][data-c="90002"]','11'); await H.dorme(1200);
   L=await p.evaluate(()=>Painel.emailContagem.linhas());
   ok('Paletes × múltiplo + avulsos: 2 × 60 + 11 = 131', L[1].fis===131&&L[1].fonte==='digitado', JSON.stringify(L[1]));

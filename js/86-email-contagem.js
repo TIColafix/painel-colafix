@@ -45,8 +45,8 @@ function iemCard(){ let pode=false; try{ pode=viewOk('anlinvd'); }catch(e){} if(
   const linha=x=>`<tr><td class="l"><b>${esc(x.d)}</b><small class="xf-de">${esc(x.c)}${x.pal?' · palete de '+iemN(x.pal):' · sem múltiplo de palete em Ajustes › Itens'} <a href="#" data-act="iem-tira" data-v="${esc(x.c)}">tirar</a></small></td>
     <td class="l"><div class="iem-fis"><label>Paletes<input class="txt" inputmode="numeric" data-iem="pal" data-c="${esc(x.c)}" value="${esc((X.fis[x.c]||{}).pal??'')}" placeholder="0"${x.pal?'':' disabled'}></label><label>Sacos avulsos<input class="txt" inputmode="numeric" data-iem="av" data-c="${esc(x.c)}" value="${esc((X.fis[x.c]||{}).av??'')}" placeholder="0"></label></div>
       <small class="xf-de">${x.fonte==='contagem'?'da contagem de hoje'+(x.cont.por?' · '+esc(x.cont.por):'')+(x.cont.em?' às '+new Date(x.cont.em).toTimeString().slice(0,5):'')+' (digite para trocar)':x.fonte==='digitado'?'digitado agora':'ninguém contou hoje: digite paletes e avulsos'}</small></td>
-    <td><b class="num">${x.fis==null?'—':iemN(x.fis)}</b></td><td><input class="txt iem-sis" inputmode="numeric" data-iem="sis" data-c="${esc(x.c)}" value="${esc((X.fis[x.c]||{}).sis??'')}" placeholder="${x.sis==null?'digite':esc(iemN(x.sis))}" aria-label="Quantidade no sistema"></td>
-    <td><span class="${x.dif==null?'':x.dif<0?'cm-neg':x.dif>0?'ivd-pos':''}">${x.dif==null?'—':x.dif===0?'igual':invdS(x.dif)}</span></td>
+    <td><b class="num" data-iem-fis="${esc(x.c)}">${x.fis==null?'—':iemN(x.fis)}</b></td><td><input class="txt iem-sis" inputmode="numeric" data-iem="sis" data-c="${esc(x.c)}" value="${esc((X.fis[x.c]||{}).sis??'')}" placeholder="${x.sis==null?'digite':esc(iemN(x.sis))}" aria-label="Quantidade no sistema"></td>
+    <td><span data-iem-dif="${esc(x.c)}" class="${x.dif==null?'':x.dif<0?'cm-neg':x.dif>0?'ivd-pos':''}">${x.dif==null?'—':x.dif===0?'igual':invdS(x.dif)}</span></td>
     <td class="l"><input class="txt iem-obs" data-iem="obs" data-c="${esc(x.c)}" value="${esc(x.obs)}"></td></tr>`;
   const lista=iemTodos().filter(i=>!C.itens.includes(String(i.codigo))).slice(0,1500);
   const add=`<div class="iem-add"><input class="txt" id="iem-add" list="iem-dl" placeholder="Acrescentar item (código ou nome) e Enter" value="${esc(X.add||'')}"><datalist id="iem-dl">${lista.map(i=>`<option value="${esc(i.codigo)}">${esc(i.descricao||i.nome||'')}</option>`).join('')}</datalist><button class="btn sec" data-act="iem-addok">Acrescentar</button></div>`;
@@ -64,9 +64,13 @@ function iemCard(){ let pode=false; try{ pode=viewOk('anlinvd'); }catch(e){} if(
 (function(){ const o=S.extViews&&S.extViews.anlinvd; if(!o) return; S.extViews.anlinvd=()=>{ const h=o(); const i=h.indexOf('<div class="cm">'); return i<0?h+iemCard():h.slice(0,i)+'<div class="cm">'+iemCard()+h.slice(i+16); }; })();
 NAV_EXTRA.push(()=>{ try{ if(!viewOk('anlinvd')) return []; const C=iemCfg(), d=new Date(); if(!C.itens.length||d.getDay()===0||d.getDay()===6||d.getHours()<8) return [];
   if(C.ult&&C.ult.dia===hojeStr()) return []; return [{n:'',t:'E-mail da contagem de hoje ainda não foi mandado',s:C.itens.length+' itens · Divergências do inventário',acao:'anlinvd',c:'warn'}]; }catch(e){ return []; } });
+/* soma na hora, sem esperar sair do campo */
+function iemConta(c){ try{ const x=iemLinha(c), q=v=>[...document.querySelectorAll('['+v+']')].find(e=>e.getAttribute(v)===c);
+  const f=q('data-iem-fis'); if(f) f.textContent=x.fis==null?'—':iemN(x.fis);
+  const d=q('data-iem-dif'); if(d){ d.textContent=x.dif==null?'—':x.dif===0?'igual':invdS(x.dif); d.className=x.dif==null?'':x.dif<0?'cm-neg':x.dif>0?'ivd-pos':''; } }catch(e){} }
 function iemLe(){ const X=S.iem; document.querySelectorAll('[data-iem]').forEach(el=>{ const c=el.dataset.c, k=el.dataset.iem; if(k==='obs') X.obs[c]=el.value; else { X.fis[c]=X.fis[c]||{}; X.fis[c][k]=el.value.replace(/\D/g,''); } }); iemGuarda(); }
 document.addEventListener('input',ev=>{ const el=ev.target; if(!el||!el.dataset) return; if(el.id==='iem-add'){ S.iem.add=el.value; return; } if(!el.dataset.iem) return;
-  iemLe(); if(el.dataset.iem==='obs') return; clearTimeout(S.iem._t); S.iem._t=setTimeout(()=>{ if(typeof rerenderSeguro==='function') rerenderSeguro(); else render(); },700); });
+  iemLe(); if(el.dataset.iem==='obs') return; iemConta(el.dataset.c); clearTimeout(S.iem._t); S.iem._t=setTimeout(()=>{ if(typeof rerenderSeguro==='function') rerenderSeguro(); else render(); },700); });
 document.addEventListener('keydown',ev=>{ if(ev.key==='Enter'&&ev.target&&ev.target.id==='iem-add'){ ev.preventDefault(); const b=document.querySelector('[data-act="iem-addok"]'); if(b) b.click(); } });
 function iemTodos(){ const m={}; (S.itens||[]).filter(i=>i.ativo!==false).forEach(i=>{ const c=String(i.codigo||i._id||''); if(c) m[c]={codigo:c,descricao:i.descricao||''}; });
   const l=(((S.anl.base||{}).itens||{}).l)||{}; for(const c in l) if(!m[c]) m[c]={codigo:c,descricao:l[c].d||''}; return Object.values(m).sort((a,b)=>a.codigo.localeCompare(b.codigo)); }

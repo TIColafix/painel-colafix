@@ -3,7 +3,7 @@
      de base não é desenhado só para ser trocado em seguida (`S._navSkip`) e o menu em grupos só é trocado quando muda (js/56).
    - Abrir o painel: o último menu deste aparelho aparece na hora (`localStorage colafix.navCache`, só os nomes das telas),
      enquanto o acesso carrega; some quando o menu de verdade é desenhado.
-   - Recolher: botão no pé da lateral (`#side-min`); recolhida, a lateral fica só com os ícones (64 px) e o nome aparece ao passar o mouse.
+   - Recolher: botão no pé da lateral (`#side-min`); recolhida, a lateral fica com a logo da Colafix (pequena) e só os ícones (68 px) e o nome aparece ao passar o mouse.
      Lembrado no aparelho (`localStorage colafix.sideMin`). Prefixo `sm-`. */
 const SM_KEY='colafix.sideMin', NC_KEY='colafix.navCache';
 function smLer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
@@ -28,10 +28,12 @@ document.head.insertAdjacentHTML('beforeend',`<style id="sm-css">
 .side .sm-bt{flex-shrink:0;color:rgba(255,255,255,.62);font-size:12.5px;margin-top:2px}.side .sm-bt:hover{color:#fff}
 .sm-ar{display:inline-flex;width:20px;justify-content:center;font-size:16px;line-height:1}
 @media (min-width:901px){
- body.side-min .side{width:68px;padding-left:8px;padding-right:8px}
+ body.side-min .side{width:68px;padding-left:6px;padding-right:6px}
  body.side-min .side .brand{justify-content:center;padding-left:0;padding-right:0}
- body.side-min .side .brand>*:not(.assin){display:none!important}
- body.side-min .side .brand .assin{display:block!important;width:30px;height:auto;margin:0 auto}
+ body.side-min .side .brand{flex-direction:column;gap:6px}
+ body.side-min .side .brand>*:not(img){display:none!important}
+ body.side-min .side .brand>img:not(.assin){display:block!important;width:56px;max-width:56px;height:auto;margin:0 auto}
+ body.side-min .side .brand .assin{display:block!important;width:18px;height:auto;margin:0 auto}
  body.side-min .side .modulo,body.side-min .side #gxs,body.side-min .side .gxg-sub{display:none}
  body.side-min .side .navbtn{justify-content:center;padding-left:0;padding-right:0;gap:0}
  body.side-min .side .navbtn>span:not(.sm-ar),body.side-min .side .navbtn small,body.side-min .side .navbtn .badge{display:none}

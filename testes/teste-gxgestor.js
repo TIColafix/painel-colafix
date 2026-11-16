@@ -1,3 +1,4 @@
+process.env.DATA = process.env.DATA || '2026-11-17'; /* depende do dia (feriado, dia útil, fim de semana): roda sempre como se fosse 2026-11-17 */
 /* Login do gestor (js/29-gestor.js): Início, Produção, Relatório do dia/mês (toneladas e meta da Curva S),
    segurança, plano de ação, turnos, calendário de preventivas e PDF. */
 const H=require('./harness'); const {seedManut}=require('./manut-seed'); const res=[]; const ok=(n,c,d)=>{ res.push({n,ok:!!c}); console.log((c?'PASSOU ':'FALHOU ')+n+(d?' — '+String(d).slice(0,300):'')); };

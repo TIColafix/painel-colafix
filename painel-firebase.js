@@ -223,10 +223,11 @@
       <label for="lg-s">SENHA</label><div class="lg-in"><input id="lg-s" type="password" autocomplete="${pri ? 'new-password' : 'current-password'}" required minlength="${pri ? 8 : 6}" style="padding-right:76px"><button type="button" class="lg-olho" id="lg-o" aria-label="Mostrar senha">Mostrar</button></div>
       <div class="er" id="lg-er" role="alert"></div><button type="submit" class="lg-go">${pri ? 'Criar e entrar' : 'Entrar'}</button>
       ${instalarPossivel() ? '<button type="button" class="lg-inst" id="lg-inst">⤓ Instalar o app neste aparelho</button>' : ''}
-      <div class="rw"><span class="lk" style="cursor:default;text-decoration:none"></span><button type="button" class="lk" id="lg-t">${pri ? 'Voltar' : 'Primeiro acesso'}</button></div>
+      <div class="rw">${pri ? '<span></span>' : '<button type="button" class="lk" id="lg-esq">Esqueci a senha</button>'}<button type="button" class="lk" id="lg-t">${pri ? 'Voltar' : 'Primeiro acesso'}</button></div>
       <div class="lg-pe">Colafix · Produção · PCP · Almoxarifado · Manutenção</div></form></div>`;
     const f = el.querySelector('form'), er = el.querySelector('#lg-er');
     el.querySelector('#lg-t').onclick = () => telaEntrar(pri ? 'entrar' : 'primeiro');
+    { const bq = el.querySelector('#lg-esq'); if (bq) bq.onclick = () => telaEsqueci(el.querySelector('#lg-e').value); }
     el.querySelector('#lg-o').onclick = () => { const i = el.querySelector('#lg-s'), o = el.querySelector('#lg-o'); const v = i.type === 'password'; i.type = v ? 'text' : 'password'; o.textContent = v ? 'Ocultar' : 'Mostrar'; i.focus(); };
     const bi = el.querySelector('#lg-inst'); if (bi) bi.onclick = instalar;
     f.onsubmit = async ev => { ev.preventDefault(); const b = f.querySelector('button[type=submit]'); b.disabled = true; b.textContent = 'Entrando…'; er.textContent = '';
@@ -245,6 +246,80 @@
     setTimeout(() => { const i = el.querySelector('input'); i && i.focus(); }, 50);
     if (!logo) document.addEventListener('DOMContentLoaded', () => { const src = (document.querySelector('.brand img') || {}).src, bx = el.querySelector('.bx'); if (src && bx && !bx.querySelector('.lg-logo')) { const im = document.createElement('img'); im.className = 'lg-logo'; im.src = src; im.alt = 'Colafix'; bx.prepend(im); } }, { once: true });
   }
+  /* ---------- esqueci a senha (16/11/2026) ----------
+     Os usuários do painel não têm e-mail de verdade (usuario@painel-colafix.app), então o "mandar e-mail" do Firebase não serve.
+     Dois caminhos: (1) quem ligou a conta Google (menu do nome › "Ligar minha conta Google") entra pelo Google e cria uma senha nova;
+     (2) quem não ligou manda um pedido para a administradora (pedsenha/), que recria o login mantendo o cargo (Equipe e cargos). */
+  let recuperando = false, descartado = '';
+  const GSVG = '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C36.9 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
+  const msgGoogle = e => { const c = (e && e.code) || '';
+    return c === 'auth/operation-not-allowed' ? 'O login com Google ainda não foi ligado no Firebase. Peça para a administradora (Firebase › Authentication › Sign-in method › Google).'
+      : c === 'auth/unauthorized-domain' ? 'Este endereço do painel não está autorizado no Firebase (Authentication › Settings › Domínios autorizados). Avise a administradora.'
+      : c === 'auth/popup-blocked' ? 'O navegador bloqueou a janela do Google. Libere as janelas deste site e tente de novo.'
+      : c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request' ? 'A janela do Google foi fechada antes de terminar.'
+      : c === 'auth/credential-already-in-use' || c === 'auth/provider-already-linked' ? 'Essa conta Google já está ligada a outro usuário do painel.'
+      : c === 'auth/network-request-failed' ? 'Sem internet. Confira a conexão e tente de novo.' : 'Não deu certo (' + (c || 'erro') + ').'; };
+  function telaEsqueci(usu) {
+    let el = document.getElementById('lg'); if (!el) return telaEntrar('entrar');
+    const logo = (document.querySelector('.brand img') || {}).src || '';
+    el.innerHTML = `<div class="lg-wrap"><div class="bx">${logo ? `<img class="lg-logo" src="${logo}" alt="Colafix">` : ''}<h1>Esqueci a senha</h1><div class="lg-sub">Escolha um dos dois jeitos.</div>
+      <label>1 · SE VOCÊ LIGOU SUA CONTA GOOGLE</label>
+      <button type="button" class="lg-inst" id="lg-goo" style="margin:0 0 6px">${GSVG}<span>Entrar com a conta Google</span></button>
+      <div class="lg-sub" style="margin:0 0 18px;text-align:left">Depois de entrar, o painel pede uma senha nova. Para ligar: entre no painel, toque no seu nome no alto › "Ligar minha conta Google".</div>
+      <label>2 · PEDIR AJUDA À ADMINISTRADORA</label>
+      <form id="lg-ps" autocomplete="off"><div class="lg-in"><input id="lg-psu" placeholder="Seu usuário (ex.: joao.silva)" autocapitalize="none" spellcheck="false" required maxlength="40" value="${esc(usu || '')}"></div>
+      <div class="lg-in"><input id="lg-psn" placeholder="Seu nome" required maxlength="60" autocomplete="name"></div>
+      <div class="lg-in"><input id="lg-psc" placeholder="WhatsApp ou ramal para falarem com você (opcional)" maxlength="60"></div>
+      <div class="er" id="lg-er" role="alert"></div><button type="submit" class="lg-go" style="width:100%">Enviar pedido</button></form>
+      <div class="rw"><span></span><button type="button" class="lk" id="lg-vol">Voltar para entrar</button></div><div class="lg-pe">Colafix · Painel de Operação</div></div></div>`;
+    const er = el.querySelector('#lg-er');
+    el.querySelector('#lg-vol').onclick = () => telaEntrar('entrar');
+    el.querySelector('#lg-goo').onclick = async () => { const b = el.querySelector('#lg-goo'); b.disabled = true; er.textContent = '';
+      recuperando = true;
+      try { const r = await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+        if (r && r.additionalUserInfo && r.additionalUserInfo.isNewUser) { /* conta Google que não é de ninguém: o Firebase acabou de criar um usuário à toa → apaga */
+          const g = (r.user && r.user.email) || 'essa conta'; descartado = (r.user && r.user.uid) || '';
+          try { await r.user.delete(); } catch (x) {} try { await auth.signOut(); } catch (y) {}
+          er.textContent = 'A conta Google ' + g + ' não está ligada a nenhum usuário do painel. Use o pedido à administradora, aqui embaixo.'; b.disabled = false; recuperando = false; return; }
+        try { sessionStorage.setItem('colafix.novaSenha', '1'); } catch (x) {}
+        location.reload(); /* entra normalmente, como o próprio usuário, e o painel pede a senha nova */ }
+      catch (e) { recuperando = false; b.disabled = false; er.textContent = msgGoogle(e); } };
+    el.querySelector('#lg-ps').onsubmit = async ev => { ev.preventDefault(); const b = ev.target.querySelector('button[type=submit]'); er.textContent = '';
+      const u = usuarioLimpo(el.querySelector('#lg-psu').value), n = el.querySelector('#lg-psn').value.trim().slice(0, 60), c = el.querySelector('#lg-psc').value.trim().slice(0, 60);
+      if (!u) { er.textContent = 'Escreva o seu usuário.'; return; } if (n.length < 2) { er.textContent = 'Escreva o seu nome.'; return; }
+      let ult = 0; try { ult = +localStorage.getItem('colafix.pedsenha') || 0; } catch (x) {}
+      if (Date.now() - ult < 10 * 60000) { er.textContent = 'Seu pedido já foi enviado há pouco. A administradora vai falar com você.'; return; }
+      b.disabled = true; b.textContent = 'Enviando…';
+      try { await entrarAnonimo(); const id = 'ps-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        await fs.doc('pedsenha/' + id).set({ usuario: u.slice(0, 40), nome: n, contato: c, em: new Date().toISOString(), status: 'aberto' });
+        try { localStorage.setItem('colafix.pedsenha', String(Date.now())); } catch (x) {}
+        try { if (auth.currentUser && auth.currentUser.isAnonymous) await auth.signOut(); } catch (x) {}
+        el.querySelector('.bx').innerHTML = `${logo ? `<img class="lg-logo" src="${logo}" alt="Colafix">` : ''}<h1>Pedido enviado</h1><div class="lg-sub" style="margin-bottom:18px">A administradora recebeu o pedido de <b>${esc(n)}</b> (usuário <b>${esc(u)}</b>). Ela cria uma senha nova e passa para você. Seu cargo e seus acessos continuam os mesmos.</div><button type="button" class="lg-go" id="lg-vol2">Voltar para entrar</button>`;
+        el.querySelector('#lg-vol2').onclick = () => telaEntrar('entrar'); }
+      catch (e) { b.disabled = false; b.textContent = 'Enviar pedido'; er.textContent = e && /network|unavailable/.test(e.code || '') ? 'Sem internet. Confira a conexão e tente de novo.' : 'Não foi possível enviar agora (' + ((e && e.code) || 'erro') + '). Fale direto com a administradora.'; } };
+  }
+  /* depois de entrar pelo Google: pedir a senha nova */
+  function novaSenha() { modal(`<h2>Crie uma senha nova</h2><p>Você entrou pela conta Google. Usuário <b>${usuarioDe(EU.email)}</b>. Da próxima vez entre com esta senha.</p><label>SENHA NOVA</label><input type="password" id="ns-n" required minlength="8" autocomplete="new-password"><label>REPITA A SENHA</label><input type="password" id="ns-r" required minlength="8" autocomplete="new-password"><div class="er" id="ns-er"></div><div class="rw"><button type="button" id="ns-x">Agora não</button><button class="p">Salvar senha</button></div>`, f => {
+      f.querySelector('#ns-x').onclick = fecharModal;
+      f.onsubmit = async ev => { ev.preventDefault(); const er = f.querySelector('#ns-er'), b = f.querySelector('.p'), a = f.querySelector('#ns-n').value, r = f.querySelector('#ns-r').value; er.textContent = '';
+        if (a.length < 8) { er.textContent = 'A senha precisa ter pelo menos 8 caracteres.'; return; } if (a !== r) { er.textContent = 'As duas senhas não são iguais.'; return; }
+        b.disabled = true; try { await EU.updatePassword(a); fecharModal(); aviso('Senha nova salva. Use ela da próxima vez.'); }
+        catch (e) { b.disabled = false; er.textContent = e && e.code === 'auth/requires-recent-login' ? 'Saia e entre de novo pelo Google para trocar a senha.' : msgErro(e); } }; }); }
+  /* menu do nome: ligar / desligar a conta Google */
+  const googleDe = u => ((u && u.providerData) || []).find(p => p && p.providerId === 'google.com') || null;
+  function contaGoogle() { const g = googleDe(EU);
+    modal(g ? `<h2>Conta Google ligada</h2><p>Se esquecer a senha, na tela de entrar toque em <b>Esqueci a senha › Entrar com a conta Google</b> usando <b>${esc(g.email || '')}</b>.</p><div class="er" id="cg-er"></div><div class="rw"><button type="button" id="cg-x">Fechar</button><button type="button" id="cg-des">Desligar a conta Google</button></div>`
+      : `<h2>Ligar minha conta Google</h2><p>Serve para recuperar o acesso se você esquecer a senha. Você continua entrando com o usuário <b>${usuarioDe(EU.email)}</b> e a senha de sempre.</p><p style="color:#6B6558;font-size:13px">O painel não lê seus e-mails nem nada da sua conta Google: só confere que é você.</p><div class="er" id="cg-er"></div><div class="rw"><button type="button" id="cg-x">Agora não</button><button type="button" class="p" id="cg-lig">${GSVG} Ligar conta Google</button></div>`, f => {
+      const er = f.querySelector('#cg-er'); f.querySelector('#cg-x').onclick = fecharModal; f.onsubmit = ev => ev.preventDefault();
+      const lig = f.querySelector('#cg-lig'); if (lig) lig.onclick = async () => { lig.disabled = true; er.textContent = '';
+        try { const r = await EU.linkWithPopup(new firebase.auth.GoogleAuthProvider()); const g2 = googleDe(r && r.user || EU);
+          try { await fs.doc('perfis/' + EU.uid).set({ recup: { google: true, em: new Date().toISOString() } }, { merge: true }); } catch (x) {}
+          fecharModal(); aviso('Conta Google ligada' + (g2 && g2.email ? ' (' + g2.email + ')' : '') + '. Se esquecer a senha, use "Esqueci a senha" na tela de entrar.'); }
+        catch (e) { lig.disabled = false; er.textContent = msgGoogle(e); } };
+      const des = f.querySelector('#cg-des'); if (des) des.onclick = async () => { if (!confirm('Desligar a conta Google? Se esquecer a senha, só a administradora poderá ajudar.')) return; des.disabled = true;
+        try { await EU.unlink('google.com'); try { await fs.doc('perfis/' + EU.uid).set({ recup: { google: false, em: new Date().toISOString() } }, { merge: true }); } catch (x) {} fecharModal(); aviso('Conta Google desligada.'); }
+        catch (e) { des.disabled = false; er.textContent = msgGoogle(e); } }; }); }
+
   /* ---------- chamado pelo QR da linha, sem login (entra como anônimo e só consegue criar o chamado) ---------- */
   const QR_LINHA = (() => { const m = (location.search + '&' + location.hash).match(/[?&#]chamado=([^&#]+)/); if (!m) return ''; try { return decodeURIComponent(m[1].replace(/\+/g, ' ')); } catch (e) { return m[1]; } })();
   let MODO_QR = false;
@@ -357,6 +432,8 @@
   if (!jaLogou) { if (document.body) primeiraTela(); else document.addEventListener('DOMContentLoaded', () => { if (!EU) primeiraTela(); }); }
   auth.onAuthStateChanged(async u => {
     if (saindo) return; /* sair() cuida do resto (limpar cache e recarregar) */
+    if (recuperando) return; /* "Esqueci a senha › Google": o botão confere se a conta é de alguém e recarrega */
+    if (u && descartado && u.uid === descartado) return; /* conta Google de ninguém, já apagada */
     if (u && u.isAnonymous) { if (!MODO_QR) auth.signOut(); return; } /* anônimo só serve para o chamado do QR */
     if (!u) { jaLogou = false; LS.del('painel.logado'); if (EU) { saindo = true; location.reload(); return; } /* a cópia local só é apagada se outra pessoa entrar */ if (!document.getElementById('lg')) primeiraTela(); return; }
     /* troca de pessoa no mesmo aparelho: o cache local é da pessoa anterior → limpa antes de abrir o painel */
@@ -365,6 +442,7 @@
     LS.set('painel.uid', u.uid); LS.set('painel.logado', '1');
     EU = u; const el = document.getElementById('lg'); if (el) el.remove(); setTimeout(() => { const q = document.querySelector('.quem'); if (q) { q.title = 'Usuário ' + usuarioDe(u.email) + ' · trocar senha ou sair'; q.style.cursor = 'pointer'; } }, 500);
     prontoOk(); /* o painel abre na hora; o perfil é conferido em segundo plano */
+    try { if (sessionStorage.getItem('colafix.novaSenha') === '1') { sessionStorage.removeItem('colafix.novaSenha'); setTimeout(novaSenha, 1200); } } catch (x) {}
     diagnostico(u);
     const ate = ms => new Promise((_, er) => setTimeout(() => er({ code: 'tempo-esgotado' }), ms));
     (async () => { try { const g = await Promise.race([fs.doc('perfis/' + u.uid).get(), ate(20000)]);
@@ -437,8 +515,8 @@
     const q = ev.target.closest && ev.target.closest('.quem'); if (!q || !EU || mn) return;
     if (!mcssOk) { const st = document.createElement('style'); st.textContent = mcss; document.head.appendChild(st); mcssOk = true; }
     const r = q.getBoundingClientRect(), m = document.createElement('div'); m.id = 'pf-menu'; m.style.top = (r.bottom + 6) + 'px'; m.style.right = Math.max(8, innerWidth - r.right) + 'px';
-    m.innerHTML = `<div>Usuário <b>${usuarioDe(EU.email)}</b></div><button data-m="senha">Trocar minha senha</button>${instalarPossivel() ? '<button data-m="instalar">Instalar o app neste aparelho</button>' : ''}<button data-m="sair">Sair</button>`;
-    m.onclick = e => { const k = e.target.dataset.m; if (!k) return; m.remove(); if (k === 'senha') trocarSenha(); else if (k === 'instalar') instalar(); else sair(); };
+    m.innerHTML = `<div>Usuário <b>${usuarioDe(EU.email)}</b></div><button data-m="senha">Trocar minha senha</button><button data-m="google">${googleDe(EU) ? 'Conta Google ligada ✓' : 'Ligar minha conta Google'}</button>${instalarPossivel() ? '<button data-m="instalar">Instalar o app neste aparelho</button>' : ''}<button data-m="sair">Sair</button>`;
+    m.onclick = e => { const k = e.target.dataset.m; if (!k) return; m.remove(); if (k === 'senha') trocarSenha(); else if (k === 'google') contaGoogle(); else if (k === 'instalar') instalar(); else sair(); };
     document.body.appendChild(m); });
 
   window.claude = {

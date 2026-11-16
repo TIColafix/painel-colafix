@@ -1,3 +1,4 @@
+process.env.DATA = process.env.DATA || '2026-10-14'; /* depende do dia (feriado, dia útil, fim de semana): roda sempre como se fosse 2026-10-14 */
 /* Almoço: refeitório sem leitura no dia (leitor só com o café) → aviso e "Marcar o dia" → ninguém fica sem justificativa. */
 const H=require('./harness'); const {seedManut}=require('./manut-seed'); const res=[]; const ok=(n,c,d)=>{ res.push({n,ok:!!c}); console.log((c?'PASSOU ':'FALHOU ')+n+(d?' — '+String(d).slice(0,300):'')); };
 (async()=>{ const {d}=seedManut(); const D=d.docs; const dia={}, pes={};

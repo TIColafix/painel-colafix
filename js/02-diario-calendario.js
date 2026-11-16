@@ -1434,7 +1434,7 @@ document.head.insertAdjacentHTML('beforeend','<style>.cal-lst .cal-lg{display:gr
 /* Ajustes separados por assunto (pedido de 13/10): as seções continuam na mesma tela (o "Salvar ajustes" lê todos os campos),
    só mostramos as do assunto escolhido. Seção nova sem assunto conhecido cai em "Outros". */
 const AJ_GRUPOS=[['prod','Produção',/Sequência de cores|Linhas de produção|Motivos de parada|Ordens de produção/],['silos','Silos e cimento',/Silos e capacidades|Produtos|Limites de cor|WhatsApp/],
-  ['almox','Almoxarifado',/almoxarifado/i],['dados','Backup e dados',/Backup|Trazer os dados/]];
+  ['almox','Almoxarifado',/almoxarifado/i],['dados','Backup e dados',/Backup|Trazer os dados|Erros do painel/]];
 let ajGrupo=(()=>{ try{ return localStorage.getItem('aj-grupo')||'prod'; }catch(e){ return 'prod'; } })();
 function ajSeparar(){ if(S.view!=='ajustes') return; const v=document.getElementById('view'); if(!v) return; const abas=v.querySelector(':scope > .chips'); if(!abas) return;
   const secs=[...v.children].filter(e=>e!==abas&&!e.classList.contains('head')&&!e.classList.contains('aj-sub')&&!e.classList.contains('banner'));

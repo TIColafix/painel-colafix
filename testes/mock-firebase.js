@@ -118,7 +118,13 @@
   function User(r) { if (!r) return null; return { uid: r.uid, email: r.email || null, isAnonymous: !!r.anon, displayName: r.nome || null,
     updateProfile: async p => { const s = srv(); if (s.users[r.email]) { s.users[r.email].nome = p.displayName; salvaSrv(s); } },
     reauthenticateWithCredential: async c => { const s = srv(); if (!s.users[r.email] || s.users[r.email].pass !== c.p) throw err('auth/invalid-credential'); },
-    updatePassword: async p => { if (String(p).length < 6) throw err('auth/weak-password'); const s = srv(); s.users[r.email].pass = p; salvaSrv(s); } }; }
+    updatePassword: async p => { if (String(p).length < 6) throw err('auth/weak-password'); const s = srv(); s.users[r.email].pass = p; salvaSrv(s); },
+    /* conta Google ligada (recuperar a senha, 16/11/2026): a conta Google do teste vem de __ctl.google */
+    get providerData() { const u = srv().users[r.email] || {}; return [{ providerId: 'password', email: r.email }].concat(u.google ? [{ providerId: 'google.com', email: u.google }] : []); },
+    linkWithPopup: async () => { const c = ctl(); if (c.semGoogle) throw err('auth/operation-not-allowed'); if (!c.google) throw err('auth/popup-closed-by-user'); const s = srv();
+      if (Object.values(s.users).some(x => x.google === c.google)) throw err('auth/credential-already-in-use'); s.users[r.email].google = c.google; salvaSrv(s); return { user: User(r) }; },
+    unlink: async pid => { const s = srv(); if (pid === 'google.com' && s.users[r.email]) { delete s.users[r.email].google; salvaSrv(s); } return User(r); },
+    delete: async () => { const s = srv(); delete s.users[r.email]; salvaSrv(s); window.__mockLog.push(['deleteUser', r.email]); } }; }
   function Auth(nome) {
     const KEY = '__sess_' + (nome || 'def');
     let atual = L.get(KEY, null);
@@ -138,6 +144,10 @@
         muda({ uid: u.uid, email: em, nome: u.nome }); return { user: User(atual) }; },
       createUserWithEmailAndPassword: async (em, p) => { await espera(); const s = srv(); if (s.users[em]) throw err('auth/email-already-in-use'); const uid = 'u' + Math.random().toString(36).slice(2, 10); s.users[em] = { uid, pass: p }; salvaSrv(s); const r = { uid, email: em }; if (nome && nome !== 'def') { atual = r; return { user: User(r) }; } muda(r); return { user: User(r) }; },
       signInAnonymously: async () => { if (ctl().semAnon) throw err('auth/operation-not-allowed'); muda({ uid: 'anon' + Math.random().toString(36).slice(2, 8), anon: true }); return { user: User(atual) }; },
+      signInWithPopup: async () => { await espera(); const c = ctl(); if (c.semGoogle) throw err('auth/operation-not-allowed'); if (!c.google) throw err('auth/popup-closed-by-user'); const s = srv();
+        const em = Object.keys(s.users).find(k => s.users[k].google === c.google);
+        if (em) { const u = s.users[em]; muda({ uid: u.uid, email: em, nome: u.nome }); return { user: User(atual), additionalUserInfo: { isNewUser: false, providerId: 'google.com' } }; }
+        const uid = 'g' + Math.random().toString(36).slice(2, 10); s.users[c.google] = { uid, pass: null }; salvaSrv(s); muda({ uid, email: c.google }); return { user: User(atual), additionalUserInfo: { isNewUser: true, providerId: 'google.com' } }; },
       signOut: async () => { window.__mockLog.push(['signOut']); muda(null); }
     };
   }
@@ -150,6 +160,7 @@
     auth: () => firebase.app().auth(), firestore: () => FS
   };
   firebase.auth.EmailAuthProvider = { credential: (e, p) => ({ e, p }) };
+  firebase.auth.GoogleAuthProvider = function () { this.providerId = 'google.com'; this.setCustomParameters = () => this; };
   firebase.firestore.Timestamp = Timestamp; firebase.firestore.Blob = Blob;
   firebase.firestore.FieldValue = { serverTimestamp: () => SERVER_TS };
   firebase.firestore.Firestore = function () { return FS; };

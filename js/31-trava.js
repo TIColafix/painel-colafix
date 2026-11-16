@@ -32,7 +32,10 @@ function travaSha(txt){ const b=new TextEncoder().encode(txt), K=[], H=[]; let n
     for(let i=0;i<64;i++){ const S1=r(e,6)^r(e,11)^r(e,25), ch=(e&f)^(~e&g), t1=(h+S1+ch+K[i]+W[i])|0, S0=r(a,2)^r(a,13)^r(a,22), mj=(a&bb)^(a&c)^(bb&c), t2=(S0+mj)|0; h=g; g=f; f=e; e=(d+t1)|0; d=c; c=bb; bb=a; a=(t1+t2)|0; }
     H[0]=(H[0]+a)|0; H[1]=(H[1]+bb)|0; H[2]=(H[2]+c)|0; H[3]=(H[3]+d)|0; H[4]=(H[4]+e)|0; H[5]=(H[5]+f)|0; H[6]=(H[6]+g)|0; H[7]=(H[7]+h)|0; }
   return H.map(x=>(x>>>0).toString(16).padStart(8,'0')).join(''); }
-async function travaHash(sal,senha){ return travaSha(sal+'|'+senha); }
+/* it = repetições (senhas definidas a partir de 16/11/2026: TRAVA_IT). Senha antiga, sem it, continua valendo como era.
+   Repetir deixa bem mais lento adivinhar a senha a partir do código guardado no banco (que todo login liberado consegue ler). */
+const TRAVA_IT=10000;
+async function travaHash(sal,senha,it){ let h=travaSha(sal+'|'+senha); for(let i=0;i<(+it||0);i++) h=travaSha(h+'|'+sal); return h; }
 let _travaLib=0;
 function travaSair(){ _travaLib=Date.now(); try{ ttCamDesliga(); }catch(e){} const x=document.createElement('button'); x.dataset.act='sair-conta'; x.hidden=true; document.body.appendChild(x); x.click(); x.remove(); }
 function travaPede(){ if(document.getElementById('trava-m')) return; const d=document.createElement('div'); d.id='trava-m'; d.className='trava-m'; d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true'); d.setAttribute('aria-labelledby','trava-t');
@@ -40,7 +43,7 @@ function travaPede(){ if(document.getElementById('trava-m')) return; const d=doc
   document.body.appendChild(d); const i=d.querySelector('#trava-s'); setTimeout(()=>i.focus(),30);
   const fecha=()=>{ d.remove(); try{ if(typeof crCapPoe==='function') crCapPoe(); }catch(e){} };
   d.querySelector('.trava-x').onclick=fecha; d.addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.stopPropagation(); fecha(); } e.stopPropagation(); });
-  d.querySelector('form').onsubmit=async e=>{ e.preventDefault(); const t=S.cfg.travaSenha||{}; let okk=false; try{ okk=(await travaHash(t.s||'',i.value))===t.h; }catch(er){}
+  d.querySelector('form').onsubmit=async e=>{ e.preventDefault(); const t=S.cfg.travaSenha||{}; let okk=false; try{ okk=(await travaHash(t.s||'',i.value,t.it))===t.h; }catch(er){}
     if(!okk){ d.querySelector('.trava-e').textContent='Senha errada.'; i.value=''; i.focus(); return; } fecha(); travaSair(); }; }
 window.addEventListener('click',ev=>{ const b=ev.target.closest&&ev.target.closest('[data-act="cq-sair"],[data-act="po-sair"],[data-act="sair-conta"]'); if(!b||!travaOn()) return; if(Date.now()-_travaLib<3000) return;
   ev.stopImmediatePropagation(); ev.preventDefault(); travaPede(); },true);
@@ -53,7 +56,7 @@ window.addEventListener('click',ev=>{ const b=ev.target.closest&&ev.target.close
 document.addEventListener('click',async ev=>{ const b=ev.target.closest&&ev.target.closest('[data-act="trava-salvar"],[data-act="trava-tirar"]'); if(!b||!dbMaster()) return;
   if(b.dataset.act==='trava-tirar'){ try{ await S.db.doc('config/geral').update({travaSenha:null}); S.cfg.travaSenha=null; toast('Trava tirada.'); }catch(e){ toast('Não foi possível salvar.'); } render(); return; }
   const i=document.getElementById('trava-n'), v=String(i&&i.value||''); if(v.length<4){ toast('A senha precisa ter pelo menos 4 caracteres.'); return; }
-  const s=Math.random().toString(36).slice(2,10)+Date.now().toString(36), t={s,h:await travaHash(s,v),em:new Date().toISOString(),por:S.uid||null};
+  const s=Math.random().toString(36).slice(2,10)+Date.now().toString(36), t={s,it:TRAVA_IT,h:await travaHash(s,v,TRAVA_IT),em:new Date().toISOString(),por:S.uid||null};
   try{ await S.db.doc('config/geral').update({travaSenha:t}); S.cfg.travaSenha=t; toast('Senha salva. O computador de chamados, o posto e o da oficina ficam travados.'); }catch(e){ toast('Não foi possível salvar.'); } render(); });
 document.head.insertAdjacentHTML('beforeend',`<style id="trava-css">
 .trava-m{position:fixed;inset:0;z-index:3000;background:rgba(14,30,40,.6);display:flex;align-items:center;justify-content:center;padding:16px;font-family:Archivo,'Segoe UI',system-ui,sans-serif}

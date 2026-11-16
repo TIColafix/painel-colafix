@@ -15,7 +15,7 @@ function travaPedeAp(titulo,texto,feito){ if(document.getElementById('trava-m'))
   document.body.appendChild(d); const i=d.querySelector('#trava-s'); setTimeout(()=>i.focus(),30);
   const fecha=()=>{ d.remove(); try{ if(typeof crCapPoe==='function') crCapPoe(); }catch(e){} };
   d.querySelector('.trava-x').onclick=fecha; d.addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.stopPropagation(); fecha(); } e.stopPropagation(); });
-  d.querySelector('form').onsubmit=async e=>{ e.preventDefault(); const t=S.cfg.travaSenha||{}; let okk=false; try{ okk=(await travaHash(t.s||'',i.value))===t.h; }catch(er){}
+  d.querySelector('form').onsubmit=async e=>{ e.preventDefault(); const t=S.cfg.travaSenha||{}; let okk=false; try{ okk=(await travaHash(t.s||'',i.value,t.it))===t.h; }catch(er){}
     if(!okk){ d.querySelector('.trava-e').textContent='Senha errada.'; i.value=''; i.focus(); return; } fecha(); feito(); }; }
 function travaApLiga(on){ try{ if(on) localStorage.setItem(TRAVA_AP_K,'1'); else localStorage.removeItem(TRAVA_AP_K); }catch(e){} document.body.classList.toggle('trava-ap',on); render(); }
 /* menu do usuário (toque no nome): Sair pede a senha; e a opção de travar/destravar o aparelho */

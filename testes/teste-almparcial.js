@@ -1,3 +1,4 @@
+process.env.DATA = process.env.DATA || '2026-10-14'; /* depende do dia (feriado, dia útil, fim de semana): roda sempre como se fosse 2026-10-14 */
 /* Almoço: dia gravado pela metade (só a manhã) → aviso; importar o dia inteiro JUNTA as passagens e o almoço aparece. */
 const H=require('./harness'); const {seedManut}=require('./manut-seed'); const fs=require('fs'); const res=[]; const ok=(n,c,d)=>{ res.push({n,ok:!!c}); console.log((c?'PASSOU ':'FALHOU ')+n+(d?' — '+String(d).slice(0,300):'')); };
 const cab='Código,Hora,Nome do usuário,RG,CPF,Grupo,Empresa,Departamento,Empresa Visitada,Autorização,Detalhes,Matrícula,Dispositivo,Área,Operador';

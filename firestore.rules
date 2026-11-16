@@ -31,12 +31,48 @@ service cloud.firestore {
 
     // Tudo o que é operacional (ordens, entregas, paradas, ranchos, almox, premix, chamados, config...)
     match /{col}/{id} {
-      allow read: if le() && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'api', 'apibots']);
-      allow write: if grava() && !bloq(col) && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'api', 'apibots']);
+      allow read: if le() && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'api', 'apibots', 'erros', 'pedsenha']);
+      allow write: if grava() && !bloq(col) && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'api', 'apibots', 'erros', 'pedsenha'])
+        && !(col == 'config' && id == 'geral'); // config/geral tem regra própria (logo abaixo)
+    }
+
+    // Esqueci a senha (16/11/2026): na tela de entrar, sem login, a pessoa só CRIA o pedido (usuário, nome, contato);
+    // só a dona lê, marca como resolvido e apaga (Equipe e cargos › Pedidos de senha).
+    match /pedsenha/{id} {
+      allow create: if id.matches('ps-[a-z0-9]{8,30}')
+        && request.resource.data.keys().hasOnly(['usuario', 'nome', 'contato', 'em', 'status'])
+        && request.resource.data.usuario is string && request.resource.data.usuario.matches('[a-z0-9._-]{1,40}')
+        && request.resource.data.nome is string && request.resource.data.nome.size() >= 2 && request.resource.data.nome.size() <= 60
+        && request.resource.data.contato is string && request.resource.data.contato.size() <= 60
+        && request.resource.data.status == 'aberto';
+      allow read, update, delete: if dono();
+    }
+
+    // Erros de programa (16/11/2026): o aparelho de quem está logado registra o erro (só criar, campos limitados);
+    // só a dona lê e apaga (Ajustes › Erros do painel).
+    match /erros/{id} {
+      allow create: if liberado() && request.resource.data.keys().hasOnly(['em', 'msg', 'onde', 'pilha', 'tela', 'uid', 'perfil', 'endereco', 'aparelho'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.msg is string && request.resource.data.msg.size() <= 300
+        && request.resource.data.get('pilha', '') is string && request.resource.data.get('pilha', '').size() <= 600;
+      allow read, delete: if dono();
+    }
+
+    // Ajustes gerais (16/11/2026, revisão de segurança). Continua: lê quem é liberado (regra geral) e grava quem pode gravar.
+    // Mas a senha da trava dos computadores (travaSenha) só a dona muda ou tira, e a configuração do OneDrive (onedrive)
+    // só a dona e o RH. Antes qualquer login que grava conseguia tirar a trava pelo console do navegador.
+    function cfgMudou() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    match /config/geral {
+      allow create: if dono() || (grava() && !bloq('config') && !request.resource.data.keys().hasAny(['travaSenha', 'onedrive']));
+      allow update: if dono() || (liberado() && !cfgMudou().hasAny(['travaSenha']) && (
+          (grava() && !bloq('config') && (!cfgMudou().hasAny(['onedrive']) || rhOk()))
+          || (rhOk() && cfgMudou().hasOnly(['onedrive']))));
+      allow delete: if dono();
     }
     match /{col}/{id}/{resto=**} {
-      allow read: if le() && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'api', 'apibots']);
-      allow write: if grava() && !bloq(col) && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'api', 'apibots']);
+      allow read: if le() && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'api', 'apibots', 'erros', 'pedsenha']);
+      allow write: if grava() && !bloq(col) && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'api', 'apibots', 'erros', 'pedsenha'])
+        && !(col == 'config' && id == 'geral'); // o ** também pega o próprio documento (config/geral não tem subcoleções)
     }
 
     // Silos: histórico do saldo (consumo, estorno, medição). Só inclusão: ninguém altera nem apaga uma movimentação.

@@ -3,7 +3,7 @@
    Importar: grava esse arquivo num projeto Firebase NOVO (mudança de projeto). Não importa logins/permissões
    (acessos, pedidos): as pessoas são recriadas em Equipe e cargos. Os nomes (perfis) vão junto para o histórico. */
 (function(){ const P=window.Painel; if(!P) return;
-  const COLECOES=['config','presenca','gxquadro','checkop','pedpecas','pmxentregas','perdas','horaextra','ordens','entregas','entregasarq','previsoes','itens','paradas','ranchos','rancrec','diario','alxfila','medicoes','cargas','premix','silos','silomov',
+  const COLECOES=['config','erros','pedsenha','presenca','gxquadro','checkop','pedpecas','pmxentregas','perdas','horaextra','ordens','entregas','entregasarq','previsoes','itens','paradas','ranchos','rancrec','diario','alxfila','medicoes','cargas','premix','silos','silomov',
     'chamados','chamfotos','pecasmov','pecafotos','crachas','conferencias','auditorias','invdiv','invdia','recebimentos','pmxfichas','pmxrec','pmxbaixas','pcpbase','pcpsnap','pcpvendas','pcpcart','pcpprevver',
     'ritplano','ritfech','sistema','perfis','acessos','pedidos','_arquivos','_arquivos_p','pedmat','pcpavisos','gxacoes','gxseg','apontpend','melhorias','exemplo'];
   const SUB={'frota':{docs:['config'],sub:{'frota/dados':['caminhoes','motoristas','abastecedores','abastecimentos','compras','manutencoes']}},'rh':{docs:['config'],sub:{'rh/dados':['funcionarios','funcoes','retiradas','terceiros','presenca','fichasmes','modelos','docsgerados','ferias','ocorrencias','emprestimos','convites','fichascand','almoco','almocoaj','almocofolha','cafefolha','almoconota','epis','vagasab','candidatos','uniformes','atestados','pjpag','ponto','pjnotaped','pjnotaenv','assinped','assinpdf','assinenv','assinenvp'],'rh/arquivos':['lista','partes']}}};

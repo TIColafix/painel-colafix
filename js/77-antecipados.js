@@ -14,17 +14,7 @@ function atcLista(){ const an=anuladas(), lim=new Date(Date.now()-ATC_DIAS*864e5
 function atcDeOrdem(id){ return atcLista().filter(e=>e.ordem===id); }
 function atcQuando(e){ const t=e.em||'', h=hojeStr(), d=t?hojeStr(new Date(t)):'';
   return (d===h?'hoje':d===amanhaStr()?'amanhã':dm(d))+' às '+hora(t); }
-function atcCard(){ const xs=atcLista(); if(!xs.length) return ''; const agora=new Date().toISOString();
-  const tot={}; xs.forEach(e=>{ const o=ordById(e.ordem); const u=o?uA(o):''; tot[u]=(tot[u]||0)+(+e.qtd||0); });
-  return `<section class="card atc-card" aria-label="Apontamentos antecipados para descontar">
-   <div class="atc-h"><div><div class="eyebrow">LEMBRETE</div><h2>${xs.length===1?'1 apontamento antecipado':xs.length+' apontamentos antecipados'} para descontar</h2>
-    <div class="sub">Já foram lançados antes da folha. Quando a folha chegar no horário, desconte estas quantidades e toque em <b>Já descontei</b>.</div></div>
-    <span class="atc-tot num">${Object.entries(tot).map(([u,q])=>fq(q)+(u?' '+esc(u):'')).join(' + ')}</span></div>
-   <div class="atc-l">${xs.map(e=>{ const o=ordById(e.ordem), venceu=String(e.em||'')<=agora;
-     return `<div class="atc-r ${venceu?'v':''}"><span class="atc-q num">${fq(+e.qtd||0)}<small>${o?esc(uA(o)):''}</small></span>
-      <span class="atc-i"><b>${o?esc(nomeCurto(o)):'Ordem '+esc(e.num||'')}</b><small class="num">Ordem ${esc(e.num||(o&&o.num)||'')} · ${esc(e.linha||(o&&o.linha)||'')} · folha de ${atcQuando(e)}${e.registradoEm?' · lançado '+(hojeStr(new Date(e.registradoEm))===hojeStr()?'hoje':dm(hojeStr(new Date(e.registradoEm))))+' às '+hora(e.registradoEm):''}${e.obs?' · '+esc(e.obs):''}</small></span>
-      <span class="atc-s">${venceu?'<span class="pill warn">a folha já chegou</span>':'<span class="pill neu">aguardando a folha</span>'}</span>
-      <span class="atc-a">${o?`<button class="lnk" data-act="o-abrir" data-id="${esc(o._id)}">Abrir ordem</button>`:''}<button class="btn sec" data-act="atc-ok" data-id="${esc(e._id)}">${ic('check',16,2.2)}Já descontei</button></span></div>`; }).join('')}</div></section>`; }
+/* atcCard: a versão que vale está mais adiante (removida a repetida em 16/11) */
 /* Programação: o quadro entra logo antes dos filtros */
 { const _vp=vProgramacao; vProgramacao=function(){ const h=_vp.apply(this,arguments); try{ const c=atcCard(); if(!c) return h; const k='<section class="card ofil pfil">', i=h.indexOf(k); return i<0?c+h:h.slice(0,i)+c+h.slice(i); }catch(e){ console.warn('[antecipados]',e); return h; } }; }
 /* Lançar apontamento em lote: aviso embaixo da ordem que tem antecipado */

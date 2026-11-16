@@ -166,10 +166,7 @@ function ritMeses(){ const P=S.anl.base.prev||{}; return Object.keys(P.mes||{}).
 /* Curva S: todas as entregas do mês consultado, sem o limite das 1.000 mais recentes da tela.
    A faixa vai de 1 dia antes a 1 dia depois do mês (fuso: o horário gravado é UTC) e o filtro pelo dia local é feito em ritDados. */
 S._ritEnt={}; const _ritSub={};
-function ritEntMes(cp){ if(!S.db||!cp) return null; if(!_ritSub[cp]){ _ritSub[cp]=true; const a=new Date(+cp.slice(0,4),+cp.slice(5,7)-1,0), b=new Date(+cp.slice(0,4),+cp.slice(5,7),2);
-    const de=a.toISOString().slice(0,10), ate=b.toISOString().slice(0,10);
-    inscrever('ritent-'+cp,()=>S.db.collection('entregas').where('em','>=',de).where('em','<',ate).orderBy('em'),snap=>{ S._ritEnt[cp]=snap.docs.map(d=>Object.assign({_id:d.id},d.data())); rerenderSeguro(); }); }
-  return S._ritEnt[cp]||null; }
+/* ritEntMes: a versão que vale está mais adiante (removida a repetida em 16/11) */
 function ritEntregas(cp){ const m=new Map(); (S.entregas||[]).forEach(e=>m.set(e._id,e)); (ritEntMes(cp)||[]).forEach(e=>m.set(e._id,e)); return [...m.values()]; }
 /* 14/10: divisão REAL entre as linhas = entregas lançadas nos últimos 60 dias (sem as anuladas), por item e linha.
    Usada como divisão automática dos itens sem % configurada e para avisar quando a % configurada não bate com o que as linhas fazem. */

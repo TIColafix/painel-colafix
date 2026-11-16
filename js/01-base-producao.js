@@ -870,8 +870,16 @@ function fardoDe(o){ if(unidDe(o)==='FD') return 0; const it=itemDe(codigoDe(o))
 function unPorFardo(o){ const it=itemDe(codigoDe(o)); return it&&it.fardo>0?+it.fardo:0; }
 function paleteDe(o){ const pp=S.cfg.paleteProd||{}, pl=S.cfg.paletes||{}; const c=codigoDe(o); const it=itemDe(c); if(it&&it.palete>0) return +it.palete;
   if(pp[c]!=null) return +pp[c]||0; if(pl[o.linha]!=null) return +pl[o.linha]||0; return 0; }
-function anuladas(){ const s=new Set(); S.entregas.forEach(e=>{ if(e.anula) s.add(e.anula); }); return s; }
-function entregasDe(id){ const an=anuladas(); return S.entregas.filter(e=>e.ordem===id&&!e.anula).map(e=>Object.assign({anulada:an.has(e._id)},e)).sort((a,b)=>a.em.localeCompare(b.em)); }
+/* 16/11/2026 (desempenho): as entregas são agrupadas por ordem UMA vez a cada lista nova que chega do banco
+   (antes cada entregasDe() percorria todos os apontamentos e refazia as anuladas: ordens × apontamentos a cada tela).
+   O resultado é o mesmo de antes: cópias novas a cada chamada, ordenadas por "em". */
+const _entIdx={ref:null,n:-1,an:null,por:null};
+function entIdx(){ const L=S.entregas||[]; if(_entIdx.ref===L&&_entIdx.n===L.length) return _entIdx;
+  const an=new Set(), por=new Map(); L.forEach(e=>{ if(e.anula) an.add(e.anula); else { let a=por.get(e.ordem); if(!a) por.set(e.ordem,a=[]); a.push(e); } });
+  por.forEach(a=>a.sort((x,y)=>String(x.em).localeCompare(String(y.em))));
+  _entIdx.ref=L; _entIdx.n=L.length; _entIdx.an=an; _entIdx.por=por; return _entIdx; }
+function anuladas(){ return new Set(entIdx().an); }
+function entregasDe(id){ const X=entIdx(), an=X.an; return (X.por.get(id)||[]).map(e=>Object.assign({anulada:an.has(e._id)},e)); }
 /* apontamento antecipado vale a partir de quando foi registrado (já foi lançado no sistema nessa hora), não do horário previsto */
 function entregueAte(o,iso){ let s=0; (o.ant||[]).forEach(a=>s+=+a.qtd||0); entregasDe(o._id).forEach(e=>{ const t=e.antecipado&&e.registradoEm?e.registradoEm:e.em; if(!e.anulada&&(!iso||!t||t<=iso)) s+=+e.qtd||0; }); return s; }
 function entregueDe(o){ let s=0; (o.ant||[]).forEach(a=>s+=+a.qtd||0); entregasDe(o._id).forEach(e=>{ if(!e.anulada) s+=+e.qtd||0; }); return s; }

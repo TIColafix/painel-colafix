@@ -4,6 +4,12 @@ const fs = require('fs'), path = require('path');
 const RAIZ = process.env.RAIZ || (require('fs').existsSync(require('path').join(__dirname, '..', 'index.html')) ? require('path').join(__dirname, '..') : '/home/claude/painel-colafix-main');
 const MOCK = fs.readFileSync(__dirname + '/mock-firebase.js', 'utf8');
 const BASE = 'http://painel.test/';
+/* DATA=2026-10-20 (ou 2026-10-20T15:30): o teste roda como se fosse esse dia, no navegador e aqui no Node (o relógio continua andando).
+   Serve para os testes que dependem do dia da semana, de feriado ou do mês (16/11/2026). */
+const DATA_FIXA = process.env.DATA ? new Date(process.env.DATA.length <= 10 ? process.env.DATA + 'T10:00:00' : process.env.DATA) : null;
+const DATA_REAL = Date;
+if (DATA_FIXA && !isNaN(DATA_FIXA)) { const Real = Date, off = DATA_FIXA.getTime() - Real.now();
+  global.Date = class extends Real { constructor(...a) { if (a.length) super(...a); else super(Real.now() + off); } static now() { return Real.now() + off; } }; }
 const CHROME = process.env.CHROME || (() => { try { const d = '/home/claude/.cache/puppeteer/chrome'; const v = fs.readdirSync(d)[0]; return path.join(d, v, 'chrome-linux64/chrome'); } catch (e) { return undefined; } })();
 
 async function abrir(op) {
@@ -19,6 +25,8 @@ async function abrir(op) {
     await ctx.addInitScript(() => { window.BarcodeDetector = class { constructor() {} static async getSupportedFormats() { return ['qr_code']; }
       async detect(src) { const c = document.createElement('canvas'); c.width = src.width; c.height = src.height; c.getContext('2d').drawImage(src, 0, 0); const t = await window.__decodifica(c.toDataURL('image/png')); return t ? [{ rawValue: t, format: 'qr_code' }] : []; } }; });
   }
+  if (DATA_FIXA && !isNaN(DATA_FIXA)) { const F = global.Date, t = F.now(); global.Date = DATA_REAL; try { await ctx.clock.setSystemTime(t); } finally { global.Date = F; } } /* o Playwright mede com o relógio verdadeiro */
+  await ctx.addInitScript(() => { window.__semSRI = true; }); /* as bibliotecas do teste são de mentira: sem conferência SRI (js/sri.js) */
   if (op.negarCamera) await ctx.addInitScript(() => { if (!navigator.mediaDevices) return; navigator.mediaDevices.getUserMedia = () => Promise.reject(Object.assign(new Error('negado'), { name: 'NotAllowedError' })); });
   await ctx.route('**/*', async route => {
     const u = route.request().url();
@@ -33,6 +41,7 @@ async function abrir(op) {
       const f = path.join(RAIZ, p);
       if (p === 'index.html' && fs.existsSync(f)) { let h = fs.readFileSync(f, 'utf8'); const k = '\niniciar();\n})();'; if (h.includes(k)) h = h.replace(k, '\nwindow.__T={ritk:(cp,f)=>{ const D=ritDados(cp,\'painel\'); return D?Object.assign({LS:D.LS,n:D.n,cut:D.cut,outros:D.outros},ritStats(D,f||{})):null; },views:()=>Object.keys(VIEWS),vo:v=>viewOk(v),fer:()=>{try{return {f:feriados(),sab:!!anlCfg().sab}}catch(e){return null}},S:()=>S,salvar:(c,d)=>salvar(c,d),proc:(i,e)=>siloProcessarEntrega(i,e),rec:()=>siloReconciliar(),prev:()=>previsaoCimento(),go:v=>go(v),rit:c=>{ const D=ritDados(c,\'painel\'); if(!D) return null; return {its:D.its.map(x=>({c:x.c,dv:x.dv,dvF:x.dvF,dif:x.dif,prev:x.prev})),al:ritAlertas(D).map(a=>a.t),meta:D.LS.map(l=>[l,Math.round(ritStats(D,{l}).T)])}; }};iniciar();\n})();'); else if (!h.includes('js/carregar.js')) throw new Error('gancho de teste'); return route.fulfill({ body: h, contentType: 'text/html; charset=utf-8' }); }
       if (/^js\/09-.*\.js$/.test(p) && fs.existsSync(f)) { let h = fs.readFileSync(f, 'utf8'); const k = '\niniciar();\n'; if (!h.endsWith(k)) throw new Error('gancho de teste (js)'); h = h.slice(0, -k.length) + '\nwindow.__T={ritk:(cp,f)=>{ const D=ritDados(cp,\'painel\'); return D?Object.assign({LS:D.LS,n:D.n,cut:D.cut,outros:D.outros},ritStats(D,f||{})):null; },views:()=>Object.keys(VIEWS),vo:v=>viewOk(v),fer:()=>{try{return {f:feriados(),sab:!!anlCfg().sab}}catch(e){return null}},S:()=>S,salvar:(c,d)=>salvar(c,d),proc:(i,e)=>siloProcessarEntrega(i,e),rec:()=>siloReconciliar(),prev:()=>previsaoCimento(),go:v=>go(v),rit:c=>{ const D=ritDados(c,\'painel\'); if(!D) return null; return {its:D.its.map(x=>({c:x.c,dv:x.dv,dvF:x.dvF,dif:x.dif,prev:x.prev})),al:ritAlertas(D).map(a=>a.t),meta:D.LS.map(l=>[l,Math.round(ritStats(D,{l}).T)])}; }};iniciar();\n})();'.replace(/\n\}\)\(\);$/, '\n'); return route.fulfill({ body: h, contentType: 'text/javascript; charset=utf-8' }); }
+      if (fs.existsSync(f) && /\.html$/.test(p)) return route.fulfill({ contentType: 'text/html', body: fs.readFileSync(f, 'utf8').replace(/\s+integrity="[^"]*"/g, '') });
       if (fs.existsSync(f)) return route.fulfill({ body: fs.readFileSync(f), contentType: p.endsWith('.js') ? 'text/javascript' : p.endsWith('.css') ? 'text/css' : p.endsWith('.html') ? 'text/html' : undefined });
       return route.fulfill({ status: 404, body: '' }); }
     return route.fulfill({ status: 404, body: '' });

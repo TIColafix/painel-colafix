@@ -1,3 +1,4 @@
+process.env.DATA = process.env.DATA || '2026-11-17'; /* depende do dia (feriado, dia útil, fim de semana): roda sempre como se fosse 2026-11-17 */
 /* Visão do gestor: menu próprio (sem repetir módulos), Início novo e "Quem está na empresa"
    (o painel do RH publica presenca/{dia} SEM CPF; o gestor lê e filtra). */
 const H=require('./harness'); const {seedManut}=require('./manut-seed'); const res=[]; const ok=(n,c,d)=>{ res.push({n,ok:!!c}); console.log((c?'PASSOU ':'FALHOU ')+n+(d?' — '+String(d).slice(0,300):'')); };

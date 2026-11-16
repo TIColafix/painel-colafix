@@ -16,15 +16,9 @@ function avdSo(){ try{ return !!(S.acs&&S.acs.dono); }catch(e){ return false; } 
 /* ---------- 3) ensacado para apontar ---------- */
 const ENS_DESDE='2026-10-26';
 function ensPode(){ try{ if(S.acs&&S.acs.dono) return true; return viewOk('programacao')&&!(typeof soVer==='function'&&soVer()); }catch(e){ return false; } }
-function ensPend(){ const by={}; (S.entregas||[]).forEach(e=>{ if(e.anula||e.ensAp||!e.em||String(e.em)<ENS_DESDE) return; const o=ordById(e.ordem)||S.ordens.find(z=>String(z.num)===String(e.num||e.ordem)); if(!o||!o.ensaca) return;
-    const k=o._id; (by[k]=by[k]||{o,qtd:0,es:[],ult:''}); by[k].qtd+=(+e.qtd||0); by[k].es.push(e); if(String(e.em)>by[k].ult) by[k].ult=e.em; });
-  return Object.values(by).filter(x=>x.qtd>0).sort((a,b)=>String(a.ult).localeCompare(String(b.ult))); }
-async function ensApontei(oid){ const x=ensPend().find(y=>y.o._id===oid); if(!x) return; const ap={em:new Date().toISOString(),por:S.uid||null,porNome:(S.nomes&&S.nomes[S.uid])||''}; let ok=0;
-  for(const e of x.es){ try{ await S.db.doc('entregas/'+e._id).update({ensAp:ap}); e.ensAp=ap; ok++; }catch(err){ console.warn('[ensacado]',err); } }
-  if(ok) toast('Ensacado '+x.o.ensaca+' marcado como apontado ('+fq(x.qtd)+').'); else toast('Não foi possível marcar. Confira a internet.'); render(); }
-function ensCard(){ if(!ensPode()) return ''; const xs=ensPend(); if(!xs.length) return '';
-  return `<section class="card ens-c"><div class="head" style="align-items:baseline"><div><div class="eyebrow" style="color:var(--warn-ink,#8a6a1f)">ENSACADO PARA APONTAR NO SISTEMA</div><div class="sub" style="margin:2px 0 0">Foi lançada produção de ordem que tem ordem de ensacado. Aponte o ensacado no sistema e toque em "Apontei".</div></div></div>
-    ${xs.map(x=>`<div class="ens-r"><div><b>Ensacado ${esc(x.o.ensaca)}</b> <span class="sub" style="display:inline;margin:0">· ordem ${esc(x.o.num)} · ${esc(x.o.linha||'')}</span><small>${esc(nomeCurto(x.o))} · ${x.es.length} apontamento${x.es.length>1?'s':''} · último ${esc(dm(hojeStr(new Date(x.ult))))} ${esc(hora(x.ult))}</small></div><b class="num ens-q">${fq(x.qtd)} ${esc(uA(x.o))}</b><button class="btn sec" data-act="ens-ok" data-id="${esc(x.o._id)}">Apontei</button></div>`).join('')}</section>`; }
+/* ensPend: a versão que vale está mais adiante (removida a repetida em 16/11) */
+/* ensApontei: a versão que vale está mais adiante (removida a repetida em 16/11) */
+/* ensCard: a versão que vale está mais adiante (removida a repetida em 16/11) */
 { const _vp=vProgramacao; vProgramacao=function(){ const h=_vp.apply(this,arguments); try{ const c=ensCard(); if(!c) return h; const i=h.indexOf('</div>',h.indexOf('<div class="head"')); if(i<0) return c+h;
     /* depois do cabeçalho da tela */ let k=h.indexOf('<div class="head"'), d=0, j=k; const re=/<\/?div\b/g; re.lastIndex=k; let m; while((m=re.exec(h))){ if(m[0]==='<div') d++; else { d--; if(d===0){ j=h.indexOf('>',m.index)+1; break; } } }
     return h.slice(0,j)+c+h.slice(j); }catch(e){ return h; } }; }

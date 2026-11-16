@@ -116,6 +116,8 @@ function sbItensRh(q){ const r=[], ws=sbN(q).trim(); if(!ws){ let xs=[]; try{ xs
 document.addEventListener('keydown',ev=>{ const p=sbPerfil(); if(p!=='adm'&&p!=='rh') return; if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='k'){ ev.preventDefault(); const i=$('#gxs-q'); i&&i.focus(); } });
 document.head.insertAdjacentHTML('beforeend',`<style id="sbg-css">
 body.sbg-adm #navlist .navbtn>span{flex:1;min-width:0}
+.side .navlist>*{flex-shrink:0}
+.side>#nav-ajustes{flex-shrink:0;border-top:1px solid rgba(255,255,255,.12);border-radius:0;margin-top:4px;padding-top:12px}
 .side .navlist{overflow-y:auto;min-height:0;flex:0 1 auto;margin-right:-6px;padding-right:6px;scrollbar-width:thin}
 /* 02/11 (Juliana): no computador a lateral já mostra as abas do grupo; a barra de abas em cima só aparece no celular */
 @media (min-width:861px){.gxg-tabs.gxg-rh{display:none}}

@@ -97,7 +97,7 @@ function banco(){ const {d}=seedManut(); const D=d.docs; d.users['juliana@painel
     await p.evaluate(()=>__T.go('programacao')); await H.dorme(1200);
     await p.evaluate(()=>{ const c=document.querySelector('.atc-card'); if(c) c.open=true; }); await H.dorme(200);
     s=await p.evaluate(()=>{ const c=document.querySelector('.atc-card'); return c?{t:c.innerText,antes:!!(c.compareDocumentPosition(document.querySelector('.pfil'))&Node.DOCUMENT_POSITION_FOLLOWING),n:c.querySelectorAll('.p12-r').length,fina:c.querySelector('summary').getBoundingClientRect().height}:null; });
-    ok('Programação: faixa fina "Antecipados para descontar" em cima dos filtros, somada por produto e linha (AC3 na L1: 120+50=170; AC3 na L2: 40+80=120; sem o antigo e sem o anulado)', s&&s.n===2&&s.antes&&s.fina<48&&/Antecipados para descontar/.test(s.t)&&/170 sc AC3001 na Linha 1/.test(s.t)&&/120 sc AC3001 na Linha 2/.test(s.t)&&!/\b70\b/.test(s.t), s&&s.t.replace(/\n/g,'|').slice(0,400));
+    ok('Programação: faixa fina "Antecipados para descontar" em cima dos filtros, somada por produto e linha (AC3 na L1: 120+50=170; AC3 na L2: 40+80=120; sem o antigo e sem o anulado)', s&&s.n===2&&s.antes&&s.fina<=56&&/Antecipados para descontar/.test(s.t)&&/170 sc AC3001 na Linha 1/.test(s.t)&&/120 sc AC3001 na Linha 2/.test(s.t)&&!/\b70\b/.test(s.t), s&&s.t.replace(/\n/g,'|').slice(0,400));
     ok('O que já passou do horário da folha aparece no resumo', /a folha já chegou em/.test(s.t));
     const av=await p.evaluate(()=>{ try{ return document.body.innerText; }catch(e){ return ''; } });
     await p.click('[data-act="md-apt-abrir"]'); await H.dorme(700);

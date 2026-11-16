@@ -31,7 +31,8 @@ document.addEventListener('toggle',ev=>{ const d=ev.target; if(d&&d.dataset&&d.d
 /* 2) data da ordem na linha */
 function p12PodeData(){ try{ if(typeof soVer==='function'&&soVer()) return false; if(!viewOk('programacao')) return false; return typeof acxPode!=='function'||acxPode('programar'); }catch(e){ return false; } }
 { const _or=ordRow; ordRow=function(o){ const h=_or.apply(this,arguments); try{ if(!o||o.status!=='aberta'||!p12PodeData()) return h; const k='<span class="ofp">', i=h.indexOf(k); if(i<0) return h;
-    const inp=`<label class="p12-dt" title="Mudar a data da ordem">${ic('calendario',14,2.2)}<input type="date" data-p12dt="${esc(o._id)}" value="${esc(o.data||dataEf(o)||'')}" aria-label="Mudar a data da ordem ${esc(o.num)}"></label>`;
+    const dv=o.data||dataEf(o)||'';
+    const inp=`<label class="p12-dt" title="Mudar a data da ordem">${ic('calendario',14,2.2)}<span class="num">${dv?esc(dm(dv)):'Data'}</span><input type="date" data-p12dt="${esc(o._id)}" value="${esc(dv)}" aria-label="Mudar a data da ordem ${esc(o.num)}"></label>`;
     return h.slice(0,i+k.length)+inp+h.slice(i+k.length); }catch(e){ return h; } }; }
 document.addEventListener('click',ev=>{ const l=ev.target.closest&&ev.target.closest('.p12-dt'); if(!l) return; ev.stopPropagation(); const i=l.querySelector('input'); if(i&&ev.target!==i){ try{ i.showPicker(); }catch(e){ i.focus(); } } },true);
 ['pointerdown','mousedown','dragstart'].forEach(t=>document.addEventListener(t,ev=>{ if(ev.target.closest&&ev.target.closest('.p12-dt')) ev.stopPropagation(); },true));
@@ -47,7 +48,8 @@ details.p12-f>summary::-webkit-details-marker{display:none}
 .p12-v{color:var(--teal-strong);font-size:12.5px;flex-shrink:0}details.p12-f[open] .p12-v{visibility:hidden}
 .p12-r{display:flex;align-items:center;gap:12px;padding:8px 14px;border-top:1px solid var(--line);font-size:13.5px}
 .p12-i{flex:1;min-width:0}.p12-i small{color:var(--muted);display:block;font-size:12px;margin-top:1px}
-.p12-dt{display:inline-flex;align-items:center;gap:4px;position:relative;border:1px solid var(--line);border-radius:8px;padding:3px 6px;color:var(--muted);cursor:pointer;background:var(--surface);vertical-align:middle}
-.p12-dt:hover{color:var(--teal-strong);border-color:var(--teal)}
-.p12-dt input{border:0;background:transparent;font:inherit;font-size:12px;color:inherit;width:112px;padding:0;cursor:pointer}
+.p12-dt{display:inline-flex;align-items:center;gap:6px;position:relative;height:30px;border:1px solid var(--line);border-radius:8px;padding:0 10px;color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer;background:var(--surface);vertical-align:middle}
+.p12-dt svg{color:var(--muted)}.p12-dt:hover{border-color:var(--teal);color:var(--teal-strong)}.p12-dt:hover svg{color:var(--teal-strong)}
+.p12-dt input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0}
+.p12-dt input::-webkit-calendar-picker-indicator{position:absolute;inset:0;width:100%;height:100%;cursor:pointer;opacity:0}
 </style>`);

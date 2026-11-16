@@ -64,7 +64,7 @@
     sub('func',()=>P.db().collection(COL.func).limit(3000)); sub('funcoes',()=>P.db().collection(COL.funcoes).limit(500)); sub('epis',()=>P.db().collection(COL.epis).limit(500)); sub('terc',()=>P.db().collection(COL.terc).limit(1000));
     sub('modelos',()=>P.db().collection(COL.modelos).limit(200)); sub('docs',()=>P.db().collection(COL.docs).orderBy('em','desc').limit(300)); sub('fer',()=>P.db().collection(COL.ferias).limit(3000));
     try{ if(window.RHAssina) window.RHAssina.iniciar(asnCtx()); }catch(e){ console.warn('[assinar]',e); }
-    if(!window.__rhPres){ window.__rhPres=true; setTimeout(function prT(){ try{ if(window.RHAlmoco&&RHAlmoco.publicar) RHAlmoco.publicar(almCtx()); }catch(e){ console.warn('[presença]',e); } setTimeout(prT,20000); },4000); } /* presença para a Visão do gestor */
+    if(!window.__rhPres){ window.__rhPres=true; setTimeout(function prT(){ try{ if(window.RHAlmoco&&RHAlmoco.publicar) RHAlmoco.publicar(almCtx()); }catch(e){ console.warn('[presença]',e); } try{ pubCad(); }catch(e){ console.warn('[quadro]',e); } setTimeout(prT,20000); },4000); } /* presença para a Visão do gestor */
     P.inscrever('rh-fm',()=>P.db().collection(COL.fm).orderBy('mes','desc').limit(14),snap=>{ snap.docs.forEach(d=>{ R.fm[d.id]=d.data(); }); R.lido.fm=true; P.rerender(); });
     P.inscrever('rh-cfg',()=>P.db().collection('rh').limit(5),snap=>{ const d=snap.docs.find(x=>x.id==='config'); R.cfg=d?d.data():{}; R.lido.cfg=true; P.rerender(); setTimeout(funcoesPadrao,0); });
     iniciarMais(); const m=location.search.match(/[?&]rhfile=([^&]+)/); if(m){ R.arqAbrir=decodeURIComponent(m[1]); P.go('rhfichas'); } }
@@ -1020,6 +1020,15 @@ const topo=(t,s,acoes,ey)=>`<div class="head"><div><div class="eyebrow">${ey||('
     if(d<0) return {etapa,f1,f2,fim,d,c:'crit',t:qual+(etapa===1?' venceu':' terminou')+' há '+plural(-d,'dia','dias'),n:0};
     if(d<=PZ_AVISO()) return {etapa,f1,f2,fim,d,c:'warn',t:d===0?qual+' termina hoje':qual+' termina em '+plural(d,'dia','dias'),n:1};
     return {etapa,f1,f2,fim,d,c:'ok',t:(etapa===1?'1ª etapa':'2ª etapa')+' até '+br(fim),n:2}; }
+  /* 17/11/2026 · resumo do cadastro para o Quadro de pessoas do gestor (o login do gestor não lê o RH): presenca/cadastro
+     {cad:[{n,e,v,adm,fn,s,exp:{fim,et},pz}], em}. SEM CPF, sem salário, sem endereço. Só regrava quando muda. */
+  let _cadH='';
+  function pubCad(){ if(!(R.lido&&R.lido.func)||!P.db()) return;
+    const cad=ativos().filter(f=>f&&f.nome&&f.status!=='Desligado').map(f=>{ let x=null; try{ x=expInfo(f); }catch(e){}
+      return {n:String(f.nome),e:String(f.empresa||''),v:String(f.tipo||''),adm:okIso(f.admissao)?f.admissao:'',fn:cargo(f.funcao||''),s:String(f.setor||''),
+        exp:x&&x.fim?{fim:x.fim,et:x.etapa}:null,pz:temPrazo(f)?f.prazo.fim:''}; }).sort((a,b)=>a.n.localeCompare(b.n,'pt-BR'));
+    const h=JSON.stringify(cad); if(h===_cadH) return; _cadH=h;
+    P.db().doc('presenca/cadastro').set({cad,em:new Date().toISOString()}).catch(e=>{ _cadH=''; console.warn('[quadro] cadastro',e&&e.code); }); }
   /* 30/10: o que fazer com a experiência (depois que a 1ª etapa vence não dá mais para prorrogar) */
   const expAcao=s=>s.d<0?(s.etapa===1?'passou do prazo para prorrogar sem prorrogação registrada: confira com a contabilidade, o contrato pode já valer por tempo indeterminado':'terminou sem efetivar ou desligar: confira com a contabilidade e registre')
     :(s.etapa===1?'prorrogar, efetivar ou desligar até o dia '+br(s.fim).slice(0,5):'efetivar ou desligar até o dia '+br(s.fim).slice(0,5));

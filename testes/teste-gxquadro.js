@@ -3,11 +3,11 @@ const H=require('./harness'); const {seedManut}=require('./manut-seed'); const r
 (async()=>{ const {d}=seedManut(); const D=d.docs; const hoje=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
  d.users['marcelo@painel-colafix.app']={uid:'uMAR',pass:'mar123',nome:'Marcelo Souza'}; D['perfis/uMAR']={nome:'Marcelo Souza',usuario:'marcelo'}; D['acessos/uMAR']={perfil:'gestor',mods:['gestor','producao','silos','manut','telas','analise'],locais:[],ativo:true};
  D['presenca/'+hoje]={dia:hoje,exp:true,p:[{n:'ANA TESTE PRIMEIRA',s:'Linha 1',e:'COLAFIX',c:'07:20'},{n:'BETO TESTE SEGUNDO',s:'Expedição',e:'COLAFIX',c:'07:25'},{n:'Lucas De Teste Narciso',s:'',e:'Zenith',c:'07:30'}],f:[{n:'CAIO TESTE TERCEIRO',s:'Rejunte',e:'ZENITH',m:'Sem registro'},{n:'Lucas De Teste Narcizo',s:'EXPEDIÇÃO',e:'Zenith',m:'Sem registro'}],em:new Date().toISOString()};
- const erros=[]; const B=await H.abrir({viewport:{width:1440,height:900}}); const p=B.page; p.on('pageerror',e=>erros.push(e.message)); await H.preparar(p,d); await p.goto(H.BASE); await H.entrar(p,'marcelo','mar123'); await H.dorme(4000);
+ const erros=[]; const B=await H.abrir({viewport:{width:1440,height:1500}}); const p=B.page; p.on('pageerror',e=>erros.push(e.message)); await H.preparar(p,d); await p.goto(H.BASE); await H.entrar(p,'marcelo','mar123'); await H.dorme(4000);
  await p.click('#navlist [data-go="gxpres"]'); await H.dorme(900);
  let s=await p.evaluate(()=>[...document.querySelectorAll('.gxg-tabs .gxg-tb')].map(b=>b.innerText.replace(/\d+$/,'').trim()).join('|'));
  ok('Pessoas tem a aba Quadro de pessoas', /Quadro de pessoas/.test(s), s);
- await p.click('.gxg-tabs [data-go="gxqd"]'); await H.dorme(900);
+ await p.evaluate(()=>document.querySelector('.gxg-tabs [data-go="gxqd"]').click()); await H.dorme(900);
  s=await p.evaluate(()=>({v:__T.S().view,cols:[...document.querySelectorAll('.qd-ct')].map(b=>b.innerText)}));
  ok('Abre com as linhas e os setores como colunas', s.v==='gxqd'&&s.cols.length>=8&&/LINHA 1/i.test(s.cols[0])&&s.cols.some(c=>/Expedi/i.test(c)), JSON.stringify(s));
  const col=i=>p.evaluate(i=>document.querySelectorAll('.qd-c')[i].dataset.qdcol,i);

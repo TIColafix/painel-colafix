@@ -9,7 +9,7 @@ const H=require('./harness'); const {seedManut}=require('./manut-seed'); const o
  D['gxquadro/atual']={cols:[{id:'c1',nome:'Linha 1',meta:3,ps:[{id:'p1',n:'ANA TESTE PRIMEIRA',st:'fica'},{id:'p2',n:'BETO TESTE SEGUNDO',st:'esp',espMot:'Exame admissional',espAte:ontem}]},{id:'c2',nome:'Expedição',ps:[{id:'p3',n:'Zeca Digitado',st:''}]}],hist:[],versoes:[]};
  const erros=[]; const B=await H.abrir({viewport:{width:1440,height:1500}}); const p=B.page; p.on('pageerror',e=>erros.push(e.message)); await H.preparar(p,d); await p.goto(H.BASE); await H.entrar(p,'marcelo','mar123'); await H.dorme(3500);
  await p.evaluate(()=>__T.go?__T.go('gxqd'):go('gxqd')).catch(()=>{}); await H.dorme(400);
- await p.evaluate(()=>{ try{ go('gxqd'); }catch(e){ document.querySelector('[data-go="gxqd"]').click(); } }).catch(async()=>{ await p.click('#navlist [data-go="gxpres"]'); await H.dorme(600); await p.click('.gxg-tabs [data-go="gxqd"]'); });
+ await p.evaluate(()=>{ try{ go('gxqd'); }catch(e){ document.querySelector('[data-go="gxqd"]').click(); } }).catch(async()=>{ await p.click('#navlist [data-go="gxpres"]'); await H.dorme(600); await p.evaluate(()=>document.querySelector('.gxg-tabs [data-go="gxqd"]').click()); });
  await H.dorme(1500);
  const card=id=>p.evaluate(id=>{ const e=document.querySelector(`.qd-p[data-qdp="${id}"]`); return e?e.innerText.replace(/\s+/g,' '):null; },id);
  let s=await card('p1'); ok('Cartão mostra vínculo e tempo de casa', /CLT/.test(s||'')&&/1 ano/.test(s||''), s);

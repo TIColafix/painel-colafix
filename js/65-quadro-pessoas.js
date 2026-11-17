@@ -129,7 +129,7 @@ function qdVerPainel(){ if(S.qd.painel!=='ver') return ''; const V=(qdD().versoe
       <div class="qd-via"><button class="lnk" data-act="qd-vcmp" data-v="${esc(v.id)}">Comparar com agora</button><button class="lnk" data-act="qd-vvolta" data-v="${esc(v.id)}">${S.qd.vconf===v.id?'Toque de novo para voltar':'Voltar para esta'}</button><button class="lnk t-crit" data-act="qd-vx" data-v="${esc(v.id)}">${S.qd.vxconf===v.id?'Toque de novo para apagar':'Apagar'}</button></div></div>`).join('')
       :'<div class="sub">Nenhuma versão guardada ainda.</div>'}</div>`; }
 function vGxQuadro(){ qdAssina(); try{ if(typeof gxpAssina==='function') gxpAssina(); }catch(e){} const D=qdD(), t=qdTot(); S.qd._rh=qdPessoasRH();
-  const k=(v,l,c,f)=>`<button class="qd-k ${c||''} ${S.qd.fil===f?'on':''}" data-act="qd-fil" data-v="${f}" aria-pressed="${S.qd.fil===f}" title="${f?'Mostrar em destaque só quem está assim (toque de novo para ver todos)':'Ver todos'}"><b>${v}</b><span>${l}</span></button>`;
+  const k=(v,l,c,f,i)=>`<button class="qd-k ${c||''} ${S.qd.fil===f?'on':''}" data-act="qd-fil" data-v="${f}" aria-pressed="${S.qd.fil===f}" title="${f?'Mostrar em destaque só quem está assim (toque de novo para ver todos)':'Ver todos'}">${i?`<i class="qd-lgs ${c||''}">${i}</i>`:''}<b>${v}</b><span>${l}</span></button>`;
   let mFal=0, mSob=0, mTem=false; D.cols.forEach(c=>{ const M=qdMetaDe(c); if(M.meta){ mTem=true; if(M.df<0) mFal-=M.df; else mSob+=M.df; } });
   const mk=mTem?`<div class="qd-k ${mFal?'crit':'ok'}" title="Soma das colunas com meta (quantas pessoas cada uma precisa). Quem está marcado Sai não conta."><b>${mFal||'✓'}</b><span>${mFal?'faltam pelas metas':'metas completas'}${mSob?' · sobram '+mSob:''}</span></div>`:'';
   const colH=(c,ci,nA)=>{ const cnt=Object.entries(QD_ST).map(([q,v])=>{ const n=c.ps.filter(p=>p.st===q).length; return n?`<i class="qd-ci ${v.c}">${n} ${q==='fica'?'fica':q==='sai'?'sai':v.t.toLowerCase()}</i>`:''; }).join('');
@@ -159,16 +159,19 @@ function vGxQuadro(){ qdAssina(); try{ if(typeof gxpAssina==='function') gxpAssi
   const emps=[...new Set(D.cols.flatMap(c=>c.ps.map(p=>qdInfo(p.n).e)).filter(Boolean).map(e=>e.toUpperCase()))].sort();
   const vv=qdEspVenc();
   const sel=(id,ops,v,ph)=>`<select class="txt" id="${id}"><option value="">${ph}</option>${ops.map(o=>`<option value="${esc(o[0])}" ${v===o[0]?'selected':''}>${esc(o[1])}</option>`).join('')}</select>`;
-  return `${banner()}${gxCab('VISÃO DO GESTOR','Quadro de pessoas',`<div class="seg qd-vis" role="group" aria-label="Como ver"><button data-act="qd-vis" data-v="col" aria-pressed="${S.qd.vis!=='org'}">Quadro</button><button data-act="qd-vis" data-v="org" aria-pressed="${S.qd.vis==='org'}">Organograma</button></div><button class="btn sec" data-act="qd-pn" data-v="hist">Histórico</button><button class="btn sec" data-act="qd-pn" data-v="ver">Versões</button><button class="btn sec" data-act="qd-xls">Excel</button><details class="qd-impm"><summary class="btn">Imprimir</summary><div class="qd-impl"><button data-act="qd-imp" data-v="dist"><b>Só a distribuição</b><small>Para o mural: quem está em cada setor</small></button><button data-act="qd-imp" data-v="dec"><b>Com as decisões</b><small>Fica, dúvida, espera, não efetivo e sai</small></button></div></details>`)}
-    <div class="qd-lg"><span>Arraste as pessoas entre os setores.</span><span class="qd-lgi"><i class="qd-lgs ok">✓</i>fica</span><span class="qd-lgi"><i class="qd-lgs warn">?</i>dúvida</span><span class="qd-lgi"><i class="qd-lgs esp">◷</i>espera</span><span class="qd-lgi"><i class="qd-lgs nef">NE</i>não efetivo</span><span class="qd-lgi"><i class="qd-lgs crit">✕</i>sai</span><span class="qd-lgi"><i class="qd-lgd veio"></i>veio hoje</span><span class="qd-lgi"><i class="qd-lgd faltou"></i>não veio</span><span class="qd-lgi"><i class="qd-lgd ferias"></i>férias</span><span style="flex:1"></span><span class="qd-lgv">Só você e a administradora veem · <span id="qd-salvo">${quando}</span></span></div>
-    <div class="qd-ks">${k(t.n,'no quadro','','')}${Object.entries(QD_ST).map(([q,v])=>k(t[q],v.pl,v.c,q)).join('')}${k(t.sem,'sem marcar','','sem')}<span style="flex:1"></span><button class="btn sec" data-act="qd-arnova">+ Nova área</button><button class="btn sec" data-act="qd-col">+ Novo setor</button></div>
+  const crTodos=D.cols.length&&D.cols.every(c=>qdCrec()[c.id]);
+  return `${banner()}<div class="qd-top"><div class="qd-tt"><div class="eyebrow">VISÃO DO GESTOR · PESSOAS</div><h1>Quadro de pessoas</h1><div class="qd-sv">Arraste as pessoas entre os setores · só você e a administradora veem · <span id="qd-salvo">${quando}</span></div></div>
+    <div class="qd-ac"><div class="seg qd-vis" role="group" aria-label="Como ver"><button data-act="qd-vis" data-v="col" aria-pressed="${S.qd.vis!=='org'}">Quadro</button><button data-act="qd-vis" data-v="org" aria-pressed="${S.qd.vis==='org'}">Organograma</button></div><button class="btn sec" data-act="qd-pn" data-v="hist">Histórico</button><button class="btn sec" data-act="qd-pn" data-v="ver">Versões</button><button class="btn sec" data-act="qd-xls">Excel</button><details class="qd-impm"><summary class="btn">Imprimir</summary><div class="qd-impl"><button data-act="qd-imp" data-v="dist"><b>Só a distribuição</b><small>Para o mural: quem está em cada setor</small></button><button data-act="qd-imp" data-v="dec"><b>Com as decisões</b><small>Fica, dúvida, espera, não efetivo e sai</small></button></div></details></div></div>
+    <div class="qd-sum">${qdTotalHtml()}<div class="qd-sumr"><div class="qd-ks">${k(t.n,'no quadro','','')}${Object.entries(QD_ST).map(([q,v])=>k(t[q],v.pl,v.c,q,v.i)).join('')}${k(t.sem,'sem marcar','','sem')}</div>
+      <div class="qd-lg" title="Toque num número para destacar só aquelas pessoas"><span class="qd-lgt">Hoje:</span><span class="qd-lgi"><i class="qd-lgd veio"></i>veio</span><span class="qd-lgi"><i class="qd-lgd faltou"></i>faltou</span><span class="qd-lgi"><i class="qd-lgd ferias"></i>férias</span></div></div></div>
     ${vv.length?`<div class="qd-av">◷ <b>${vv.length} ${vv.length>1?'pessoas':'pessoa'} em espera com o prazo vencido:</b> ${vv.map(x=>`<button class="lnk" data-act="qd-sel" data-v="${esc(x.p.id)}">${esc(x.p.n)}</button> <small>(${x.p.espMot?esc(x.p.espMot)+', ':''}venceu ${dm(x.p.espAte)})</small>`).join(' · ')}</div>`:''}
     <div class="qd-fb"><input class="txt" id="qd-busca" type="search" autocomplete="off" placeholder="Procurar setor, nome ou habilidade…" value="${esc(S.qd.busca)}">
       ${sel('qd-femp',emps.map(e=>[qdK(e),qdCap(e)]),S.qd.emp,'Todas as empresas')}${sel('qd-fvin',[['CLT','CLT'],['PJ','PJ']],S.qd.vin,'CLT e PJ')}${sel('qd-fhab',qdHabTodas().map(h=>[qdK(h),h]),S.qd.hab,'Todas as habilidades')}
-      <span class="sub" id="qd-fcont"></span><button class="lnk" data-act="qd-flimpa">limpar</button>${S.qd.vis==='org'?'':`<button class="lnk qd-crt" data-act="qd-crectodos" data-v="${D.cols.length&&D.cols.every(c=>qdCrec()[c.id])?'abrir':'fechar'}">${D.cols.length&&D.cols.every(c=>qdCrec()[c.id])?'▾ Abrir todos os setores':'▸ Recolher todos os setores'}</button>`}</div>
+      <span class="sub" id="qd-fcont"></span><button class="lnk" data-act="qd-flimpa">limpar</button><span class="qd-fbsp"></span>${S.qd.vis==='org'?'':`<button class="lnk qd-crt" data-act="qd-crectodos" data-v="${crTodos?'abrir':'fechar'}" title="${crTodos?'Abrir todos os setores':'Deixar todos os setores só com o nome'}">${crTodos?'▾ Abrir setores':'▸ Recolher setores'}</button>`}<button class="btn sec qd-fbb" data-act="qd-arnova" title="Nova área">+ Área</button><button class="btn sec qd-fbb" data-act="qd-col" title="Novo setor">+ Setor</button></div>
+    ${qdLivresHtml()}
     ${S.qd.fil?`<div class="qd-filav">Mostrando em destaque: <b>${esc(S.qd.fil==='sem'?'Sem marcar':(QD_ST[S.qd.fil]||{}).t||'')}</b> · <button class="lnk" data-act="qd-fil" data-v="">ver todos</button></div>`:''}
     ${qdSelPainel()}${qdAddPainel()}${qdHistPainel()}${qdVerPainel()}
-    <div class="qd-lay"><aside class="qd-lado">${qdTotalHtml()}${qdLivresHtml()}</aside>${S.qd.vis==='org'?`<div class="qd-areas qdo-w ${S.qd.fil?'fil fil-'+esc(S.qd.fil):''}">${qdOrgHtml()}</div>`:`<div class="qd-areas ${S.qd.fil?'fil fil-'+esc(S.qd.fil):''}">${cols}</div>`}</div>${qdOrgPainel()}`; }
+    ${S.qd.vis==='org'?`<div class="qd-areas qdo-w ${S.qd.fil?'fil fil-'+esc(S.qd.fil):''}">${qdOrgHtml()}</div>`:`<div class="qd-areas ${S.qd.fil?'fil fil-'+esc(S.qd.fil):''}">${cols}</div>`}${qdOrgPainel()}`; }
 /* filtros sem redesenhar (busca, empresa, vínculo, habilidade) */
 function qdFiltra(){ if(S.view!=='gxqd') return; const q=qdK(S.qd.busca), ws=q?q.split(' '):[], e=S.qd.emp, v=S.qd.vin, h=S.qd.hab, liga=ws.length||e||v||h; let n=0, tot=0, ns=0;
   const bate=b=>ws.every(w=>String(b||'').split(' ').some(y=>y.startsWith(w)));
@@ -376,10 +379,10 @@ function qdLivres(){ const L=(S.qd._rh||qdPessoasRH()).map(p=>({n:p.n,s:p.s,e:p.
   return L.filter(p=>!qdOnde(p.n)).sort((a,b)=>a.n.localeCompare(b.n,'pt-BR')); }
 function qdIniN(n){ const w=String(n).split(/\s+/).filter(Boolean); return ((w[0]||'')[0]||'')+(w.length>1?w[w.length-1][0]:''); }
 function qdLivresHtml(){ const L=qdLivres(), tem=(S.qd._rh||[]).length||(S.qd.cad||[]).length;
-  return `<section class="qd-lv0"><div class="qd-lvh"><b>Sem setor no quadro</b><span class="qd-lvc">${L.length}</span></div>
-    <div class="sub" style="margin:0">Pessoas do RH que ainda não estão em nenhum setor. Arraste para uma coluna ou toque no nome.</div>
+  if(!L.length&&!tem) return '';
+  return `<section class="qd-lv0 ${S.qd.lvAll?'all':''}"><div class="qd-lvh"><b>Sem setor no quadro</b><span class="qd-lvc">${L.length}</span><span class="qd-lvd">${L.length?'arraste a pessoa para um setor, ou toque no nome e depois em "Pôr aqui"':'todo mundo do RH já está num setor'}</span>${L.length>8?`<button class="lnk qd-lvtg" data-act="qd-lvall">${S.qd.lvAll?'ver menos':'ver todos'}</button>`:''}</div>
     ${S.qd.lvSel?`<div class="qd-lvsel">Escolha o setor para <b>${esc(qdNomeV(S.qd.lvSel))}</b> · <button class="lnk" data-act="qd-lvx">cancelar</button></div>`:''}
-    ${L.length>6?`<input class="txt" id="qd-lvq" type="search" autocomplete="off" placeholder="Procurar" value="${esc(S.qd.lvq)}">`:''}
+    ${L.length>8?`<input class="txt" id="qd-lvq" type="search" autocomplete="off" placeholder="Procurar" value="${esc(S.qd.lvq)}">`:''}
     <div class="qd-lvl">${L.map(p=>`<div role="button" tabindex="0" class="qd-lv ${S.qd.lvSel===p.n?'on':''}" draggable="true" data-qdlv="${esc(p.n)}" data-act="qd-lvsel" data-v="${esc(p.n)}" data-b="${esc(qdK([p.n,p.s,p.e].join(' ')))}"><span class="qd-lvi">${esc(qdIniN(p.n).toUpperCase())}</span><span class="qd-lvt"><b>${esc(qdNomeV(p.n))}</b><small>${esc([qdInfo(p.n).v,p.s,qdCap(p.e)].filter(Boolean).join(' · '))}</small></span></div>`).join('')
       ||`<div class="sub" style="margin:0">${tem?'Todo mundo do RH já está no quadro.':'A lista aparece quando o RH publicar a presença do Face ID.'}</div>`}</div></section>`; }
 function qdLvFiltra(){ const q=qdK(S.qd.lvq), ws=q?q.split(' '):[]; document.querySelectorAll('.qd-lv').forEach(x=>{ const b=x.dataset.b||''; x.style.display=!ws.length||ws.every(w=>b.split(' ').some(y=>y.startsWith(w)))?'':'none'; }); }
@@ -643,4 +646,34 @@ document.head.insertAdjacentHTML('beforeend',`<style id="qd-org-css2">
 .qdo-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 8px}.qdo-bar .qdo-dica{margin:0;flex:1 1 300px}
 .qdo-zm{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}.qdo-zm button{font:inherit;font-size:12.5px;border:0;background:none;padding:5px 10px;cursor:pointer;color:inherit}.qdo-zm button+button{border-left:1px solid var(--line)}.qdo-zm button:hover{background:var(--ground)}
 .qdo{max-height:calc(100vh - 150px)}.qdo-n{width:190px}
+</style>`);
+/* topo do quadro refeito (17/11/2026, "o Total e o Sem setor estão atrapalhando, têm que ficar em cima; refaça a parte de cima"):
+   título com as ações à direita, faixa do total da fábrica + números + legenda, barra de busca com os botões, "Sem setor" em faixa
+   e os setores na largura toda. A barra de abas do grupo (Pessoas · Quem está hoje…) some no computador: a lateral já tem. */
+document.addEventListener('click',e=>{ const b=e.target.closest&&e.target.closest('[data-act="qd-lvall"]'); if(!b||S.view!=='gxqd') return; S.qd.lvAll=!S.qd.lvAll; render(); },true);
+document.head.insertAdjacentHTML('beforeend',`<style id="qd-css4">
+@media (min-width:861px){body.gx-solo:not(.side-min) .gxg-tabs{display:none}}
+.qd-top{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:0 0 14px}.qd-tt{flex:1 1 320px;min-width:0}.qd-tt h1{margin:2px 0 4px}
+.qd-sv{font-size:12.5px;color:var(--muted)}
+.qd-ac{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.qd-ac .btn{height:38px}.qd-ac .qd-impm>summary{height:38px;display:inline-flex;align-items:center}
+.qd-sum{display:grid;grid-template-columns:minmax(260px,330px) minmax(0,1fr);gap:12px;margin:0 0 12px;align-items:stretch}
+.qd-sum .qd-tot{padding:12px 16px;border-radius:14px;display:flex;flex-direction:column;justify-content:center}
+.qd-sum .qd-totn{margin-top:2px}.qd-sum .qd-totn b{font-size:30px}.qd-sum .qd-totb{margin-top:8px;height:6px}
+.qd-sum .qd-totg{grid-template-columns:repeat(4,auto);justify-content:space-between;gap:4px 12px;margin-top:8px;font-size:12px}.qd-sum .qd-totg b{font-size:15px}
+.qd-sumr{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;justify-content:center;min-width:0}
+.qd-sum .qd-ks{margin:0;gap:6px;flex-wrap:wrap}
+.qd-sum .qd-k{min-width:0;display:inline-flex;align-items:center;gap:6px;padding:6px 12px 6px 8px;border-radius:999px;box-shadow:none;background:var(--ground)}
+.qd-sum .qd-k b{font-size:17px;font-weight:600;display:inline}.qd-sum .qd-k span{font-size:12.5px}.qd-sum .qd-k .qd-lgs{min-width:20px;height:20px}
+.qd-sum .qd-k:first-child{padding-left:12px;background:var(--surface);border-color:var(--line)}
+.qd-sum .qd-lg{margin:0;font-size:12px}.qd-lgt{color:var(--muted);opacity:.85}
+.qd-fb{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px;margin:0 0 12px}.qd-fb #qd-busca{flex:1 1 200px;min-width:160px}
+.qd-fb .txt,.qd-fb select{height:38px;font-size:14px}.qd-fb select{min-width:0!important;width:auto;max-width:175px}.qd-fb{flex-wrap:wrap;row-gap:8px}.qd-sum .qd-k{padding:5px 11px 5px 7px}.qd-sum .qd-k span{font-size:12px}.qd-fbsp{flex:1}.qd-fbb{height:38px!important;padding:0 12px!important;font-size:13.5px!important;min-width:0!important}.qd-crt{font-size:13px;white-space:nowrap}
+.qd-lv0{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:0 0 14px;display:flex;flex-direction:column;gap:8px;overflow:visible}
+.qd-lv0 .qd-lvh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.qd-lvd{font-size:12.5px;color:var(--muted);flex:1}.qd-lvtg{font-size:13px}
+.qd-lv0 #qd-lvq{height:34px;max-width:320px}
+.qd-lv0 .qd-lvl{display:flex;flex-wrap:wrap;gap:6px;max-height:84px;overflow:auto;flex-direction:row}.qd-lv0.all .qd-lvl{max-height:none}
+.qd-lv0 .qd-lv{flex:none;padding:4px 10px 4px 4px;border-radius:999px;gap:7px;width:auto;max-width:280px}
+.qd-lv0 .qd-lvi{width:28px;height:28px;font-size:10.5px}.qd-lv0 .qd-lvt b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}.qd-lv0 .qd-lvt small{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.qd-lvsel{font-size:13px}
+@media (max-width:900px){.qd-sum{grid-template-columns:1fr}.qd-ac{width:100%}}
 </style>`);

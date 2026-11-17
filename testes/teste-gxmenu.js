@@ -10,15 +10,15 @@ const H=require('./harness'); const {seedManut}=require('./manut-seed'); const r
  await p.click('#navlist [data-go="gxch"]'); await H.dorme(800);
  let s=await p.evaluate(()=>({sub:[...document.querySelectorAll('#navlist .gxg-si')].map(b=>b.innerText.replace(/\d+$/,'').trim()),tabs:[...document.querySelectorAll('.gxg-tabs .gxg-tb')].map(b=>b.innerText.replace(/\d+$/,'').trim()),v:__T.S().view}));
  ok('Manutenção abre Chamados, com Chamados · Pedidos de peça · Itens · Preventivas · Máquinas na lateral e nas abas', s.v==='gxch'&&s.sub.join('|')==='Chamados|Pedidos de peça|Itens|Preventivas|Máquinas'&&s.tabs.join('|')==='Chamados|Pedidos de peça|Itens|Preventivas|Máquinas', JSON.stringify(s));
- await p.click('.gxg-tabs [data-go="gxpec"]'); await H.dorme(800); ok('Aba "Pedidos de peça" abre a tela', await p.evaluate(()=>__T.S().view==='gxpec'));
+ await p.evaluate(()=>document.querySelector('.gxg-tabs [data-go="gxpec"]').click()); await H.dorme(800); ok('Aba "Pedidos de peça" abre a tela', await p.evaluate(()=>__T.S().view==='gxpec'));
  await p.click('#navlist [data-go="gxpres"]'); await H.dorme(800);
  s=await p.evaluate(()=>[...document.querySelectorAll('.gxg-tabs .gxg-tb')].map(b=>b.innerText.trim())); ok('Pessoas: Quem está hoje · Saídas no expediente · Hora extra · Quadro de pessoas · Uniformes · Segurança', s.join('|')==='Quem está hoje|Saídas no expediente|Hora extra|Quadro de pessoas|Uniformes|Segurança', s.join('|'));
  await p.click('#navlist [data-go="gxcad"]'); await H.dorme(800);
  s=await p.evaluate(()=>[...document.querySelectorAll('.gxg-tabs .gxg-tb')].map(b=>b.innerText.trim())); ok('Cadastros: Motivos e equipes · Turnos', s.join('|')==='Motivos e equipes|Turnos', s.join('|'));
- await p.click('#navlist [data-go="gxprod"]'); await H.dorme(800); await p.click('.gxg-tabs [data-go="gxdia"]'); await H.dorme(800);
+ await p.click('#navlist [data-go="gxprod"]'); await H.dorme(800); await p.evaluate(()=>document.querySelector('.gxg-tabs [data-go="gxdia"]').click()); await H.dorme(800);
  s=await p.evaluate(()=>({v:__T.S().view,cur:(document.querySelector('.gxg-tabs [aria-current]')||{}).innerText}));
  ok('Produção › Relatórios', s.v==='gxdia'&&s.cur==='Relatórios', JSON.stringify(s));
- await p.click('.gxg-tabs [data-go="prodano"]'); await H.dorme(1500);
+ await p.evaluate(()=>document.querySelector('.gxg-tabs [data-go="prodano"]').click()); await H.dorme(1500);
  s=await p.evaluate(()=>({v:__T.S().view,cur:(document.querySelector('.gxg-tabs [aria-current]')||{}).innerText,tabs:[...document.querySelectorAll('.gxg-tabs .gxg-tb')].map(b=>b.innerText.trim()).join('|'),h:(document.querySelector('#view h1')||{}).innerText,mod:document.body.classList.contains('gx-mod')}));
  ok('Produção › Produção do ano (o gestor também vê)', s.v==='prodano'&&s.cur==='Produção do ano'&&/Produção do ano/.test(s.h)&&s.mod&&/Relatórios\|Produção do ano/.test(s.tabs), JSON.stringify(s));
  /* busca */

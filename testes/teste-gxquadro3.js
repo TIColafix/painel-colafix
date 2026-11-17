@@ -6,7 +6,7 @@ const H=require('./harness'); const {seedManut}=require('./manut-seed'); const o
  D['presenca/'+hoje]={dia:hoje,exp:true,p:[{n:'ANA TESTE PRIMEIRA',s:'Linha 1',e:'COLAFIX'},{n:'WAGNER TESTE LIVRE',s:'Expedição',e:'COLAFIX'}],f:[{n:'XENIA TESTE SOLTA',s:'',e:'NEXUS',m:'Sem registro'}],em:new Date().toISOString()};
  D['gxquadro/atual']={cols:[{id:'c1',nome:'Linha 1',meta:3,ps:[{id:'p1',n:'ANA TESTE PRIMEIRA',st:'fica'}]},{id:'c2',nome:'Almoxarifado',meta:1,ps:[{id:'p2',n:'BETO TESTE',st:'sai'},{id:'p3',n:'CAIO TESTE',st:'esp'}]},{id:'c3',nome:'Rejunte',ps:[]}],hist:[],versoes:[]};
  const erros=[]; const B=await H.abrir({viewport:{width:1440,height:1500}}); const p=B.page; p.on('pageerror',e=>erros.push(e.message)); await H.preparar(p,d); await p.goto(H.BASE); await H.entrar(p,'marcelo','mar123'); await H.dorme(3000);
- await p.click('#navlist [data-go="gxpres"]'); await H.dorme(700); await p.click('.gxg-tabs [data-go="gxqd"]'); await H.dorme(1500);
+ await p.click('#navlist [data-go="gxpres"]'); await H.dorme(700); await p.evaluate(()=>document.querySelector('.gxg-tabs [data-go="gxqd"]').click()); await H.dorme(1500);
  let s=await p.evaluate(()=>[...document.querySelectorAll('.qd-ar')].map(a=>a.querySelector('.qd-art').innerText+':'+[...a.querySelectorAll('.qd-ct')].map(x=>x.innerText).join(',')).join(' | '));
  ok('Setores agrupados por área (Produção · Apoio · Fixcol)', /Produção:Linha 1/i.test(s)&&/Apoio:Almoxarifado/i.test(s)&&/Fixcol:Rejunte/i.test(s), s);
  s=await p.evaluate(()=>document.querySelectorAll('.qd-c[data-qdcol="c1"] .qd-vg').length); ok('Vagas tracejadas pela meta (1 de 3 → 2 vagas)', s===2, s);

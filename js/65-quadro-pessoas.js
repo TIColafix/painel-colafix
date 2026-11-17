@@ -10,7 +10,7 @@
    Dados: gxquadro/atual {cols:[{id,nome,ps:[{id,n,obs,st}]}], em, por, porNome} — coleção protegida no firestore.rules
    (só a dona e quem tem a Visão do gestor; publicar as regras). */
 "use strict";
-S.qd={dados:null,sub:false,sel:null,q:'',add:null,ed:null,salv:0,drag:null,rasc:'',fil:'',busca:'',emp:'',vin:'',hab:'',painel:'',metaEd:null,cmp:null,cad:null,lido:false};
+S.qd={dados:null,sub:false,sel:null,q:'',add:null,ed:null,salv:0,drag:null,rasc:'',fil:'',busca:'',emp:'',vin:'',hab:'',painel:'',metaEd:null,cmp:null,cad:null,lido:false,cdrag:null,ldrag:null,lvSel:null,lvq:'',arEd:null,arx:null};
 /* situações (16/11/2026, pedido do Marcelo: "em espera" e "não efetivo"). i = símbolo do botão; pl = como aparece nos números e na impressão */
 const QD_ST={fica:{t:'Fica',c:'ok',i:'✓',pl:'ficam'},duv:{t:'Em dúvida',c:'warn',i:'?',pl:'em dúvida'},esp:{t:'Em espera',c:'esp',i:'◷',pl:'em espera'},nef:{t:'Não efetivo',c:'nef',i:'NE',pl:'não efetivos'},sai:{t:'Sai',c:'crit',i:'✕',pl:'saem'}};
 const QD_PADRAO=['Rejunte','Fixcol','Área líquida','Almoxarifado','Expedição','Argamassa geral','Premix','Cargas rejunte'];
@@ -23,11 +23,11 @@ function qdK(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').to
 function qdD(){ if(!S.qd.dados) S.qd.dados=qdIni(); return S.qd.dados; }
 function qdAssina(){ if(S.qd.sub||!S.db||!qdPode()) return; S.qd.sub=true;
   inscrever('gxquadro',()=>S.db.collection('gxquadro').doc('atual'),snap=>{ const d=snap&&snap.exists?snap.data():null;
-    if(d&&Array.isArray(d.cols)&&!(S.qd.salv&&Date.now()-S.qd.salv<2500)) S.qd.dados={cols:d.cols,em:d.em,porNome:d.porNome,hist:d.hist||[],versoes:d.versoes||[]}; S.qd.lido=true; rerenderSeguro(); });
+    if(d&&Array.isArray(d.cols)&&!(S.qd.salv&&Date.now()-S.qd.salv<2500)) S.qd.dados={cols:d.cols,areas:d.areas||null,em:d.em,porNome:d.porNome,hist:d.hist||[],versoes:d.versoes||[]}; S.qd.lido=true; rerenderSeguro(); });
   inscrever('qdcad',()=>S.db.collection('presenca').doc('cadastro'),snap=>{ S.qd.cad=snap&&snap.exists?((snap.data()||{}).cad||[]):[]; rerenderSeguro(); }); }
 let _qdT=null;
 function qdGrava(){ const D=qdD(); S.qd.dados=D; S.qd.salv=Date.now(); clearTimeout(_qdT);
-  _qdT=setTimeout(async()=>{ try{ await S.db.collection('gxquadro').doc('atual').set({cols:D.cols,hist:(D.hist||[]).slice(-300),versoes:D.versoes||[],em:new Date().toISOString(),por:(S.user&&S.user.uid)||'',porNome:(typeof gxEu==='function'?gxEu():'')||''}); S.qd.salv=Date.now(); D.em=new Date().toISOString(); D.porNome=(typeof gxEu==='function'?gxEu():'')||''; const el=document.getElementById('qd-salvo'); if(el) el.textContent='Salvo agora'; }
+  _qdT=setTimeout(async()=>{ try{ await S.db.collection('gxquadro').doc('atual').set({cols:D.cols,areas:qdAreas(),hist:(D.hist||[]).slice(-300),versoes:D.versoes||[],em:new Date().toISOString(),por:(S.user&&S.user.uid)||'',porNome:(typeof gxEu==='function'?gxEu():'')||''}); S.qd.salv=Date.now(); D.em=new Date().toISOString(); D.porNome=(typeof gxEu==='function'?gxEu():'')||''; const el=document.getElementById('qd-salvo'); if(el) el.textContent='Salvo agora'; }
     catch(e){ toast('Não deu para salvar o quadro: '+(e&&e.message||e)); } },500); }
 function qdLev(a,b){ if(Math.abs(a.length-b.length)>2) return 9; let v=[...Array(b.length+1).keys()]; for(let i=1;i<=a.length;i++){ const w=[i]; for(let j=1;j<=b.length;j++) w[j]=Math.min(v[j]+1,w[j-1]+1,v[j-1]+(a[i-1]===b[j-1]?0:1)); v=w; } return v[b.length]; }
 /* mesma pessoa com grafia diferente (NARCISO/NARCIZO, nome do Face ID × cadastro) */
@@ -75,13 +75,17 @@ function qdCard(c,p,i){ const st=QD_ST[p.st], I=qdInfo(p.n), h=hojeStr(), habs=p
   if(I.cad&&I.cad.adm) inf.push(esc(qdCasa(I.cad.adm)));
   if(I.cad&&I.cad.exp&&I.cad.exp.fim){ const f=I.cad.exp.fim; inf.push(`<b class="${f<h?'c':f<=addDias(h,15)?'w':''}">${f<h?'experiência venceu '+dm(f):'experiência até '+dm(f)}</b>`); }
   if(I.cad&&I.cad.pz){ const f=I.cad.pz; inf.push(`<b class="${f<h?'c':f<=addDias(h,15)?'w':''}">contrato até ${dm(f)}</b>`); }
-  if(I.faltas) inf.push(`<b class="w">${I.faltas} falta${I.faltas>1?'s':''} em ${I.dias} dias</b>`);
+  if(I.faltas) inf.push(`<b class="w">${I.faltas} falta${I.faltas>1?'s':''} em ${I.dias} dia${I.dias>1?'s':''}</b>`);
   const venc=p.st==='esp'&&p.espAte&&p.espAte<h;
   const tag=p.st==='esp'?`<em class="qd-tag esp ${venc?'venc':''}">Em espera${p.espMot?' · '+esc(p.espMot):''}${p.espAte?(venc?' · venceu ':' · até ')+dm(p.espAte):''}</em>`:p.st==='nef'?'<em class="qd-tag nef">Não efetivo</em>':'';
-  const dot=I.hoje?`<i class="qd-dot ${I.hoje}" title="${({veio:'Veio hoje',faltou:'Não veio hoje (sem registro no Face ID)',ferias:'De férias'})[I.hoje]}"></i>`:'';
+  const ht=({veio:'Veio hoje',faltou:'Não veio hoje (sem registro no Face ID)',ferias:'De férias'})[I.hoje]||'Sem informação de hoje';
+  const av=`<span class="qd-pav${I.hoje?' qd-dot '+I.hoje:''}" title="${ht}" aria-hidden="true">${esc(qdIniN(p.n).toUpperCase())}</span>`;
   return `<div class="qd-p ${p.st?'st-'+p.st:'st-sem'} ${S.qd.sel===p.id?'sel':''}" draggable="true" data-qdp="${esc(p.id)}" data-qdc="${esc(c.id)}" data-b="${esc(qdK([p.n,p.obs,habs.join(' '),I.e,I.s,I.fn,p.espMot].join(' ')))}" data-e="${esc(qdK(I.e))}" data-vi="${esc(I.v)}" data-h="|${esc(habs.map(qdK).join('|'))}|">
-    <span class="qd-n">${i+1}</span><button class="qd-nm" data-act="qd-sel" data-v="${esc(p.id)}" title="Mover, marcar ou anotar">${dot}${esc(p.n)}${p.obs?`<small>${esc(p.obs)}</small>`:''}${inf.length?`<span class="qd-inf">${inf.join('<i> · </i>')}</span>`:''}${tag}${habs.length?`<span class="qd-hbs">${habs.slice(0,3).map(x=>`<em class="qd-hb">${esc(x)}</em>`).join('')}${habs.length>3?`<em class="qd-hb">+${habs.length-3}</em>`:''}</span>`:''}</button>
-    <span class="qd-sts">${Object.entries(QD_ST).map(([k,v])=>`<button class="qd-st ${v.c} ${p.st===k?'on':''}" data-act="qd-st" data-v="${esc(p.id)}" data-st="${k}" title="${v.t}" aria-label="${v.t}" aria-pressed="${p.st===k}">${v.i}</button>`).join('')}</span></div>`; }
+    <div class="qd-pr">${av}<button class="qd-nm" data-act="qd-sel" data-v="${esc(p.id)}" title="${esc(p.n)} · ${ht} · toque para mover, marcar ou anotar"><span class="qd-nmt">${esc(qdNomeV(p.n))}</span>${p.obs?`<small>${esc(p.obs)}</small>`:''}${inf.length?`<span class="qd-inf">${inf.join('<i> · </i>')}</span>`:''}${tag}${habs.length?`<span class="qd-hbs">${habs.slice(0,3).map(x=>`<em class="qd-hb">${esc(x)}</em>`).join('')}${habs.length>3?`<em class="qd-hb">+${habs.length-3}</em>`:''}</span>`:''}</button></div>
+    <span class="qd-sts">${Object.entries(QD_ST).map(([k,v])=>`<button class="qd-st ${v.c} ${p.st===k?'on':''}" data-act="qd-st" data-v="${esc(p.id)}" data-st="${k}" title="${v.t}" aria-label="${v.t}" aria-pressed="${p.st===k}">${v.i}<span class="qd-stl">${QD_STC[k]||''}</span></button>`).join('')}</span></div>`; }
+const QD_STC={fica:'Fica',duv:'Dúvida',esp:'Espera',nef:'',sai:'Sai'};
+const QD_MIN=new Set(['de','da','do','das','dos','e']);
+function qdNomeV(n){ return String(n||'').toLowerCase().split(/\s+/).filter(Boolean).map((w,i)=>i&&QD_MIN.has(w)?w:w.charAt(0).toUpperCase()+w.slice(1)).join(' '); }
 function qdPessoaInfo(p){ const I=qdInfo(p.n), h=hojeStr(), L=[];
   if(I.v) L.push(['Vínculo',I.v+(I.e?' · '+qdCap(I.e):'')]); if(I.fn) L.push(['Função',I.fn]); if(I.s) L.push(['Setor no RH',I.s]);
   if(I.cad&&I.cad.adm) L.push(['Admissão',dm(I.cad.adm)+'/'+I.cad.adm.slice(0,4)+' · '+qdCasa(I.cad.adm)]);
@@ -128,30 +132,42 @@ function vGxQuadro(){ qdAssina(); try{ if(typeof gxpAssina==='function') gxpAssi
   const k=(v,l,c,f)=>`<button class="qd-k ${c||''} ${S.qd.fil===f?'on':''}" data-act="qd-fil" data-v="${f}" aria-pressed="${S.qd.fil===f}" title="${f?'Mostrar em destaque só quem está assim (toque de novo para ver todos)':'Ver todos'}"><b>${v}</b><span>${l}</span></button>`;
   let mFal=0, mSob=0, mTem=false; D.cols.forEach(c=>{ const M=qdMetaDe(c); if(M.meta){ mTem=true; if(M.df<0) mFal-=M.df; else mSob+=M.df; } });
   const mk=mTem?`<div class="qd-k ${mFal?'crit':'ok'}" title="Soma das colunas com meta (quantas pessoas cada uma precisa). Quem está marcado Sai não conta."><b>${mFal||'✓'}</b><span>${mFal?'faltam pelas metas':'metas completas'}${mSob?' · sobram '+mSob:''}</span></div>`:'';
-  const cols=D.cols.map((c,ci)=>{ const cnt=Object.entries(QD_ST).map(([q,v])=>{ const n=c.ps.filter(p=>p.st===q).length; return n?`<i class="qd-ci ${v.c}">${n} ${q==='fica'?'fica':q==='sai'?'sai':v.t.toLowerCase()}</i>`:''; }).join('');
+  const colH=(c,ci,nA)=>{ const cnt=Object.entries(QD_ST).map(([q,v])=>{ const n=c.ps.filter(p=>p.st===q).length; return n?`<i class="qd-ci ${v.c}">${n} ${q==='fica'?'fica':q==='sai'?'sai':v.t.toLowerCase()}</i>`:''; }).join('');
     const M=qdMetaDe(c), mc=M.meta?(M.df<0?`<i class="qd-ci crit qd-mt">faltam ${-M.df}</i>`:M.df>0?`<i class="qd-ci warn qd-mt">sobra${M.df>1?'m':''} ${M.df}</i>`:'<i class="qd-ci ok qd-mt">completo</i>'):'';
-    return `<section class="qd-c" data-qdcol="${esc(c.id)}"><header>${S.qd.ed===c.id?`<input class="txt qd-cn" id="qd-cn" maxlength="40" value="${esc(c.nome)}"><button class="btn" data-act="qd-cnok">OK</button>`
-      :`<button class="qd-ct" data-act="qd-ced" data-v="${esc(c.id)}" title="Renomear">${esc(c.nome)}</button><span class="qd-cc" title="${M.meta?'pessoas (sem contar quem sai) / quantas a coluna precisa':'pessoas'}">${M.meta?M.at+'/'+M.meta:c.ps.length}</span>${cnt||mc?`<div class="qd-cst">${mc}${cnt}</div>`:''}`}</header>
-      <div class="qd-ps" data-qdcol="${esc(c.id)}">${c.ps.map((p,i)=>qdCard(c,p,i)).join('')||'<div class="qd-vz">Arraste alguém para cá</div>'}</div>
+    const vgs=Math.max(0,(M.meta||0)-M.at);
+    const qa=(qdAreas().find(a=>a.id===qdAreaDe(c))||{}).cor||'#1F5F7A', pct=M.meta?Math.min(100,Math.round(M.at/M.meta*100)):0, bc=M.meta?(M.df<0?'crit':M.df>0?'warn':'ok'):'';
+    return `<section class="qd-c ${S.qd.lvSel?'lvalvo':''}" data-qdcol="${esc(c.id)}" style="--qa:${esc(qa)}"><header draggable="true" data-qdcd="${esc(c.id)}" title="Arraste para mudar o setor de lugar ou de área">${S.qd.ed===c.id?`<input class="txt qd-cn" id="qd-cn" maxlength="40" value="${esc(c.nome)}"><button class="btn" data-act="qd-cnok">OK</button>`
+      :`<span class="qd-alc" aria-hidden="true">⋮⋮</span><button class="qd-ct" data-act="qd-ced" data-v="${esc(c.id)}" title="Renomear">${esc(c.nome)}</button><span class="qd-cc" title="${M.meta?'pessoas (sem contar quem sai) / quantas a coluna precisa':'pessoas'}">${M.meta?M.at+'/'+M.meta:c.ps.length}</span>${M.meta?`<div class="qd-cbar ${bc}"><i style="width:${pct}%"></i></div>`:''}${cnt||mc?`<div class="qd-cst">${mc}${cnt}</div>`:''}`}</header>
+      ${S.qd.lvSel?`<button class="btn qd-lvpor" data-act="qd-lvpor" data-v="${esc(c.id)}">Pôr ${esc(qdNomeV(String(S.qd.lvSel).split(' ')[0]))} aqui</button>`:''}<div class="qd-ps" data-qdcol="${esc(c.id)}">${c.ps.map((p,i)=>qdCard(c,p,i)).join('')}${Array.from({length:vgs},()=>'<div class="qd-vg">Vaga aberta · arraste alguém</div>').join('')}${!c.ps.length&&!vgs?'<div class="qd-vz">Arraste alguém para cá</div>':''}</div>
       <footer><button class="lnk" data-act="qd-add" data-v="${esc(c.id)}">+ Pôr pessoa</button>
         ${S.qd.metaEd===c.id?`<span class="qd-me"><input class="txt" id="qd-meta" inputmode="numeric" maxlength="3" value="${M.meta||''}" placeholder="nº"><button class="btn" data-act="qd-metaok" data-v="${esc(c.id)}">OK</button></span>`
           :`<button class="lnk" data-act="qd-meta" data-v="${esc(c.id)}" title="Quantas pessoas esta coluna precisa">${M.meta?'precisa de '+M.meta:'quantos precisa?'}</button>`}<span style="flex:1"></span>
-        <button class="lnk" data-act="qd-cesq" data-v="${esc(c.id)}" ${ci===0?'disabled':''} title="Mudar a coluna para a esquerda" aria-label="Mudar a coluna para a esquerda">‹</button><button class="lnk" data-act="qd-cdir" data-v="${esc(c.id)}" ${ci===D.cols.length-1?'disabled':''} title="Mudar a coluna para a direita" aria-label="Mudar a coluna para a direita">›</button>
-        <button class="lnk t-crit" data-act="qd-cx" data-v="${esc(c.id)}">${S.qd.cx===c.id?(c.ps.length?'Tem pessoas: tire antes':'Toque de novo'):'Apagar'}</button></footer></section>`; }).join('');
+        <button class="lnk" data-act="qd-cesq" data-v="${esc(c.id)}" ${ci===0?'disabled':''} title="Mudar a coluna para a esquerda" aria-label="Mudar a coluna para a esquerda">‹</button><button class="lnk" data-act="qd-cdir" data-v="${esc(c.id)}" ${ci===nA-1?'disabled':''} title="Mudar a coluna para a direita" aria-label="Mudar a coluna para a direita">›</button>
+        <button class="lnk t-crit" data-act="qd-cx" data-v="${esc(c.id)}">${S.qd.cx===c.id?(c.ps.length?'Tem pessoas: tire antes':'Toque de novo'):'Apagar'}</button></footer></section>`; };
+  const AR=qdAreas(), recol=qdRecol();
+  const cols=AR.map((ar,ai)=>{ const cs=D.cols.filter(c=>qdAreaDe(c)===ar.id), tA=qdTotArea(cs), fech=recol[ar.id];
+    return `<section class="qd-ar ${fech?'fech':''}" data-qdar="${esc(ar.id)}"><div class="qd-arh"><span class="qd-arpin" style="background:${esc(ar.cor||'#1F5F7A')}"></span>
+      ${S.qd.arEd===ar.id?`<input class="txt qd-arn" id="qd-arn" maxlength="30" value="${esc(ar.nome)}"><button class="btn" data-act="qd-arok">OK</button>`:`<button class="qd-art" data-act="qd-ared" data-v="${esc(ar.id)}" title="Renomear a área">${esc(ar.nome)}</button>`}
+      <span class="qd-ars">${tA.at}${tA.meta?' de '+tA.meta:''} ${tA.at===1?'pessoa':'pessoas'} · ${cs.length} ${cs.length===1?'setor':'setores'}${tA.meta&&tA.at<tA.meta?` · <b class="c">faltam ${tA.meta-tA.at}</b>`:tA.meta&&tA.at>tA.meta?` · <b class="w">sobram ${tA.at-tA.meta}</b>`:''}</span>
+      <span style="flex:1"></span><button class="lnk" data-act="qd-arcol" data-v="${esc(ar.id)}">+ setor</button>
+      <button class="lnk" data-act="qd-arsob" data-v="${esc(ar.id)}" ${ai===0?'disabled':''} aria-label="Subir a área">↑</button><button class="lnk" data-act="qd-ardes" data-v="${esc(ar.id)}" ${ai===AR.length-1?'disabled':''} aria-label="Descer a área">↓</button>
+      <button class="lnk t-crit" data-act="qd-arx" data-v="${esc(ar.id)}">${S.qd.arx===ar.id?(cs.length?'Tem setores: mova antes':'Toque de novo'):'apagar'}</button>
+      <button class="lnk" data-act="qd-arrec" data-v="${esc(ar.id)}">${fech?'abrir':'recolher'}</button></div>
+      ${fech?'':`<div class="qd-g">${cs.map((c,i)=>colH(c,i,cs.length)).join('')||'<div class="qd-arvz">Arraste um setor para cá</div>'}</div>`}</section>`; }).join('');
   const quando=D.em?`Salvo ${dm(D.em.slice(0,10))} às ${hora(D.em)}${D.porNome?' por '+esc(D.porNome):''}`:'Ainda não salvo';
   const emps=[...new Set(D.cols.flatMap(c=>c.ps.map(p=>qdInfo(p.n).e)).filter(Boolean).map(e=>e.toUpperCase()))].sort();
   const vv=qdEspVenc();
   const sel=(id,ops,v,ph)=>`<select class="txt" id="${id}"><option value="">${ph}</option>${ops.map(o=>`<option value="${esc(o[0])}" ${v===o[0]?'selected':''}>${esc(o[1])}</option>`).join('')}</select>`;
-  return `${banner()}${gxCab('VISÃO DO GESTOR','Quadro de pessoas',`<button class="btn sec" data-act="qd-pn" data-v="hist">Histórico</button><button class="btn sec" data-act="qd-pn" data-v="ver">Versões</button><button class="btn sec" data-act="qd-xls">Excel</button><button class="btn sec" data-act="qd-imp" data-v="dist">Imprimir só a distribuição</button><button class="btn" data-act="qd-imp" data-v="dec">Imprimir com as decisões</button>`)}
-    <div class="sub" style="margin:-6px 0 12px">Arraste os nomes entre as colunas, como no quadro branco. Marque quem fica (✓), está em dúvida (?), está em espera (◷), não é efetivo (NE) ou sai (✕). Toque num número para destacar só aquelas pessoas; bolinha verde = veio hoje, vermelha = não veio. Só você e a administradora veem este quadro. · <span id="qd-salvo">${quando}</span></div>
-    <div class="qd-ks">${k(t.n,'no quadro','','')}${Object.entries(QD_ST).map(([q,v])=>k(t[q],v.pl,v.c,q)).join('')}${k(t.sem,'sem marcar','','sem')}${mk}<span style="flex:1"></span><button class="btn sec" data-act="qd-col">+ Nova coluna</button></div>
+  return `${banner()}${gxCab('VISÃO DO GESTOR','Quadro de pessoas',`<button class="btn sec" data-act="qd-pn" data-v="hist">Histórico</button><button class="btn sec" data-act="qd-pn" data-v="ver">Versões</button><button class="btn sec" data-act="qd-xls">Excel</button><details class="qd-impm"><summary class="btn">Imprimir</summary><div class="qd-impl"><button data-act="qd-imp" data-v="dist"><b>Só a distribuição</b><small>Para o mural: quem está em cada setor</small></button><button data-act="qd-imp" data-v="dec"><b>Com as decisões</b><small>Fica, dúvida, espera, não efetivo e sai</small></button></div></details>`)}
+    <div class="qd-lg"><span>Arraste as pessoas entre os setores.</span><span class="qd-lgi"><i class="qd-lgs ok">✓</i>fica</span><span class="qd-lgi"><i class="qd-lgs warn">?</i>dúvida</span><span class="qd-lgi"><i class="qd-lgs esp">◷</i>espera</span><span class="qd-lgi"><i class="qd-lgs nef">NE</i>não efetivo</span><span class="qd-lgi"><i class="qd-lgs crit">✕</i>sai</span><span class="qd-lgi"><i class="qd-lgd veio"></i>veio hoje</span><span class="qd-lgi"><i class="qd-lgd faltou"></i>não veio</span><span class="qd-lgi"><i class="qd-lgd ferias"></i>férias</span><span style="flex:1"></span><span class="qd-lgv">Só você e a administradora veem · <span id="qd-salvo">${quando}</span></span></div>
+    <div class="qd-ks">${k(t.n,'no quadro','','')}${Object.entries(QD_ST).map(([q,v])=>k(t[q],v.pl,v.c,q)).join('')}${k(t.sem,'sem marcar','','sem')}<span style="flex:1"></span><button class="btn sec" data-act="qd-arnova">+ Nova área</button><button class="btn sec" data-act="qd-col">+ Novo setor</button></div>
     ${vv.length?`<div class="qd-av">◷ <b>${vv.length} ${vv.length>1?'pessoas':'pessoa'} em espera com o prazo vencido:</b> ${vv.map(x=>`<button class="lnk" data-act="qd-sel" data-v="${esc(x.p.id)}">${esc(x.p.n)}</button> <small>(${x.p.espMot?esc(x.p.espMot)+', ':''}venceu ${dm(x.p.espAte)})</small>`).join(' · ')}</div>`:''}
     <div class="qd-fb"><input class="txt" id="qd-busca" type="search" autocomplete="off" placeholder="Procurar nome, habilidade, setor…" value="${esc(S.qd.busca)}">
       ${sel('qd-femp',emps.map(e=>[qdK(e),qdCap(e)]),S.qd.emp,'Todas as empresas')}${sel('qd-fvin',[['CLT','CLT'],['PJ','PJ']],S.qd.vin,'CLT e PJ')}${sel('qd-fhab',qdHabTodas().map(h=>[qdK(h),h]),S.qd.hab,'Todas as habilidades')}
       <span class="sub" id="qd-fcont"></span><button class="lnk" data-act="qd-flimpa">limpar</button></div>
     ${S.qd.fil?`<div class="qd-filav">Mostrando em destaque: <b>${esc(S.qd.fil==='sem'?'Sem marcar':(QD_ST[S.qd.fil]||{}).t||'')}</b> · <button class="lnk" data-act="qd-fil" data-v="">ver todos</button></div>`:''}
     ${qdSelPainel()}${qdAddPainel()}${qdHistPainel()}${qdVerPainel()}
-    <div class="qd-g ${S.qd.fil?'fil fil-'+esc(S.qd.fil):''}">${cols}</div>`; }
+    <div class="qd-lay"><aside class="qd-lado">${qdTotalHtml()}${qdLivresHtml()}</aside><div class="qd-areas ${S.qd.fil?'fil fil-'+esc(S.qd.fil):''}">${cols}</div></div>`; }
 /* filtros sem redesenhar (busca, empresa, vínculo, habilidade) */
 function qdFiltra(){ if(S.view!=='gxqd') return; const q=qdK(S.qd.busca), ws=q?q.split(' '):[], e=S.qd.emp, v=S.qd.vin, h=S.qd.hab; let n=0, tot=0;
   document.querySelectorAll('.qd-g .qd-p').forEach(x=>{ tot++; const b=x.dataset.b||''; const ok=(!ws.length||ws.every(w=>b.split(' ').some(y=>y.startsWith(w))))&&(!e||x.dataset.e===e)&&(!v||x.dataset.vi===v)&&(!h||(x.dataset.h||'').includes('|'+h+'|'));
@@ -190,15 +206,15 @@ function qdImprimir(dec){ const D=qdD(), t=qdTot(), w=window.open('','_blank'); 
     li.x span{text-decoration:line-through;color:#8a8a8a}b{font-size:8.5pt;white-space:nowrap}.fica{color:#2F6E4F}.sai{color:#B5473F}.duv{color:#A86A16}.esp{color:#2B6A87}.nef{color:#6B4E9B}
     .r{margin-top:4mm;font-size:9pt;color:#5E6E77}</style></head><body>
     <div class="t">${logo?`<img src="${logo}" alt="Colafix">`:''}<div><h1>Quadro de pessoas${dec?' · decisões':''}</h1><p>${t.n} pessoas · ${D.cols.length} setores${dec?Object.entries(QD_ST).map(([q,v])=>` · ${v.pl} ${t[q]}`).join(''):''} · ${new Date().toLocaleDateString('pt-BR')}</p></div></div>
-    <div class="g">${D.cols.map(box).join('')}</div>${dec?'<div class="r">Documento interno da gestão.</div>':''}
+    <div class="g">${qdAreas().map(ar=>D.cols.filter(c=>qdAreaDe(c)===ar.id).map(box).join('')).join('')}</div>${dec?'<div class="r">Documento interno da gestão.</div>':''}
     <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`); w.document.close(); }
 /* ---------- ações ---------- */
 function qdAcha(id){ for(const c of qdD().cols){ const i=c.ps.findIndex(p=>p.id===id); if(i>=0) return {c,i,p:c.ps[i]}; } return null; }
 function qdMove(pid,cid,pos){ const D=qdD(), a=qdAcha(pid), to=D.cols.find(c=>c.id===cid); if(!a||!to) return; if(a.c.id!==to.id) qdLog(a.p.n+': '+a.c.nome+' → '+to.nome); a.c.ps.splice(a.i,1); if(pos==null||pos>to.ps.length) pos=to.ps.length; to.ps.splice(pos,0,a.p); qdGrava(); }
 function qdLeObs(){ const i=document.getElementById('qd-obs'); if(i&&S.qd.sel){ const a=qdAcha(S.qd.sel); if(a&&(a.p.obs||'')!==i.value.trim()){ a.p.obs=i.value.trim().slice(0,60); qdGrava(); } } }
-function qdPor(n,cid){ const D=qdD(), col=D.cols.find(c=>c.id===cid); n=String(n||'').trim().replace(/\s+/g,' '); if(!col||!n) return;
+function qdPor(n,cid,pos){ const D=qdD(), col=D.cols.find(c=>c.id===cid); n=String(n||'').trim().replace(/\s+/g,' '); if(!col||!n) return;
   const ja=qdOnde(n); if(ja){ toast(n+' já está em '+ja+'. Arraste o nome para mudar de coluna.'); return; }
-  col.ps.push({id:qdId(),n,obs:'',st:''}); qdLog(n+' entrou em '+col.nome); S.qd.q=''; qdGrava(); toast(n+' entrou em '+col.nome); }
+  const np={id:qdId(),n,obs:'',st:''}; if(pos==null||pos>col.ps.length) col.ps.push(np); else col.ps.splice(pos,0,np); qdLog(n+' entrou em '+col.nome); S.qd.q=''; qdGrava(); toast(n+' entrou em '+col.nome); }
 document.addEventListener('click',e=>{ const b=e.target.closest('[data-act^="qd-"]'); if(!b||S.view!=='gxqd') return; const a=b.dataset.act, v=b.dataset.v, D=qdD();
   if(a!=='qd-tira') S.qd.tira=null; if(a!=='qd-cx') S.qd.cx=null;
   if(a==='qd-sel'){ qdLeObs(); S.qd.sel=S.qd.sel===v?null:v; S.qd.add=null; S.qd.painel=''; S.qd.cmp=null; render(); return; }
@@ -222,14 +238,16 @@ document.addEventListener('click',e=>{ const b=e.target.closest('[data-act^="qd-
   if(a==='qd-st'){ const x=qdAcha(v); if(x){ const st=b.dataset.st||''; const ant=x.p.st||''; x.p.st=x.p.st===st&&b.closest('.qd-p')?'':st; if((x.p.st||'')!==ant) qdLog(x.p.n+': '+qdStT(ant)+' → '+qdStT(x.p.st)); qdGrava(); render(); } return; }
   if(a==='qd-mv'){ qdLeObs(); qdMove(S.qd.sel,v); render(); return; }
   if(a==='qd-sobe'||a==='qd-desce'){ const x=qdAcha(S.qd.sel); if(x){ const j=x.i+(a==='qd-sobe'?-1:1); if(j>=0&&j<x.c.ps.length){ x.c.ps.splice(x.i,1); x.c.ps.splice(j,0,x.p); qdGrava(); } render(); } return; }
+  if(qdAcaoArea(a,v,b)) return;
   if(a==='qd-tira'){ const x=qdAcha(S.qd.sel); if(!x) return; if(S.qd.tira!==x.p.id){ S.qd.tira=x.p.id; render(); return; } x.c.ps.splice(x.i,1); qdLog(x.p.n+' saiu do quadro (estava em '+x.c.nome+')'); S.qd.sel=null; S.qd.tira=null; qdGrava(); render(); return; }
   if(a==='qd-add'){ qdLeObs(); S.qd.add=v; S.qd.sel=null; S.qd.q=''; render(); setTimeout(()=>{ const i=document.getElementById('qd-q'); if(i) i.focus(); },50); return; }
   if(a==='qd-addrh'){ qdPor(v,S.qd.add); render(); return; }
   if(a==='qd-addtxt'){ const i=document.getElementById('qd-q'); qdPor(i?i.value:S.qd.q,S.qd.add); render(); setTimeout(()=>{ const j=document.getElementById('qd-q'); if(j) j.focus(); },50); return; }
-  if(a==='qd-col'){ D.cols.push({id:qdId(),nome:'Nova coluna',ps:[]}); S.qd.ed=D.cols[D.cols.length-1].id; qdGrava(); render(); setTimeout(()=>{ const i=document.getElementById('qd-cn'); if(i){ i.focus(); i.select(); } },50); return; }
+  if(a==='qd-col'){ const AR=qdAreas(); D.cols.push({id:qdId(),nome:'Nova coluna',ps:[],area:(AR[AR.length-1]||{}).id}); S.qd.ed=D.cols[D.cols.length-1].id; qdGrava(); render(); setTimeout(()=>{ const i=document.getElementById('qd-cn'); if(i){ i.focus(); i.select(); } },50); return; }
   if(a==='qd-ced'){ S.qd.ed=v; render(); setTimeout(()=>{ const i=document.getElementById('qd-cn'); if(i){ i.focus(); i.select(); } },50); return; }
   if(a==='qd-cnok'){ const i=document.getElementById('qd-cn'), c=D.cols.find(x=>x.id===S.qd.ed); if(i&&c&&i.value.trim()){ const nv=i.value.trim().slice(0,40); if(nv!==c.nome&&c.nome!=='Nova coluna') qdLog('Coluna "'+c.nome+'" virou "'+nv+'"'); else if(c.nome==='Nova coluna') qdLog('Nova coluna "'+nv+'"'); c.nome=nv; qdGrava(); } S.qd.ed=null; render(); return; }
-  if(a==='qd-cesq'||a==='qd-cdir'){ const i=D.cols.findIndex(c=>c.id===v), j=i+(a==='qd-cesq'?-1:1); if(i>=0&&j>=0&&j<D.cols.length){ const [c]=D.cols.splice(i,1); D.cols.splice(j,0,c); qdGrava(); } render(); return; }
+  if(a==='qd-cesq'||a==='qd-cdir'){ const c=D.cols.find(x=>x.id===v); if(!c) return; const mesma=D.cols.filter(x=>qdAreaDe(x)===qdAreaDe(c)), k=mesma.indexOf(c), o=mesma[k+(a==='qd-cesq'?-1:1)];
+    if(o){ const i=D.cols.indexOf(c), j=D.cols.indexOf(o); D.cols[i]=o; D.cols[j]=c; qdGrava(); } render(); return; }
   if(a==='qd-cx'){ const c=D.cols.find(x=>x.id===v); if(!c) return; if(c.ps.length){ S.qd.cx=v; render(); return; } if(S.qd.cx!==v){ S.qd.cx=v; render(); return; } qdLog('Apagou a coluna "'+c.nome+'"'); D.cols=D.cols.filter(x=>x.id!==v); S.qd.cx=null; qdGrava(); render(); return; }
   if(a==='qd-imp'){ qdImprimir(v==='dec'); return; }
 });
@@ -252,14 +270,14 @@ document.addEventListener('keydown',e=>{ if(S.view!=='gxqd'||!e.target) return; 
   else if(id==='qd-vnome'&&e.key==='Enter'){ e.preventDefault(); const b=document.querySelector('[data-act="qd-vsalva"]'); if(b) b.click(); } });
 /* arrastar (computador) */
 document.addEventListener('dragstart',e=>{ const p=e.target.closest&&e.target.closest('.qd-p'); if(!p) return; S.qd.drag=p.dataset.qdp; p.classList.add('drag'); try{ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain',p.dataset.qdp); }catch(x){} });
-document.addEventListener('dragend',()=>{ S.qd.drag=null; document.querySelectorAll('.qd-p.drag,.qd-ps.over').forEach(x=>x.classList.remove('drag','over')); document.querySelectorAll('.qd-ins').forEach(x=>x.remove()); });
+document.addEventListener('dragend',()=>{ S.qd.drag=null; S.qd.ldrag=null; S.qd.cdrag=null; document.querySelectorAll('.qd-p.drag,.qd-ps.over,.qd-c.cdrag,.qd-c.cinsl,.qd-c.cinsr,.qd-ar.over,.qd-lv.drag').forEach(x=>x.classList.remove('drag','over','cdrag','cinsl','cinsr')); document.querySelectorAll('.qd-ins').forEach(x=>x.remove()); });
 function qdPos(lista,y){ const cs=[...lista.querySelectorAll('.qd-p:not(.drag)')]; for(let i=0;i<cs.length;i++){ const r=cs[i].getBoundingClientRect(); if(y<r.top+r.height/2) return i; } return cs.length; }
-document.addEventListener('dragover',e=>{ if(!S.qd.drag) return; const l=e.target.closest&&e.target.closest('.qd-c'); if(!l) return; e.preventDefault(); const ps=l.querySelector('.qd-ps');
+document.addEventListener('dragover',e=>{ if(!S.qd.drag&&!S.qd.ldrag) return; const l=e.target.closest&&e.target.closest('.qd-c'); if(!l) return; e.preventDefault(); const ps=l.querySelector('.qd-ps');
   document.querySelectorAll('.qd-ps.over').forEach(x=>{ if(x!==ps) x.classList.remove('over'); }); ps.classList.add('over');
   document.querySelectorAll('.qd-ins').forEach(x=>x.remove()); const i=qdPos(ps,e.clientY), cs=[...ps.querySelectorAll('.qd-p:not(.drag)')], ln=document.createElement('div'); ln.className='qd-ins';
   if(cs[i]) ps.insertBefore(ln,cs[i]); else ps.appendChild(ln); });
-document.addEventListener('drop',e=>{ if(!S.qd.drag) return; const l=e.target.closest&&e.target.closest('.qd-c'); if(!l) return; e.preventDefault(); const ps=l.querySelector('.qd-ps'), pos=qdPos(ps,e.clientY), id=S.qd.drag;
-  S.qd.drag=null; qdMove(id,ps.dataset.qdcol,pos); render(); });
+document.addEventListener('drop',e=>{ if(!S.qd.drag&&!S.qd.ldrag) return; const l=e.target.closest&&e.target.closest('.qd-c'); if(!l) return; e.preventDefault(); const ps=l.querySelector('.qd-ps'), pos=qdPos(ps,e.clientY), id=S.qd.drag, ln=S.qd.ldrag;
+  S.qd.drag=null; S.qd.ldrag=null; if(ln) qdPor(ln,ps.dataset.qdcol,pos); else qdMove(id,ps.dataset.qdcol,pos); render(); });
 /* ---------- registro ---------- */
 Object.assign(VIEWS,{gxqd:{nome:'Quadro de pessoas',ic:'equipe',mob:'Quadro'}}); CRUMB.gxqd='Quadro de pessoas';
 S.extViews=S.extViews||{}; S.extViews.gxqd=vGxQuadro;
@@ -276,7 +294,7 @@ document.head.insertAdjacentHTML('beforeend',`<style id="qd-css">
 .qd-k.ok b{color:var(--ok)}.qd-k.warn b{color:var(--warn)}.qd-k.crit b{color:var(--crit)}.qd-k.esp b{color:var(--pc-info,var(--teal))}.qd-k.nef b{color:var(--qd-nef)}
 :root{--qd-nef:#6B4E9B}:root[data-theme="dark"]{--qd-nef:#B79BE0}
 .qd-filav{margin:-4px 0 10px;font-size:13px;color:var(--muted)}
-.qd-g.fil .qd-p{opacity:.28}.qd-g.fil-fica .st-fica,.qd-g.fil-duv .st-duv,.qd-g.fil-esp .st-esp,.qd-g.fil-nef .st-nef,.qd-g.fil-sai .st-sai,.qd-g.fil-sem .st-sem{opacity:1}
+.qd-areas.fil .qd-p{opacity:.28}.qd-areas.fil-fica .st-fica,.qd-areas.fil-duv .st-duv,.qd-areas.fil-esp .st-esp,.qd-areas.fil-nef .st-nef,.qd-areas.fil-sai .st-sai,.qd-areas.fil-sem .st-sem{opacity:1}
 .qd-c header{flex-wrap:wrap}.qd-cst{flex-basis:100%;display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11.5px}.qd-ci{font-style:normal}.qd-ci.ok{color:var(--ok)}.qd-ci.warn{color:var(--warn)}.qd-ci.crit{color:var(--crit)}.qd-ci.esp{color:var(--pc-info,var(--teal))}.qd-ci.nef{color:var(--qd-nef)}
 .qd-tag{display:inline-block;margin-top:2px;font-style:normal;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:999px}.qd-tag.esp{background:var(--pc-info-bg,var(--teal-tint));color:var(--pc-info,var(--teal))}.qd-tag.nef{background:color-mix(in srgb,var(--qd-nef) 14%,transparent);color:var(--qd-nef)}
 .qd-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;align-items:start}
@@ -325,3 +343,139 @@ document.head.insertAdjacentHTML('beforeend',`<style id="qd-css">
 /* sino do gestor: espera com prazo vencido */
 if(typeof gxAlertas==='function'){ const _gaQd=gxAlertas; gxAlertas=function(){ const out=_gaQd.apply(this,arguments)||[];
   try{ if(qdPode()){ qdAssina(); if(S.qd.lido){ const vs=qdEspVenc(); if(vs.length) out.push({c:'warn',t:vs.length+(vs.length>1?' pessoas':' pessoa')+' em espera com o prazo vencido',d:vs.slice(0,3).map(x=>x.p.n+(x.p.espMot?' ('+x.p.espMot+')':'')).join(' · '),go:'gxqd'}); } } }catch(e){} return out; }; }
+
+/* ===== 17/11/2026 · Quadro de pessoas em áreas (escolha da usuária no protótipo "Quadro de pessoas · opções de layout":
+   A = colunas por área, com o "Sem setor no quadro" da B e o "Total da fábrica" da C).
+   - D.areas [{id,nome,cor}]; cada coluna tem c.area. Sem áreas gravadas, monta Produção · Apoio · Fixcol pelo nome do setor.
+   - Arrastar o setor pela alça (cabeçalho) para outro lugar ou outra área; a área muda de ordem com ↑ ↓; recolher fica no aparelho.
+   - Vaga = lugar tracejado na coluna (meta − pessoas que não saem).
+   - Sem setor no quadro = pessoas do RH (presença e cadastro publicados pelo RH, sem CPF) que não estão em nenhuma coluna;
+     arrastar para a coluna, ou tocar no nome e depois em "Pôr … aqui". */
+const QD_AREAS=[{id:'pro',nome:'Produção',cor:'#1F5F7A'},{id:'apo',nome:'Apoio',cor:'#B07A1A'},{id:'fix',nome:'Fixcol',cor:'#6B4E9B'}];
+const QD_ACORES=['#1F5F7A','#B07A1A','#6B4E9B','#2F6E4F','#B5473F','#2B6A87'];
+function qdAreaPadrao(nome){ const k=qdK(nome); if(/^LINHA|PREMIX|ARGAMASSA/.test(k)) return 'pro'; if(/ALMOX|EXPEDI|CARGA|ADM|MANUT|PORTARIA|LIMPEZA/.test(k)) return 'apo'; if(/REJUNTE|FIXCOL|LIQUID/.test(k)) return 'fix'; return 'pro'; }
+function qdAreas(){ const D=qdD(); if(!Array.isArray(D.areas)||!D.areas.length) D.areas=QD_AREAS.map(a=>Object.assign({},a));
+  D.cols.forEach(c=>{ if(!c.area||!D.areas.some(a=>a.id===c.area)) c.area=qdAreaPadrao(c.nome); if(!D.areas.some(a=>a.id===c.area)) c.area=D.areas[0].id; }); return D.areas; }
+function qdAreaDe(c){ return c.area||qdAreaPadrao(c.nome); }
+function qdTotArea(cs){ let at=0, meta=0; cs.forEach(c=>{ const M=qdMetaDe(c); at+=M.at; meta+=M.meta||0; }); return {at,meta}; }
+function qdRecol(){ try{ return JSON.parse(localStorage.getItem('colafix.qd.recol')||'{}')||{}; }catch(e){ return {}; } }
+function qdTotalHtml(){ const D=qdD(), t=qdTot(); let at=0, meta=0, falta=0, sobra=0; D.cols.forEach(c=>{ const M=qdMetaDe(c); at+=M.at; if(M.meta){ meta+=M.meta; if(M.df<0) falta-=M.df; else sobra+=M.df; } });
+  const pc=meta?Math.min(100,Math.round(at/meta*100)):0;
+  return `<section class="qd-tot"><div class="qd-tote">TOTAL DA FÁBRICA</div><div class="qd-totn"><b>${at}</b><span>${meta?'de '+meta+' pela meta':at===1?'pessoa':'pessoas'}</span></div>
+    ${meta?`<div class="qd-totb"><i style="width:${pc}%"></i></div>`:'<div class="qd-totsm">Ponha "quantos precisa" em cada setor para ver as vagas.</div>'}
+    <div class="qd-totg"><span>Faltam <b>${falta}</b></span><span>Sobram <b>${sobra}</b></span><span>Saem <b>${t.sai}</b></span><span>Em espera <b>${t.esp}</b></span></div></section>`; }
+function qdLivres(){ const L=(S.qd._rh||qdPessoasRH()).map(p=>({n:p.n,s:p.s,e:p.e}));
+  (S.qd.cad||[]).forEach(c=>{ if(c&&c.n&&!L.some(x=>qdMesma(x.n,c.n))) L.push({n:c.n,s:c.s||'',e:c.e||''}); });
+  return L.filter(p=>!qdOnde(p.n)).sort((a,b)=>a.n.localeCompare(b.n,'pt-BR')); }
+function qdIniN(n){ const w=String(n).split(/\s+/).filter(Boolean); return ((w[0]||'')[0]||'')+(w.length>1?w[w.length-1][0]:''); }
+function qdLivresHtml(){ const L=qdLivres(), tem=(S.qd._rh||[]).length||(S.qd.cad||[]).length;
+  return `<section class="qd-lv0"><div class="qd-lvh"><b>Sem setor no quadro</b><span class="qd-lvc">${L.length}</span></div>
+    <div class="sub" style="margin:0">Pessoas do RH que ainda não estão em nenhum setor. Arraste para uma coluna ou toque no nome.</div>
+    ${S.qd.lvSel?`<div class="qd-lvsel">Escolha o setor para <b>${esc(qdNomeV(S.qd.lvSel))}</b> · <button class="lnk" data-act="qd-lvx">cancelar</button></div>`:''}
+    ${L.length>6?`<input class="txt" id="qd-lvq" type="search" autocomplete="off" placeholder="Procurar" value="${esc(S.qd.lvq)}">`:''}
+    <div class="qd-lvl">${L.map(p=>`<div role="button" tabindex="0" class="qd-lv ${S.qd.lvSel===p.n?'on':''}" draggable="true" data-qdlv="${esc(p.n)}" data-act="qd-lvsel" data-v="${esc(p.n)}" data-b="${esc(qdK([p.n,p.s,p.e].join(' ')))}"><span class="qd-lvi">${esc(qdIniN(p.n).toUpperCase())}</span><span class="qd-lvt"><b>${esc(qdNomeV(p.n))}</b><small>${esc([qdInfo(p.n).v,p.s,qdCap(p.e)].filter(Boolean).join(' · '))}</small></span></div>`).join('')
+      ||`<div class="sub" style="margin:0">${tem?'Todo mundo do RH já está no quadro.':'A lista aparece quando o RH publicar a presença do Face ID.'}</div>`}</div></section>`; }
+function qdLvFiltra(){ const q=qdK(S.qd.lvq), ws=q?q.split(' '):[]; document.querySelectorAll('.qd-lv').forEach(x=>{ const b=x.dataset.b||''; x.style.display=!ws.length||ws.every(w=>b.split(' ').some(y=>y.startsWith(w)))?'':'none'; }); }
+setTimeout(()=>{ try{ depoisDoRender(()=>{ if(S.view==='gxqd') qdLvFiltra(); },'quadro: sem setor'); }catch(e){} },0);
+function qdAcaoArea(a,v,b){ const D=qdD(), AR=qdAreas(); if(a!=='qd-arx') S.qd.arx=null;
+  if(a==='qd-lvsel'){ S.qd.lvSel=S.qd.lvSel===v?null:v; render(); return true; }
+  if(a==='qd-lvx'){ S.qd.lvSel=null; render(); return true; }
+  if(a==='qd-lvpor'){ const n=S.qd.lvSel; S.qd.lvSel=null; if(n) qdPor(n,v); render(); return true; }
+  if(a==='qd-arrec'){ const r=qdRecol(); if(r[v]) delete r[v]; else r[v]=1; try{ localStorage.setItem('colafix.qd.recol',JSON.stringify(r)); }catch(e){} render(); return true; }
+  if(a==='qd-arnova'){ const id='a'+qdId(); AR.push({id,nome:'Nova área',cor:QD_ACORES[AR.length%QD_ACORES.length]}); S.qd.arEd=id; qdLog('Nova área'); qdGrava(); render(); setTimeout(()=>{ const i=document.getElementById('qd-arn'); if(i){ i.focus(); i.select(); } },50); return true; }
+  if(a==='qd-ared'){ S.qd.arEd=v; render(); setTimeout(()=>{ const i=document.getElementById('qd-arn'); if(i){ i.focus(); i.select(); } },50); return true; }
+  if(a==='qd-arok'){ const i=document.getElementById('qd-arn'), ar=AR.find(x=>x.id===S.qd.arEd); if(i&&ar&&i.value.trim()){ const nv=i.value.trim().slice(0,30); if(nv!==ar.nome){ qdLog('Área "'+ar.nome+'" virou "'+nv+'"'); ar.nome=nv; qdGrava(); } } S.qd.arEd=null; render(); return true; }
+  if(a==='qd-arsob'||a==='qd-ardes'){ const i=AR.findIndex(x=>x.id===v), j=i+(a==='qd-arsob'?-1:1); if(i>=0&&j>=0&&j<AR.length){ const [x]=AR.splice(i,1); AR.splice(j,0,x); qdGrava(); } render(); return true; }
+  if(a==='qd-arx'){ const ar=AR.find(x=>x.id===v); if(!ar) return true; const n=D.cols.filter(c=>qdAreaDe(c)===v).length; if(n||AR.length<2||S.qd.arx!==v){ S.qd.arx=v; render(); return true; } D.areas=AR.filter(x=>x.id!==v); S.qd.arx=null; qdLog('Apagou a área "'+ar.nome+'"'); qdGrava(); render(); return true; }
+  if(a==='qd-arcol'){ D.cols.push({id:qdId(),nome:'Nova coluna',ps:[],area:v}); S.qd.ed=D.cols[D.cols.length-1].id; qdGrava(); render(); setTimeout(()=>{ const i=document.getElementById('qd-cn'); if(i){ i.focus(); i.select(); } },50); return true; }
+  return false; }
+/* mover setor (arrastar o cabeçalho) */
+function qdMoveCol(cid,alvo,depois,area){ const D=qdD(), c=D.cols.find(x=>x.id===cid); if(!c) return; qdAreas(); const de=qdAreaDe(c);
+  D.cols.splice(D.cols.indexOf(c),1);
+  const o=alvo&&D.cols.find(x=>x.id===alvo);
+  if(o){ c.area=qdAreaDe(o); D.cols.splice(D.cols.indexOf(o)+(depois?1:0),0,c); }
+  else { c.area=area||de; const ult=D.cols.map(x=>qdAreaDe(x)).lastIndexOf(c.area); D.cols.splice(ult>=0?ult+1:D.cols.length,0,c); }
+  if(c.area!==de){ const AR=qdAreas(), n=id=>(AR.find(x=>x.id===id)||{}).nome||id; qdLog('Setor "'+c.nome+'": '+n(de)+' → '+n(c.area)); }
+  qdGrava(); }
+document.addEventListener('dragstart',e=>{ if(S.view!=='gxqd'||!e.target.closest) return;
+  const h=e.target.closest('[data-qdcd]'); if(h&&!e.target.closest('.qd-p')){ S.qd.cdrag=h.dataset.qdcd; const c=h.closest('.qd-c'); if(c) c.classList.add('cdrag'); try{ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain','col:'+S.qd.cdrag); }catch(x){} return; }
+  const l=e.target.closest('.qd-lv'); if(l){ S.qd.ldrag=l.dataset.qdlv; l.classList.add('drag'); try{ e.dataTransfer.effectAllowed='copyMove'; e.dataTransfer.setData('text/plain',S.qd.ldrag); }catch(x){} } });
+function qdLimpaCol(){ document.querySelectorAll('.qd-c.cinsl,.qd-c.cinsr,.qd-ar.over').forEach(x=>x.classList.remove('cinsl','cinsr','over')); }
+document.addEventListener('dragover',e=>{ if(!S.qd.cdrag||!e.target.closest) return; const c=e.target.closest('.qd-c'), ar=e.target.closest('.qd-ar'); if(!c&&!ar) return; e.preventDefault(); qdLimpaCol();
+  if(c&&c.dataset.qdcol!==S.qd.cdrag){ const r=c.getBoundingClientRect(); c.classList.add(e.clientX>r.left+r.width/2?'cinsr':'cinsl'); } else if(!c&&ar) ar.classList.add('over'); });
+document.addEventListener('drop',e=>{ if(!S.qd.cdrag||!e.target.closest) return; const c=e.target.closest('.qd-c'), ar=e.target.closest('.qd-ar'); if(!c&&!ar) return; e.preventDefault(); const id=S.qd.cdrag; S.qd.cdrag=null; qdLimpaCol();
+  if(c){ if(c.dataset.qdcol!==id){ const r=c.getBoundingClientRect(); qdMoveCol(id,c.dataset.qdcol,e.clientX>r.left+r.width/2); } } else qdMoveCol(id,null,false,ar.dataset.qdar); render(); });
+document.addEventListener('input',e=>{ if(e.target&&e.target.id==='qd-lvq'){ S.qd.lvq=e.target.value; qdLvFiltra(); } });
+document.addEventListener('keydown',e=>{ if(S.view==='gxqd'&&e.target&&e.target.classList&&e.target.classList.contains('qd-lv')&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); e.target.click(); return; }
+  if(S.view==='gxqd'&&e.target&&e.target.id==='qd-arn'&&e.key==='Enter'){ e.preventDefault(); const b=document.querySelector('[data-act="qd-arok"]'); if(b) b.click(); } });
+window.Painel.quadro.areas=()=>qdAreas(); window.Painel.quadro.livres=()=>qdLivres(); window.Painel.quadro.moveCol=qdMoveCol;
+document.head.insertAdjacentHTML('beforeend',`<style id="qd-css2">
+.qd-lay{display:grid;grid-template-columns:270px minmax(0,1fr);gap:16px;align-items:start}
+.qd-lado{position:sticky;top:76px;display:flex;flex-direction:column;gap:12px;max-height:calc(100vh - 96px)}
+.qd-tot{background:#143F54;color:#fff;border-radius:16px;padding:16px}.qd-tote{font-size:11.5px;letter-spacing:.08em;opacity:.75;font-weight:600}
+.qd-totn{display:flex;align-items:baseline;gap:8px;margin-top:6px}.qd-totn b{font-size:40px;font-weight:300;line-height:1}.qd-totn span{opacity:.8;font-size:14px}
+.qd-totb{height:8px;border-radius:6px;background:rgba(255,255,255,.2);margin-top:10px;overflow:hidden}.qd-totb i{display:block;height:8px;background:#8FD3B0}
+.qd-totsm{font-size:12px;opacity:.75;margin-top:8px}
+.qd-totg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;font-size:13px}.qd-totg b{font-size:18px;font-weight:500}
+.qd-lv0{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:8px;min-height:0;overflow:hidden}
+.qd-lvh{display:flex;align-items:center;gap:8px}.qd-lvc{font-size:12px;background:var(--ground);border-radius:999px;padding:1px 8px;color:var(--muted)}
+.qd-lvl{display:flex;flex-direction:column;gap:6px;overflow:auto;min-height:0;max-height:52vh}
+.qd-lv{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:12px;background:var(--ground);border:1px solid transparent;font:inherit;color:inherit;text-align:left;cursor:grab;flex:none}
+.qd-lv:hover{border-color:var(--line)}.qd-lv.on{border-color:var(--teal);outline:2px solid var(--teal)}.qd-lv.drag{opacity:.4}
+.qd-lvi{width:30px;height:30px;border-radius:50%;background:color-mix(in srgb,var(--teal) 16%,var(--surface));color:var(--teal-strong,#143F54);font-size:11.5px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
+.qd-lvt{min-width:0}.qd-lvt b{display:block;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.qd-lvt small{display:block;font-size:11px;color:var(--muted)}
+.qd-lvsel{font-size:13px;background:color-mix(in srgb,var(--teal) 10%,transparent);border-radius:10px;padding:8px 10px}
+.qd-lvpor{margin:6px 6px 0}
+.qd-areas{display:flex;flex-direction:column;gap:18px;min-width:0}
+.qd-ar{border-radius:16px}.qd-ar.over{outline:2px dashed var(--teal);outline-offset:4px}
+.qd-arh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 2px 8px}
+.qd-arpin{width:12px;height:12px;border-radius:4px;flex:none}
+.qd-art{background:none;border:0;padding:0;font:inherit;font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:inherit;cursor:pointer}
+.qd-arn{width:200px}.qd-ars{font-size:12.5px;color:var(--muted)}.qd-ars b.c{color:var(--crit)}.qd-ars b.w{color:var(--warn)}
+.qd-arvz{color:var(--muted);font-size:13px;border:1.5px dashed var(--line);border-radius:12px;padding:18px;text-align:center;grid-column:1/-1}
+.qd-ar.fech .qd-arh{margin-bottom:0;opacity:.8}
+.qd-c header[draggable="true"]{cursor:grab}.qd-alc{color:var(--muted);font-size:13px;letter-spacing:-2px;flex:none}
+.qd-c.cdrag{opacity:.4}.qd-c.cinsl{box-shadow:-4px 0 0 0 var(--teal)}.qd-c.cinsr{box-shadow:4px 0 0 0 var(--teal)}
+.qd-vg{border:1.5px dashed color-mix(in srgb,var(--muted) 45%,transparent);border-radius:8px;padding:8px;font-size:12px;color:var(--muted);text-align:center}
+@media (max-width:1100px){.qd-lay{grid-template-columns:1fr}.qd-lado{position:static;max-height:none}.qd-lvl{max-height:240px}}
+</style>`);
+/* Visual do quadro (17/11/2026, "melhorar o visual para o usuário"): cartões com iniciais e nome numa linha, faixa de situação embaixo,
+   setor com a cor da área e barra da meta, legenda curta e "Imprimir" num menu. Só aparência. */
+document.head.insertAdjacentHTML('beforeend',`<style id="qd-css3">
+.qd-lg{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:-4px 0 16px;font-size:12.5px;color:var(--muted)}
+.qd-lgi{display:inline-flex;align-items:center;gap:5px}.qd-lgs{font-style:normal;font-size:10px;font-weight:700;min-width:18px;height:18px;padding:0 3px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;color:#fff;background:var(--muted)}
+.qd-lgs.ok{background:var(--ok)}.qd-lgs.warn{background:var(--warn)}.qd-lgs.esp{background:var(--pc-info,var(--teal))}.qd-lgs.nef{background:var(--qd-nef)}.qd-lgs.crit{background:var(--crit)}
+.qd-lgd{width:9px;height:9px;border-radius:50%;display:inline-block}.qd-lgd.veio{background:var(--ok)}.qd-lgd.faltou{background:var(--crit)}.qd-lgd.ferias{background:var(--pc-info,var(--teal))}
+.qd-lgv{font-size:12px}
+.qd-impm{position:relative}.qd-impm>summary{list-style:none;cursor:pointer}.qd-impm>summary::-webkit-details-marker{display:none}.qd-impm>summary::after{content:"▾";margin-left:6px;font-size:11px}
+.qd-impl{position:absolute;right:0;top:calc(100% + 6px);z-index:40;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(20,63,84,.18);padding:6px;min-width:260px;display:flex;flex-direction:column}
+.qd-impl button{font:inherit;color:inherit;background:none;border:0;border-radius:8px;padding:9px 10px;text-align:left;cursor:pointer}.qd-impl button:hover{background:var(--ground)}.qd-impl b{display:block;font-size:14px;font-weight:600}.qd-impl small{display:block;font-size:12px;color:var(--muted)}
+.qd-k{border-radius:14px;padding:10px 16px;min-width:104px;box-shadow:0 1px 2px rgba(16,40,52,.04)}.qd-k b{font-size:26px;font-weight:300;line-height:1.1}
+.qd-g{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.qd-c{background:color-mix(in srgb,var(--ground) 70%,var(--surface));border:1px solid var(--line);border-top:3px solid var(--qa,var(--teal));border-radius:14px;overflow:hidden}
+.qd-c header{border-bottom:0;padding:12px 12px 8px;background:var(--surface);gap:6px 8px}
+.qd-ct{text-transform:none;font-size:15.5px;font-weight:650;letter-spacing:-.01em}
+.qd-cc{font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--ground);color:var(--ink,inherit)}
+.qd-cbar{flex-basis:100%;height:5px;border-radius:5px;background:var(--line);overflow:hidden}.qd-cbar i{display:block;height:100%;border-radius:5px;background:var(--ok)}.qd-cbar.crit i{background:var(--crit)}.qd-cbar.warn i{background:var(--warn)}
+.qd-ps{padding:8px;gap:7px}
+.qd-p{flex-direction:column;align-items:stretch;gap:8px;padding:9px 10px 8px;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--line);border-radius:12px;box-shadow:0 1px 2px rgba(16,40,52,.05)}
+.qd-p:hover{box-shadow:0 3px 10px rgba(16,40,52,.10)}
+.qd-pr{display:flex;align-items:flex-start;gap:9px;min-width:0}
+.qd-pav{flex:none;width:32px;height:32px;border-radius:50%;background:var(--ground);color:var(--ink,inherit);font-size:11.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 2px var(--line);margin:0;vertical-align:top}
+.qd-pav.qd-dot{width:32px;height:32px;margin:0;background:var(--ground)}.qd-pav.veio{box-shadow:inset 0 0 0 2.5px var(--ok)}.qd-pav.faltou{box-shadow:inset 0 0 0 2.5px var(--crit);color:var(--crit)}.qd-pav.ferias{box-shadow:inset 0 0 0 2.5px var(--pc-info,var(--teal))}
+.qd-nm{padding:0}.qd-nmt{display:block;font-size:14px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qd-nm small{font-size:11.5px;margin-top:1px}.qd-inf{font-size:11.5px;margin-top:2px}
+.qd-sts{display:flex;gap:3px;background:var(--ground);border-radius:9px;padding:3px}
+.qd-st{flex:1;width:auto;height:26px;border:0;border-radius:7px;background:transparent;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:4px}
+.qd-st:hover{background:var(--surface)}.qd-stl{font-size:11px;font-weight:500}
+.qd-st.on .qd-stl{font-weight:600}
+@container qdc (max-width:270px){.qd-stl{display:none}}
+.qd-ps{container:qdc/inline-size}
+.qd-p.st-sai{opacity:.72}.qd-p.st-sai .qd-nmt{text-decoration:line-through}
+.qd-vg{border-radius:12px;padding:12px 8px;background:transparent}
+.qd-c footer{background:var(--surface);font-size:12.5px;gap:10px}
+.qd-ar{margin-bottom:22px}.qd-arh{padding-bottom:8px;border-bottom:1px solid var(--line);margin-bottom:12px}.qd-arpin{width:12px;height:12px;border-radius:4px}
+.qd-art{font-size:15px;letter-spacing:.02em;text-transform:none;font-weight:700}
+</style>`);
+/* menu Imprimir: fecha ao escolher ou ao tocar fora */
+document.addEventListener('click',e=>{ document.querySelectorAll('details.qd-impm[open]').forEach(d=>{ if(!d.contains(e.target)||e.target.closest('.qd-impl button')) setTimeout(()=>{ d.open=false; },0); }); });

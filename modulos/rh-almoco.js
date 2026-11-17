@@ -896,7 +896,11 @@
   function prHash(o){ const s=JSON.stringify(o); let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))|0; return (h>>>0).toString(36)+'.'+s.length; }
   const prMenos=(d,n)=>{ const x=new Date(d+'T12:00'); x.setDate(x.getDate()-n); return x.toISOString().slice(0,10); };
   /* último dia em que cada CPF passou no Face ID (meses já carregados), antes do dia d */
-  function prVisto(d){ const ult={}; let dias=0; Object.keys(A.dados).forEach(m=>{ const ds=(A.dados[m]||{}).dias||{}; Object.keys(ds).forEach(x=>{ if(x>=d) return; const ks=Object.keys(ds[x]||{}); if(ks.length>=5) dias++; ks.forEach(k=>{ if(!ult[k]||x>ult[k]) ult[k]=x; }); }); }); return {ult,dias}; }
+  function prVisto(d){ const ult={}, nm={}; let dias=0; Object.keys(A.dados).forEach(m=>{ const Dm=A.dados[m]||{}, ds=Dm.dias||{}, pe=Dm.pessoas||{}; Object.keys(ds).forEach(x=>{ if(x>=d) return; const ks=Object.keys(ds[x]||{}); if(ks.length>=5) dias++; ks.forEach(k=>{ if(!ult[k]||x>ult[k]) ult[k]=x; const n=(pe[k]&&pe[k].n)||(/^nome:/.test(k)?k.slice(5):''); if(n&&(!nm[n]||x>nm[n])) nm[n]=x; }); }); });
+    /* 17/11: a pessoa pode passar no Face ID com outra chave (sem CPF ou CPF diferente do cadastro) e ser ligada pelo nome no dia;
+       então a última passagem também é procurada pelo nome, senão quem só faltou aparecia como "nunca passou no Face ID" */
+    const porNome=n=>{ let u=''; Object.keys(nm).forEach(x=>{ if(nm[x]>u&&prMesma(x,n)) u=nm[x]; }); return u; };
+    return {ult,dias,porNome}; }
   /* nome do Face ID × nome do cadastro com grafia um pouco diferente (NARCISO/NARCIZO): mesma pessoa */
   function prLev(a,b){ if(Math.abs(a.length-b.length)>1) return 9; let v=[...Array(b.length+1).keys()]; for(let i=1;i<=a.length;i++){ const w=[i]; for(let j=1;j<=b.length;j++) w[j]=Math.min(v[j]+1,w[j-1]+1,v[j-1]+(a[i-1]===b[j-1]?0:1)); v=w; } return v[b.length]; }
   function prMesma(a,b){ if(fMesma(a,b)) return true; const A1=fNorm(a).split(' ').filter(t=>t.length>2), B1=fNorm(b).split(' ').filter(t=>t.length>2); if(A1.length<2||B1.length<2) return false;
@@ -926,7 +930,7 @@
         const jo=jornadaDe(f), wdd=new Date(d+'T12:00').getDay();
         if(jo&&Array.isArray(jo.dias)&&jo.dias.length&&!jo.dias.includes(wdd)){ fs.push({n:titulo(f.nome),s:f.setor||'',e:prEmp(f,null),m:'Folga',mt:'não trabalha neste dia'}); return; }
         if(jo&&jo.ini&&d===P.hojeStr()&&(new Date().getHours()*60+new Date().getMinutes())<hm(jo.ini)+30){ fs.push({n:titulo(f.nome),s:f.setor||'',e:prEmp(f,null),m:'Mais tarde',mt:'entra às '+jo.ini}); return; }
-        const fer=ferias.some(y=>y.funcId===f._id), vi=fer?null:(VI||(VI=prVisto(d))), u=vi&&vi.ult[k]||'', lim2=prMenos(d,14);
+        const fer=ferias.some(y=>y.funcId===f._id), vi=fer?null:(VI||(VI=prVisto(d))), u=vi?[vi.ult[k]||'',vi.porNome(f.nome)].sort().pop():'', lim2=prMenos(d,14);
         /* sem passar no Face ID há mais de 2 semanas (ou nunca, com 2 semanas de dados): provavelmente saiu e o cadastro não foi atualizado */
         if(vi&&vi.dias>=8&&(!f.admissao||f.admissao<lim2)&&(!u||u<lim2)){ fs.push({n:titulo(f.nome),s:f.setor||'',e:prEmp(f,null),m:'Sumiu',u}); return; }
         const at=fer?null:atDe({funcId:f._id,cpf:f.cpf},d);
@@ -935,7 +939,9 @@
     const C=cfgBase(); return {dia:d,exp,lim:limT,alm:[C.ini,C.fim],p:ps,f:fs}; }
   async function publicar(c){ if(!c||!c.P||PR.ocupado) return; const P=c.P, R=c.R; A.ctx=A.ctx||c; if(!(R.lido&&R.lido.func&&R.lido.fer)) return;
     const hj=P.hojeStr(), d0=(()=>{ const x=new Date(hj+'T12:00'); x.setDate(x.getDate()-15); return x.toISOString().slice(0,10); })();
-    [...new Set([hj.slice(0,7),d0.slice(0,7)])].forEach(m=>{ try{ assinar(m); }catch(e){} });
+    /* 17/11: também o mês de 31 dias atrás, para saber a última passagem de quem não vem há mais de 2 semanas (sem ele aparecia "nunca passou") */
+    const d1=(()=>{ const x=new Date(hj+'T12:00'); x.setDate(x.getDate()-31); return x.toISOString().slice(0,10); })();
+    [...new Set([hj.slice(0,7),d0.slice(0,7),d1.slice(0,7)])].forEach(m=>{ try{ assinar(m); }catch(e){} });
     if(!A.roboSub){ A.roboSub=true; try{ P.db().doc('rh/dados/robo/faceid').onSnapshot(g=>{ A.robo=g.exists?g.data():null; P.rerender(); },()=>{}); }catch(e){} }
     if(!PR.sub){ PR.sub=true; P.inscrever('rh-presenca',()=>P.db().collection('presenca').orderBy('dia','desc').limit(20),snap=>{ snap.docs.forEach(g=>{ PR.map[g.id]=(g.data()||{}).h||''; }); PR.lido=true; }); return; }
     if(!PR.lido) return; const ms=[...new Set([hj.slice(0,7),d0.slice(0,7)])]; if(ms.some(m=>!A.dados[m])) return;

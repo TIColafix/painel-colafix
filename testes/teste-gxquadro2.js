@@ -7,7 +7,7 @@ const H=require('./harness'); const {seedManut}=require('./manut-seed'); const o
  D['presenca/'+ontem]={dia:ontem,exp:true,p:[],f:[{n:'BETO TESTE SEGUNDO',s:'Linha 1',e:'ZENITH',m:'Sem registro'},{n:'ANA TESTE PRIMEIRA',s:'Linha 1',e:'COLAFIX',m:'Férias'}]};
  D['presenca/cadastro']={cad:[{n:'ANA TESTE PRIMEIRA',e:'COLAFIX',v:'CLT',adm:longe,fn:'Operadora',s:'Linha 1',exp:null},{n:'BETO TESTE SEGUNDO',e:'ZENITH',v:'PJ',adm:hoje,fn:'Auxiliar',s:'Linha 1',exp:{fim:exp,et:1}}],em:new Date().toISOString()};
  D['gxquadro/atual']={cols:[{id:'c1',nome:'Linha 1',meta:3,ps:[{id:'p1',n:'ANA TESTE PRIMEIRA',st:'fica'},{id:'p2',n:'BETO TESTE SEGUNDO',st:'esp',espMot:'Exame admissional',espAte:ontem}]},{id:'c2',nome:'Expedição',ps:[{id:'p3',n:'Zeca Digitado',st:''}]}],hist:[],versoes:[]};
- const erros=[]; const B=await H.abrir({viewport:{width:1440,height:900}}); const p=B.page; p.on('pageerror',e=>erros.push(e.message)); await H.preparar(p,d); await p.goto(H.BASE); await H.entrar(p,'marcelo','mar123'); await H.dorme(3500);
+ const erros=[]; const B=await H.abrir({viewport:{width:1440,height:1500}}); const p=B.page; p.on('pageerror',e=>erros.push(e.message)); await H.preparar(p,d); await p.goto(H.BASE); await H.entrar(p,'marcelo','mar123'); await H.dorme(3500);
  await p.evaluate(()=>__T.go?__T.go('gxqd'):go('gxqd')).catch(()=>{}); await H.dorme(400);
  await p.evaluate(()=>{ try{ go('gxqd'); }catch(e){ document.querySelector('[data-go="gxqd"]').click(); } }).catch(async()=>{ await p.click('#navlist [data-go="gxpres"]'); await H.dorme(600); await p.click('.gxg-tabs [data-go="gxqd"]'); });
  await H.dorme(1500);
@@ -16,8 +16,8 @@ const H=require('./harness'); const {seedManut}=require('./manut-seed'); const o
  s=await card('p2'); ok('Cartão do PJ: empresa, experiência e faltas', /PJ · Zenith/.test(s||'')&&/experiência até/.test(s||'')&&/2 faltas em 2 dias/.test(s||''), s);
  s=await p.evaluate(()=>[...document.querySelectorAll('.qd-p')].map(e=>{ const d=e.querySelector('.qd-dot'); return d?d.className.split(' ').pop():''; }).join(','));
  ok('Bolinha de hoje: veio / não veio / digitado sem bolinha', s==='veio,faltou,', s);
- s=await p.evaluate(()=>({cc:document.querySelector('.qd-c[data-qdcol="c1"] .qd-cc').innerText,mt:document.querySelector('.qd-c[data-qdcol="c1"] .qd-mt').innerText,k:[...document.querySelectorAll('.qd-k')].map(e=>e.innerText.replace(/\s+/g,' ')).join('|')}));
- ok('Meta da coluna: 2/3 e faltam 1', s.cc==='2/3'&&/faltam 1/.test(s.mt)&&/faltam pelas metas/.test(s.k), JSON.stringify(s));
+ s=await p.evaluate(()=>({cc:document.querySelector('.qd-c[data-qdcol="c1"] .qd-cc').innerText,mt:document.querySelector('.qd-c[data-qdcol="c1"] .qd-mt').innerText,k:document.querySelector('.qd-tot').innerText.replace(/\s+/g,' ')}));
+ ok('Meta da coluna: 2/3 e faltam 1', s.cc==='2/3'&&/faltam 1/.test(s.mt)&&/Faltam 1/.test(s.k), JSON.stringify(s));
  s=await p.evaluate(()=>({av:(document.querySelector('.qd-av')||{}).innerText||'',tag:(document.querySelector('.qd-p[data-qdp="p2"] .qd-tag')||{}).className||''}));
  ok('Espera vencida: aviso no alto e selo vermelho', /prazo vencido/.test(s.av)&&/BETO/.test(s.av)&&/venc/.test(s.tag), JSON.stringify(s));
  s=await p.evaluate(()=>JSON.stringify(Painel.quadro.alertas().filter(x=>/espera/.test(x.t)))).catch(e=>'erro '+e.message);
@@ -47,7 +47,7 @@ const H=require('./harness'); const {seedManut}=require('./manut-seed'); const o
  await p.click('[data-act="qd-pn"][data-v="hist"]'); await H.dorme(400);
  s=await p.evaluate(()=>(document.querySelector('.qd-hl')||{}).innerText||''); ok('Histórico guarda as mudanças', /Zeca Digitado: sem marcar → Sai/.test(s)&&/Solda/.test(s)&&/Expedição: precisa de 2/.test(s), s.slice(0,300));
  // versões
- await p.click('[data-act="qd-pn"][data-v="ver"]'); await H.dorme(300); await p.fill('#qd-vnome','Plano teste'); await p.click('[data-act="qd-vsalva"]'); await H.dorme(800);
+ await p.click("[data-act=\"qd-fecha\"]"); await H.dorme(300); await p.click('[data-act="qd-pn"][data-v="ver"]'); await H.dorme(300); await p.fill('#qd-vnome','Plano teste'); await p.click('[data-act="qd-vsalva"]'); await H.dorme(800);
  s=await p.evaluate(()=>[...document.querySelectorAll('.qd-vi b')].map(e=>e.innerText).join('|')); ok('Guardar versão', s==='Plano teste', s);
  const vid=await p.evaluate(()=>document.querySelector('[data-act="qd-vcmp"]').dataset.v);
  await p.click('[data-act="qd-fecha"]'); await H.dorme(200);

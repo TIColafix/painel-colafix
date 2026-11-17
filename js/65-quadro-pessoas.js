@@ -136,14 +136,15 @@ function vGxQuadro(){ qdAssina(); try{ if(typeof gxpAssina==='function') gxpAssi
     const M=qdMetaDe(c), mc=M.meta?(M.df<0?`<i class="qd-ci crit qd-mt">faltam ${-M.df}</i>`:M.df>0?`<i class="qd-ci warn qd-mt">sobra${M.df>1?'m':''} ${M.df}</i>`:'<i class="qd-ci ok qd-mt">completo</i>'):'';
     const vgs=Math.max(0,(M.meta||0)-M.at);
     const qa=(qdAreas().find(a=>a.id===qdAreaDe(c))||{}).cor||'#1F5F7A', pct=M.meta?Math.min(100,Math.round(M.at/M.meta*100)):0, bc=M.meta?(M.df<0?'crit':M.df>0?'warn':'ok'):'';
-    return `<section class="qd-c ${S.qd.lvSel?'lvalvo':''}" data-qdcol="${esc(c.id)}" style="--qa:${esc(qa)}"><header draggable="true" data-qdcd="${esc(c.id)}" title="Arraste para mudar o setor de lugar ou de área">${S.qd.ed===c.id?`<input class="txt qd-cn" id="qd-cn" maxlength="40" value="${esc(c.nome)}"><button class="btn" data-act="qd-cnok">OK</button>`
-      :`<span class="qd-alc" aria-hidden="true">⋮⋮</span><button class="qd-ct" data-act="qd-ced" data-v="${esc(c.id)}" title="Renomear">${esc(c.nome)}</button><span class="qd-cc" title="${M.meta?'pessoas (sem contar quem sai) / quantas a coluna precisa':'pessoas'}">${M.meta?M.at+'/'+M.meta:c.ps.length}</span>${M.meta?`<div class="qd-cbar ${bc}"><i style="width:${pct}%"></i></div>`:''}${cnt||mc?`<div class="qd-cst">${mc}${cnt}</div>`:''}`}</header>
-      ${S.qd.lvSel?`<button class="btn qd-lvpor" data-act="qd-lvpor" data-v="${esc(c.id)}">Pôr ${esc(qdNomeV(String(S.qd.lvSel).split(' ')[0]))} aqui</button>`:''}<div class="qd-ps" data-qdcol="${esc(c.id)}">${c.ps.map((p,i)=>qdCard(c,p,i)).join('')}${Array.from({length:vgs},()=>'<div class="qd-vg">Vaga aberta · arraste alguém</div>').join('')}${!c.ps.length&&!vgs?'<div class="qd-vz">Arraste alguém para cá</div>':''}</div>
-      <footer><button class="lnk" data-act="qd-add" data-v="${esc(c.id)}">+ Pôr pessoa</button>
+    const rec=!!qdCrec()[c.id];
+    return `<section class="qd-c ${S.qd.lvSel?'lvalvo':''} ${rec?'crec':''}" data-qdcol="${esc(c.id)}" data-cn="${esc(qdK(c.nome))}" style="--qa:${esc(qa)}"><header draggable="true" data-qdcd="${esc(c.id)}" title="Arraste para mudar o setor de lugar ou de área">${S.qd.ed===c.id?`<input class="txt qd-cn" id="qd-cn" maxlength="40" value="${esc(c.nome)}"><button class="btn" data-act="qd-cnok">OK</button>`
+      :`<span class="qd-alc" aria-hidden="true">⋮⋮</span><button class="qd-ct" data-act="qd-ced" data-v="${esc(c.id)}" title="Renomear">${esc(c.nome)}</button><span class="qd-cc" title="${M.meta?'pessoas (sem contar quem sai) / quantas a coluna precisa':'pessoas'}">${M.meta?M.at+'/'+M.meta:c.ps.length}</span><button class="qd-crb" data-act="qd-crec" data-v="${esc(c.id)}" title="${rec?'Abrir o setor':'Recolher o setor (fica só o nome)'}" aria-label="${rec?'Abrir o setor':'Recolher o setor'}" aria-expanded="${!rec}">${rec?'▸':'▾'}</button>${M.meta?`<div class="qd-cbar ${bc}"><i style="width:${pct}%"></i></div>`:''}${cnt||mc?`<div class="qd-cst">${mc}${cnt}</div>`:''}`}</header>
+      ${S.qd.lvSel?`<button class="btn qd-lvpor" data-act="qd-lvpor" data-v="${esc(c.id)}">Pôr ${esc(qdNomeV(String(S.qd.lvSel).split(' ')[0]))} aqui</button>`:''}${rec?qdRecBody(c):`<div class="qd-ps" data-qdcol="${esc(c.id)}">${c.ps.map((p,i)=>qdCard(c,p,i)).join('')}${Array.from({length:vgs},()=>'<div class="qd-vg">Vaga aberta · arraste alguém</div>').join('')}${!c.ps.length&&!vgs?'<div class="qd-vz">Arraste alguém para cá</div>':''}</div>`}
+      ${rec?'':`<footer><button class="lnk" data-act="qd-add" data-v="${esc(c.id)}">+ Pôr pessoa</button>
         ${S.qd.metaEd===c.id?`<span class="qd-me"><input class="txt" id="qd-meta" inputmode="numeric" maxlength="3" value="${M.meta||''}" placeholder="nº"><button class="btn" data-act="qd-metaok" data-v="${esc(c.id)}">OK</button></span>`
           :`<button class="lnk" data-act="qd-meta" data-v="${esc(c.id)}" title="Quantas pessoas esta coluna precisa">${M.meta?'precisa de '+M.meta:'quantos precisa?'}</button>`}<span style="flex:1"></span>
         <button class="lnk" data-act="qd-cesq" data-v="${esc(c.id)}" ${ci===0?'disabled':''} title="Mudar a coluna para a esquerda" aria-label="Mudar a coluna para a esquerda">‹</button><button class="lnk" data-act="qd-cdir" data-v="${esc(c.id)}" ${ci===nA-1?'disabled':''} title="Mudar a coluna para a direita" aria-label="Mudar a coluna para a direita">›</button>
-        <button class="lnk t-crit" data-act="qd-cx" data-v="${esc(c.id)}">${S.qd.cx===c.id?(c.ps.length?'Tem pessoas: tire antes':'Toque de novo'):'Apagar'}</button></footer></section>`; };
+        <button class="lnk t-crit" data-act="qd-cx" data-v="${esc(c.id)}">${S.qd.cx===c.id?(c.ps.length?'Tem pessoas: tire antes':'Toque de novo'):'Apagar'}</button></footer>`}</section>`; };
   const AR=qdAreas(), recol=qdRecol();
   const cols=AR.map((ar,ai)=>{ const cs=D.cols.filter(c=>qdAreaDe(c)===ar.id), tA=qdTotArea(cs), fech=recol[ar.id];
     return `<section class="qd-ar ${fech?'fech':''}" data-qdar="${esc(ar.id)}"><div class="qd-arh"><span class="qd-arpin" style="background:${esc(ar.cor||'#1F5F7A')}"></span>
@@ -158,21 +159,27 @@ function vGxQuadro(){ qdAssina(); try{ if(typeof gxpAssina==='function') gxpAssi
   const emps=[...new Set(D.cols.flatMap(c=>c.ps.map(p=>qdInfo(p.n).e)).filter(Boolean).map(e=>e.toUpperCase()))].sort();
   const vv=qdEspVenc();
   const sel=(id,ops,v,ph)=>`<select class="txt" id="${id}"><option value="">${ph}</option>${ops.map(o=>`<option value="${esc(o[0])}" ${v===o[0]?'selected':''}>${esc(o[1])}</option>`).join('')}</select>`;
-  return `${banner()}${gxCab('VISÃO DO GESTOR','Quadro de pessoas',`<button class="btn sec" data-act="qd-pn" data-v="hist">Histórico</button><button class="btn sec" data-act="qd-pn" data-v="ver">Versões</button><button class="btn sec" data-act="qd-xls">Excel</button><details class="qd-impm"><summary class="btn">Imprimir</summary><div class="qd-impl"><button data-act="qd-imp" data-v="dist"><b>Só a distribuição</b><small>Para o mural: quem está em cada setor</small></button><button data-act="qd-imp" data-v="dec"><b>Com as decisões</b><small>Fica, dúvida, espera, não efetivo e sai</small></button></div></details>`)}
+  return `${banner()}${gxCab('VISÃO DO GESTOR','Quadro de pessoas',`<div class="seg qd-vis" role="group" aria-label="Como ver"><button data-act="qd-vis" data-v="col" aria-pressed="${S.qd.vis!=='org'}">Quadro</button><button data-act="qd-vis" data-v="org" aria-pressed="${S.qd.vis==='org'}">Organograma</button></div><button class="btn sec" data-act="qd-pn" data-v="hist">Histórico</button><button class="btn sec" data-act="qd-pn" data-v="ver">Versões</button><button class="btn sec" data-act="qd-xls">Excel</button><details class="qd-impm"><summary class="btn">Imprimir</summary><div class="qd-impl"><button data-act="qd-imp" data-v="dist"><b>Só a distribuição</b><small>Para o mural: quem está em cada setor</small></button><button data-act="qd-imp" data-v="dec"><b>Com as decisões</b><small>Fica, dúvida, espera, não efetivo e sai</small></button></div></details>`)}
     <div class="qd-lg"><span>Arraste as pessoas entre os setores.</span><span class="qd-lgi"><i class="qd-lgs ok">✓</i>fica</span><span class="qd-lgi"><i class="qd-lgs warn">?</i>dúvida</span><span class="qd-lgi"><i class="qd-lgs esp">◷</i>espera</span><span class="qd-lgi"><i class="qd-lgs nef">NE</i>não efetivo</span><span class="qd-lgi"><i class="qd-lgs crit">✕</i>sai</span><span class="qd-lgi"><i class="qd-lgd veio"></i>veio hoje</span><span class="qd-lgi"><i class="qd-lgd faltou"></i>não veio</span><span class="qd-lgi"><i class="qd-lgd ferias"></i>férias</span><span style="flex:1"></span><span class="qd-lgv">Só você e a administradora veem · <span id="qd-salvo">${quando}</span></span></div>
     <div class="qd-ks">${k(t.n,'no quadro','','')}${Object.entries(QD_ST).map(([q,v])=>k(t[q],v.pl,v.c,q)).join('')}${k(t.sem,'sem marcar','','sem')}<span style="flex:1"></span><button class="btn sec" data-act="qd-arnova">+ Nova área</button><button class="btn sec" data-act="qd-col">+ Novo setor</button></div>
     ${vv.length?`<div class="qd-av">◷ <b>${vv.length} ${vv.length>1?'pessoas':'pessoa'} em espera com o prazo vencido:</b> ${vv.map(x=>`<button class="lnk" data-act="qd-sel" data-v="${esc(x.p.id)}">${esc(x.p.n)}</button> <small>(${x.p.espMot?esc(x.p.espMot)+', ':''}venceu ${dm(x.p.espAte)})</small>`).join(' · ')}</div>`:''}
-    <div class="qd-fb"><input class="txt" id="qd-busca" type="search" autocomplete="off" placeholder="Procurar nome, habilidade, setor…" value="${esc(S.qd.busca)}">
+    <div class="qd-fb"><input class="txt" id="qd-busca" type="search" autocomplete="off" placeholder="Procurar setor, nome ou habilidade…" value="${esc(S.qd.busca)}">
       ${sel('qd-femp',emps.map(e=>[qdK(e),qdCap(e)]),S.qd.emp,'Todas as empresas')}${sel('qd-fvin',[['CLT','CLT'],['PJ','PJ']],S.qd.vin,'CLT e PJ')}${sel('qd-fhab',qdHabTodas().map(h=>[qdK(h),h]),S.qd.hab,'Todas as habilidades')}
-      <span class="sub" id="qd-fcont"></span><button class="lnk" data-act="qd-flimpa">limpar</button></div>
+      <span class="sub" id="qd-fcont"></span><button class="lnk" data-act="qd-flimpa">limpar</button>${S.qd.vis==='org'?'':`<button class="lnk qd-crt" data-act="qd-crectodos" data-v="${D.cols.length&&D.cols.every(c=>qdCrec()[c.id])?'abrir':'fechar'}">${D.cols.length&&D.cols.every(c=>qdCrec()[c.id])?'▾ Abrir todos os setores':'▸ Recolher todos os setores'}</button>`}</div>
     ${S.qd.fil?`<div class="qd-filav">Mostrando em destaque: <b>${esc(S.qd.fil==='sem'?'Sem marcar':(QD_ST[S.qd.fil]||{}).t||'')}</b> · <button class="lnk" data-act="qd-fil" data-v="">ver todos</button></div>`:''}
     ${qdSelPainel()}${qdAddPainel()}${qdHistPainel()}${qdVerPainel()}
-    <div class="qd-lay"><aside class="qd-lado">${qdTotalHtml()}${qdLivresHtml()}</aside><div class="qd-areas ${S.qd.fil?'fil fil-'+esc(S.qd.fil):''}">${cols}</div></div>`; }
+    <div class="qd-lay"><aside class="qd-lado">${qdTotalHtml()}${qdLivresHtml()}</aside>${S.qd.vis==='org'?`<div class="qd-areas qdo-w ${S.qd.fil?'fil fil-'+esc(S.qd.fil):''}">${qdOrgHtml()}</div>`:`<div class="qd-areas ${S.qd.fil?'fil fil-'+esc(S.qd.fil):''}">${cols}</div>`}</div>${qdOrgPainel()}`; }
 /* filtros sem redesenhar (busca, empresa, vínculo, habilidade) */
-function qdFiltra(){ if(S.view!=='gxqd') return; const q=qdK(S.qd.busca), ws=q?q.split(' '):[], e=S.qd.emp, v=S.qd.vin, h=S.qd.hab; let n=0, tot=0;
-  document.querySelectorAll('.qd-g .qd-p').forEach(x=>{ tot++; const b=x.dataset.b||''; const ok=(!ws.length||ws.every(w=>b.split(' ').some(y=>y.startsWith(w))))&&(!e||x.dataset.e===e)&&(!v||x.dataset.vi===v)&&(!h||(x.dataset.h||'').includes('|'+h+'|'));
-    x.classList.toggle('qd-oc',!ok); if(ok) n++; });
-  const ct=document.getElementById('qd-fcont'); if(ct) ct.textContent=(ws.length||e||v||h)?n+' de '+tot+' pessoas':''; }
+function qdFiltra(){ if(S.view!=='gxqd') return; const q=qdK(S.qd.busca), ws=q?q.split(' '):[], e=S.qd.emp, v=S.qd.vin, h=S.qd.hab, liga=ws.length||e||v||h; let n=0, tot=0, ns=0;
+  const bate=b=>ws.every(w=>String(b||'').split(' ').some(y=>y.startsWith(w)));
+  document.querySelectorAll('.qd-g .qd-c').forEach(col=>{ const porNome=ws.length&&bate(col.dataset.cn); let vis=0;
+    col.querySelectorAll('.qd-p,.qd-pk').forEach(x=>{ tot++; const ok=(porNome||!ws.length||bate(x.dataset.b))&&(!e||x.dataset.e===e)&&(!v||x.dataset.vi===v)&&(!h||(x.dataset.h||'').includes('|'+h+'|'));
+      x.classList.toggle('qd-oc',!ok); if(ok){ n++; vis++; } });
+    const some=!!liga&&!porNome&&!vis; col.classList.toggle('qd-ocol',some); col.classList.toggle('qd-achou',!!porNome); if(!some) ns++; });
+  document.querySelectorAll('.qd-areas:not(.qdo-w) .qd-ar').forEach(ar=>{ const cs=ar.querySelectorAll('.qd-c'); ar.classList.toggle('qd-ocol',!!liga&&cs.length>0&&[...cs].every(c=>c.classList.contains('qd-ocol'))); });
+  document.querySelectorAll('.qdo-n[data-qdon]').forEach(x=>{ const ok=!liga||((!ws.length||bate(x.dataset.cn)||bate(x.dataset.b))&&(!e||(x.dataset.e||'').includes('|'+e+'|'))&&(!v||(x.dataset.vi||'').includes('|'+v+'|'))&&(!h||(x.dataset.h||'').includes('|'+h+'|')));
+    x.classList.toggle('qdo-dim',!ok); x.classList.toggle('qdo-hit',!!liga&&ok); if(ok&&liga) ns++; });
+  const ct=document.getElementById('qd-fcont'); if(ct) ct.textContent=liga?(S.qd.vis==='org'?ns+' setores':n+' de '+tot+' pessoas · '+ns+(ns===1?' setor':' setores')):''; }
 setTimeout(()=>{ try{ depoisDoRender(qdFiltra,'quadro de pessoas: filtros'); }catch(e){ const _r=render; render=function(){ const x=_r.apply(this,arguments); try{ qdFiltra(); }catch(er){} return x; }; } },0);
 /* versões: gxquadro/v-<id> {tipo:'versao', nome, cols, em, por, porNome}; a lista fica no próprio quadro (D.versoes) */
 async function qdVerSalva(nome,auto){ const D=qdD(), id=qdId(), em=new Date().toISOString(), porNome=(typeof gxEu==='function'?gxEu():'')||'';
@@ -479,3 +486,161 @@ document.head.insertAdjacentHTML('beforeend',`<style id="qd-css3">
 </style>`);
 /* menu Imprimir: fecha ao escolher ou ao tocar fora */
 document.addEventListener('click',e=>{ document.querySelectorAll('details.qd-impm[open]').forEach(d=>{ if(!d.contains(e.target)||e.target.closest('.qd-impl button')) setTimeout(()=>{ d.open=false; },0); }); });
+/* ===== 17/11/2026 · Setores que recolhem, busca por setor e organograma (pedido: "pesquisar por setor, o setor poder fechar e abrir
+   para ter mais espaço, tratar os setores como cards e poder ligar eles como organograma").
+   - Recolher: cada setor (▾/▸ no cabeçalho) fica só com o nome, a contagem e as iniciais; lembrado no aparelho (colafix.qd.crec).
+     Dá para soltar pessoas num setor recolhido (entram no fim).
+   - Busca de cima acha o nome do setor (mostra o setor inteiro) e esconde os setores e áreas sem nada.
+   - Organograma (Quadro | Organograma, lembrado em colafix.qd.vis): Colafix → áreas → setores; c.pai = setor de cima,
+     c.resp = responsável (nome). Ligar: arrastar um cartão para cima de outro, ou "Fica abaixo de" no painel do setor.
+     Soltar numa área = direto na área. Cada ramo recolhe (colafix.qd.orec). Imprimir › Organograma. */
+S.qd.vis=(()=>{ try{ return localStorage.getItem('colafix.qd.vis')==='org'?'org':'col'; }catch(e){ return 'col'; } })();
+S.qd.osel=null; S.qd.odrag=null;
+function qdLS(k){ try{ return JSON.parse(localStorage.getItem(k)||'{}')||{}; }catch(e){ return {}; } }
+function qdLSg(k,o){ try{ localStorage.setItem(k,JSON.stringify(o)); }catch(e){} }
+function qdCrec(){ return qdLS('colafix.qd.crec'); }
+function qdPkAttrs(p){ const I=qdInfo(p.n), habs=p.hab||[];
+  return `data-b="${esc(qdK([p.n,p.obs,habs.join(' '),I.e,I.s,I.fn,p.espMot].join(' ')))}" data-e="${esc(qdK(I.e))}" data-vi="${esc(I.v)}" data-h="|${esc(habs.map(qdK).join('|'))}|"`; }
+function qdRecBody(c){ return `<div class="qd-ps qd-psrec" data-qdcol="${esc(c.id)}">${c.ps.map(p=>{ const I=qdInfo(p.n), st=QD_ST[p.st];
+    return `<button class="qd-pk ${p.st?'st-'+p.st:'st-sem'} ${I.hoje||''}" data-act="qd-sel" data-v="${esc(p.id)}" ${qdPkAttrs(p)} title="${esc(qdNomeV(p.n)+(st?' · '+st.t:''))}">${esc(qdIniN(p.n).toUpperCase())}</button>`; }).join('')||'<span class="qd-pk0">vazio · solte alguém aqui</span>'}</div>`; }
+/* árvore */
+function qdOrgPai(c){ const D=qdD(); let p=c.pai&&D.cols.find(x=>x.id===c.pai&&x.id!==c.id); const vis=new Set([c.id]);
+  for(let x=p;x;x=x.pai&&D.cols.find(y=>y.id===x.pai)){ if(vis.has(x.id)) return null; vis.add(x.id); } return p||null; }
+function qdOrgFilhos(id){ return qdD().cols.filter(c=>{ const p=qdOrgPai(c); return id?p&&p.id===id:!p; }); }
+function qdOrgDesc(id){ const out=new Set(), f=x=>qdOrgFilhos(x).forEach(c=>{ if(!out.has(c.id)){ out.add(c.id); f(c.id); } }); f(id); return out; }
+function qdOrgSoma(id){ let at=0, meta=0, n=0; const f=c=>{ const M=qdMetaDe(c); at+=M.at; meta+=M.meta||0; n++; qdOrgFilhos(c.id).forEach(f); }; const c=qdD().cols.find(x=>x.id===id); if(c) f(c); return {at,meta,n}; }
+function qdOrgNo(c){ const D=qdD(), M=qdMetaDe(c), kids=qdOrgFilhos(c.id), rec=!!qdLS('colafix.qd.orec')[c.id], AR=qdAreas(), ar=AR.find(a=>a.id===qdAreaDe(c))||{};
+  const pc=M.meta?Math.min(100,Math.round(M.at/M.meta*100)):0, bc=M.meta?(M.df<0?'crit':M.df>0?'warn':'ok'):'';
+  const es=[...new Set(c.ps.map(p=>qdK(qdInfo(p.n).e)).filter(Boolean))], vs=[...new Set(c.ps.map(p=>qdInfo(p.n).v).filter(Boolean))], hs=[...new Set(c.ps.flatMap(p=>(p.hab||[]).map(qdK)))];
+  const avs=c.ps.slice(0,7).map(p=>{ const I=qdInfo(p.n); return `<i class="qdo-av ${I.hoje||''} ${p.st?'st-'+p.st:''}" title="${esc(qdNomeV(p.n))}">${esc(qdIniN(p.n).toUpperCase())}</i>`; }).join('')+(c.ps.length>7?`<i class="qdo-av mais">+${c.ps.length-7}</i>`:'');
+  const sai=c.ps.filter(p=>p.st==='sai').length, esp=c.ps.filter(p=>p.st==='esp').length, duv=c.ps.filter(p=>p.st==='duv').length;
+  const sub=rec&&kids.length?qdOrgSoma(c.id):null;
+  return `<li><div class="qdo-n ${S.qd.osel===c.id?'sel':''}" role="button" tabindex="0" draggable="true" data-qdon="${esc(c.id)}" data-act="qdo-sel" data-v="${esc(c.id)}" data-cn="${esc(qdK(c.nome))}" data-b="${esc(qdK(c.ps.map(p=>p.n+' '+(p.hab||[]).join(' ')).join(' ')+' '+(c.resp||'')))}" data-e="|${esc(es.join('|'))}|" data-vi="|${esc(vs.join('|'))}|" data-h="|${esc(hs.join('|'))}|" style="--qa:${esc(ar.cor||'#1F5F7A')}">
+    <div class="qdo-nh"><b>${esc(c.nome)}</b><span class="qd-cc">${M.meta?M.at+'/'+M.meta:c.ps.length}</span></div>
+    <div class="qdo-r">${c.resp?`<span class="qdo-rl">Responsável</span> ${esc(qdNomeV(c.resp))}`:'<span class="qdo-rl">sem responsável</span>'}</div>
+    ${M.meta?`<div class="qd-cbar ${bc}"><i style="width:${pc}%"></i></div><div class="qdo-m ${bc}">${M.df<0?'faltam '+(-M.df):M.df>0?'sobra'+(M.df>1?'m ':' ')+M.df:'completo'}</div>`:''}
+    <div class="qdo-avs">${avs||'<span class="qdo-vz">ninguém ainda</span>'}</div>
+    ${sai||esp||duv?`<div class="qdo-st">${sai?`<span class="crit">${sai} sai</span>`:''}${esp?`<span class="esp">${esp} em espera</span>`:''}${duv?`<span class="warn">${duv} em dúvida</span>`:''}</div>`:''}
+    ${kids.length?`<button class="qdo-rb" data-act="qdo-rec" data-v="${esc(c.id)}" title="${rec?'Mostrar os setores de baixo':'Recolher os setores de baixo'}">${rec?`+ ${kids.length} ${kids.length>1?'setores':'setor'} · ${sub.at} pessoas`:'−'}</button>`:''}
+  </div>${kids.length&&!rec?`<ul>${kids.map(qdOrgNo).join('')}</ul>`:''}</li>`; }
+function qdOrgHtml(){ const D=qdD(), AR=qdAreas(), t=qdTotArea(D.cols);
+  const ars=AR.map(ar=>{ const rs=qdOrgFilhos(null).filter(c=>qdAreaDe(c)===ar.id); const tA=qdTotArea(D.cols.filter(c=>qdAreaDe(c)===ar.id));
+    return `<li><div class="qdo-n qdo-ar" data-qdoa="${esc(ar.id)}" style="--qa:${esc(ar.cor||'#1F5F7A')}"><div class="qdo-nh"><b>${esc(ar.nome)}</b><span class="qd-cc">${tA.at}${tA.meta?'/'+tA.meta:''}</span></div><div class="qdo-r"><span class="qdo-rl">${rs.length?'área':'sem setor direto'}</span></div></div>${rs.length?`<ul>${rs.map(qdOrgNo).join('')}</ul>`:''}</li>`; }).join('');
+  const z=qdOz();
+  return `<div class="qdo-bar"><span class="qdo-dica">Arraste um setor para cima de outro para ligar (fica embaixo dele). Solte numa área para tirar a ligação. Toque no setor para escolher o responsável.</span>
+      <span class="qdo-zm" role="group" aria-label="Tamanho"><button data-act="qdo-z" data-v="-" aria-label="Diminuir">−</button><button data-act="qdo-z" data-v="1" title="Tamanho normal">${Math.round(z*100)}%</button><button data-act="qdo-z" data-v="+" aria-label="Aumentar">+</button><button data-act="qdo-z" data-v="fit">Caber na tela</button></span></div>
+    <div class="qdo"><ul class="qdo-t" style="zoom:${z}"><li><div class="qdo-n qdo-top" data-qdoa=""><div class="qdo-nh"><b>Colafix</b><span class="qd-cc">${t.at}${t.meta?'/'+t.meta:''}</span></div><div class="qdo-r"><span class="qdo-rl">${D.cols.length} setores</span></div></div><ul>${ars}</ul></li></ul></div>`; }
+function qdOrgPainel(){ if(S.qd.vis!=='org'||!S.qd.osel) return ''; const D=qdD(), c=D.cols.find(x=>x.id===S.qd.osel); if(!c){ S.qd.osel=null; return ''; }
+  const AR=qdAreas(), ds=qdOrgDesc(c.id), pai=qdOrgPai(c), M=qdMetaDe(c), outros=D.cols.flatMap(x=>x.id===c.id?[]:x.ps.map(p=>p.n));
+  return `<div class="qd-sp card qdo-sp"><div class="qd-sph"><div><div class="eyebrow">SETOR NO ORGANOGRAMA</div><h3>${esc(c.nome)}</h3></div><button class="btn sec" data-act="qdo-fecha">Fechar</button></div>
+    <label><span>Fica abaixo de</span><select class="txt" id="qdo-pai"><option value="">Ninguém (direto na área)</option>${D.cols.filter(x=>x.id!==c.id&&!ds.has(x.id)).map(x=>`<option value="${esc(x.id)}" ${pai&&pai.id===x.id?'selected':''}>${esc(x.nome)}</option>`).join('')}</select></label>
+    ${pai?'':`<label><span>Área</span><select class="txt" id="qdo-area">${AR.map(a=>`<option value="${esc(a.id)}" ${qdAreaDe(c)===a.id?'selected':''}>${esc(a.nome)}</option>`).join('')}</select></label>`}
+    <label><span>Responsável</span><select class="txt" id="qdo-resp"><option value="">Sem responsável</option>${c.ps.length?`<optgroup label="Neste setor">${c.ps.map(p=>`<option value="${esc(p.n)}" ${c.resp===p.n?'selected':''}>${esc(qdNomeV(p.n))}</option>`).join('')}</optgroup>`:''}${outros.length?`<optgroup label="De outro setor">${outros.map(n=>`<option value="${esc(n)}" ${c.resp===n?'selected':''}>${esc(qdNomeV(n))}</option>`).join('')}</optgroup>`:''}${c.resp&&!c.ps.some(p=>p.n===c.resp)&&!outros.includes(c.resp)?`<option value="${esc(c.resp)}" selected>${esc(qdNomeV(c.resp))}</option>`:''}</select></label>
+    <div class="qd-dl" style="display:block"><b>${c.ps.length} ${c.ps.length===1?'pessoa':'pessoas'}</b>${M.meta?` · precisa de ${M.meta}`:''}${ds.size?` · ${ds.size} ${ds.size>1?'setores':'setor'} abaixo`:''}
+      <div class="qdo-pl">${c.ps.map(p=>`<span>${esc(qdNomeV(p.n))}${p.st&&QD_ST[p.st]?` <small>${esc(QD_ST[p.st].t.toLowerCase())}</small>`:''}</span>`).join('')||'<span class="sub">Ninguém neste setor.</span>'}</div></div>
+    <div class="qd-spa"><button class="btn sec" data-act="qdo-ver" data-v="${esc(c.id)}">Ver no quadro</button></div></div>`; }
+/* ações */
+function qdOrgLiga(id,paiId,area){ const D=qdD(), c=D.cols.find(x=>x.id===id); if(!c) return false; const AR=qdAreas(), nA=a=>(AR.find(x=>x.id===a)||{}).nome||a;
+  if(paiId){ if(paiId===id||qdOrgDesc(id).has(paiId)){ toast('Não dá: '+(D.cols.find(x=>x.id===paiId)||{}).nome+' está abaixo de '+c.nome+'.'); return false; }
+    const p=D.cols.find(x=>x.id===paiId); if(!p) return false; if(c.pai===paiId) return false; c.pai=paiId; qdLog('Setor "'+c.nome+'" agora fica abaixo de "'+p.nome+'"'); }
+  else { const tinha=c.pai&&qdOrgPai(c); delete c.pai; if(area&&area!==qdAreaDe(c)){ qdLog('Setor "'+c.nome+'": '+nA(qdAreaDe(c))+' → '+nA(area)); c.area=area; } else if(tinha) qdLog('Setor "'+c.nome+'" não fica mais abaixo de "'+tinha.nome+'"'); else if(!area) return false; }
+  qdGrava(); return true; }
+document.addEventListener('click',e=>{ if(S.view!=='gxqd'||!e.target.closest) return; const b=e.target.closest('[data-act^="qd-crec"],[data-act="qd-vis"],[data-act^="qdo-"]'); if(!b) return; const a=b.dataset.act, v=b.dataset.v, D=qdD();
+  if(a==='qd-crec'){ const r=qdCrec(); if(r[v]) delete r[v]; else r[v]=1; qdLSg('colafix.qd.crec',r); render(); return; }
+  if(a==='qd-crectodos'){ const r={}; if(v==='fechar') D.cols.forEach(c=>{ r[c.id]=1; }); qdLSg('colafix.qd.crec',r); render(); return; }
+  if(a==='qd-vis'){ S.qd.vis=v==='org'?'org':'col'; try{ localStorage.setItem('colafix.qd.vis',S.qd.vis); }catch(er){} S.qd.osel=null; S.qd.sel=null; render(); return; }
+  if(a==='qdo-sel'){ S.qd.osel=S.qd.osel===v?null:v; S.qd.sel=null; S.qd.painel=''; render(); return; }
+  if(a==='qdo-fecha'){ S.qd.osel=null; render(); return; }
+  if(a==='qdo-rec'){ e.stopPropagation(); const r=qdLS('colafix.qd.orec'); if(r[v]) delete r[v]; else r[v]=1; qdLSg('colafix.qd.orec',r); render(); return; }
+  if(a==='qdo-ver'){ S.qd.vis='col'; try{ localStorage.setItem('colafix.qd.vis','col'); }catch(er){} S.qd.osel=null; const r=qdCrec(); if(r[v]){ delete r[v]; qdLSg('colafix.qd.crec',r); }
+    const rr=qdRecol(), c=D.cols.find(x=>x.id===v); if(c&&rr[qdAreaDe(c)]){ delete rr[qdAreaDe(c)]; qdLSg('colafix.qd.recol',rr); }
+    render(); setTimeout(()=>{ const el=document.querySelector(`.qd-c[data-qdcol="${CSS.escape(v)}"]`); if(el){ el.scrollIntoView({block:'center',behavior:'smooth'}); el.classList.add('qd-flash'); setTimeout(()=>el.classList.remove('qd-flash'),1600); } },80); return; }
+  if(a==='qdo-imp'){ const dt=b.closest('details'); if(dt) dt.open=false; qdOrgImprimir(); return; }
+},true);
+document.addEventListener('change',e=>{ const t=e.target; if(!t||S.view!=='gxqd'||!S.qd.osel) return; const D=qdD(), c=D.cols.find(x=>x.id===S.qd.osel); if(!c) return;
+  if(t.id==='qdo-pai'){ qdOrgLiga(c.id,t.value||null,null); render(); }
+  else if(t.id==='qdo-area'){ qdOrgLiga(c.id,null,t.value); render(); }
+  else if(t.id==='qdo-resp'){ const nv=t.value||''; if((c.resp||'')!==nv){ if(nv) c.resp=nv; else delete c.resp; qdLog('Setor "'+c.nome+'": responsável '+(nv?qdNomeV(nv):'nenhum')); qdGrava(); } render(); } });
+document.addEventListener('keydown',e=>{ if(S.view!=='gxqd') return; if(e.key==='Escape'&&S.qd.osel){ S.qd.osel=null; render(); return; }
+  if((e.key==='Enter'||e.key===' ')&&e.target&&e.target.matches&&e.target.matches('.qdo-n[data-qdon]')){ e.preventDefault(); e.target.click(); } });
+/* arrastar no organograma: setor em cima de setor (liga), em cima de área/Colafix (desliga); pessoa da lista "Sem setor" em cima do setor */
+function qdoLimpa(){ document.querySelectorAll('.qdo-n.over,.qdo-n.nao,.qdo-n.drag').forEach(x=>x.classList.remove('over','nao','drag')); }
+document.addEventListener('dragstart',e=>{ if(S.view!=='gxqd'||S.qd.vis!=='org'||!e.target.closest) return; const n=e.target.closest('.qdo-n[data-qdon]'); if(!n) return;
+  S.qd.odrag=n.dataset.qdon; n.classList.add('drag'); try{ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain','org:'+S.qd.odrag); }catch(x){} });
+document.addEventListener('dragend',()=>{ S.qd.odrag=null; qdoLimpa(); });
+document.addEventListener('dragover',e=>{ if(S.view!=='gxqd'||S.qd.vis!=='org'||!e.target.closest) return; if(!S.qd.odrag&&!S.qd.ldrag) return; const n=e.target.closest('.qdo-n'); if(!n) return;
+  if(S.qd.ldrag&&!n.dataset.qdon) return; e.preventDefault(); document.querySelectorAll('.qdo-n.over,.qdo-n.nao').forEach(x=>{ if(x!==n) x.classList.remove('over','nao'); });
+  const ruim=S.qd.odrag&&n.dataset.qdon&&(n.dataset.qdon===S.qd.odrag||qdOrgDesc(S.qd.odrag).has(n.dataset.qdon)); n.classList.add(ruim?'nao':'over'); });
+document.addEventListener('drop',e=>{ if(S.view!=='gxqd'||S.qd.vis!=='org'||!e.target.closest) return; const n=e.target.closest('.qdo-n'); if(!n||(!S.qd.odrag&&!S.qd.ldrag)) return; e.preventDefault();
+  const id=S.qd.odrag, ln=S.qd.ldrag; S.qd.odrag=null; S.qd.ldrag=null; qdoLimpa();
+  if(ln){ if(n.dataset.qdon) qdPor(ln,n.dataset.qdon); render(); return; }
+  if(n.dataset.qdon){ if(n.dataset.qdon!==id) qdOrgLiga(id,n.dataset.qdon,null); } else qdOrgLiga(id,null,n.dataset.qdoa||null); render(); });
+/* imprimir o organograma (A4 deitada, reduz para caber) */
+function qdOrgImprimir(){ const w=window.open('','_blank'); if(!w){ toast('O navegador bloqueou a janela de impressão. Libere pop-ups para o painel.'); return; }
+  let logo=''; try{ logo=(document.querySelector('.brand img')||{}).src||''; }catch(e){} const css=(document.getElementById('qd-org-css')||{}).textContent||'', t=qdTotArea(qdD().cols);
+  w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Organograma</title><style>
+    :root{--surface:#fff;--line:#C9D3DA;--muted:#5E6E77;--ground:#F2F4F6;--ok:#2F6E4F;--warn:#A86A16;--crit:#B5473F;--teal:#1F5F7A;--pc-info:#2B6A87;--qd-nef:#6B4E9B}
+    @page{size:A4 landscape;margin:8mm}*{box-sizing:border-box}body{font:10pt Arial,Helvetica,sans-serif;color:#143F54;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .t{display:flex;align-items:center;gap:14px;border-bottom:2px solid #143F54;padding-bottom:6px;margin-bottom:10px}.t img{height:32px}.t h1{font-size:16pt;margin:0}.t p{margin:2px 0 0;color:#5E6E77;font-size:9pt}
+    ${css}.qdo{overflow:visible!important;padding:0!important}.qdo-rb,.qdo-dica{display:none!important}.qdo-n{box-shadow:none!important;cursor:default}</style></head><body>
+    <div class="t">${logo?`<img src="${logo}" alt="Colafix">`:''}<div><h1>Organograma</h1><p>${t.at} pessoas · ${qdD().cols.length} setores · ${new Date().toLocaleDateString('pt-BR')}</p></div></div>
+    <div id="o">${qdOrgHtml()}</div>
+    <script>window.onload=()=>{ const o=document.querySelector('.qdo-t'), W=1060; if(o&&o.scrollWidth>W) document.getElementById('o').style.zoom=(W/o.scrollWidth).toFixed(3); setTimeout(()=>window.print(),350); }<\/script></body></html>`); w.document.close(); }
+/* menu Imprimir ganha "Organograma" */
+setTimeout(()=>{ try{ depoisDoRender(()=>{ if(S.view!=='gxqd') return; const l=document.querySelector('.qd-impl'); if(l&&!l.querySelector('[data-act="qdo-imp"]')) l.insertAdjacentHTML('beforeend','<button data-act="qdo-imp"><b>Organograma</b><small>Os setores ligados, com o responsável e as pessoas</small></button>'); },'quadro: organograma no imprimir'); }catch(e){} },0);
+/* soltar pessoa num setor recolhido: entra no fim */
+document.addEventListener('drop',e=>{ const ps=e.target&&e.target.closest&&e.target.closest('.qd-psrec'); if(ps&&(S.qd.drag||S.qd.ldrag)) S.qd._fimRec=true; },true);
+{ const _qm=qdMove, _qp=qdPor; qdMove=function(pid,cid,pos){ if(S.qd._fimRec){ S.qd._fimRec=false; pos=null; } return _qm(pid,cid,pos); }; qdPor=function(n,cid,pos){ if(S.qd._fimRec){ S.qd._fimRec=false; pos=null; } return _qp(n,cid,pos); }; }
+window.Painel.quadro.org={liga:qdOrgLiga,filhos:qdOrgFilhos,pai:qdOrgPai};
+document.head.insertAdjacentHTML('beforeend',`<style id="qd-org-css">
+.qd-vis{flex:none}
+.qd-crb{border:0;background:none;color:var(--muted);font-size:13px;width:26px;height:26px;border-radius:7px;cursor:pointer;flex:none;padding:0}.qd-crb:hover{background:var(--ground);color:inherit}
+.qd-c.crec{min-height:0}.qd-c.crec header{padding-bottom:10px}
+.qd-psrec{flex-direction:row!important;flex-wrap:wrap;gap:5px!important;padding:6px 10px 10px!important;min-height:0!important}.qd-psrec .qd-ins{display:none}
+.qd-pk{width:30px;height:30px;border-radius:50%;border:0;background:var(--surface);box-shadow:inset 0 0 0 2px var(--line);font:inherit;font-size:10.5px;font-weight:700;color:var(--ink,inherit);cursor:pointer;padding:0}
+.qd-pk.veio{box-shadow:inset 0 0 0 2.5px var(--ok)}.qd-pk.faltou{box-shadow:inset 0 0 0 2.5px var(--crit);color:var(--crit)}.qd-pk.ferias{box-shadow:inset 0 0 0 2.5px var(--pc-info,var(--teal))}
+.qd-pk.st-sai{opacity:.45;text-decoration:line-through}.qd-pk.qd-oc{display:none}.qd-pk0{font-size:12px;color:var(--muted)}
+.qd-c.qd-ocol,.qd-ar.qd-ocol{display:none}.qd-c.qd-achou{outline:2px solid var(--teal);outline-offset:1px}
+.qd-c.qd-flash{animation:qdFlash 1.6s}@keyframes qdFlash{0%,60%{box-shadow:0 0 0 4px color-mix(in srgb,var(--teal) 45%,transparent)}100%{box-shadow:none}}
+.qdo-w{min-width:0}
+.qdo-dica{font-size:12.5px;color:var(--muted);margin:0 0 8px}
+.qdo{overflow:auto;padding:8px 4px 20px;background:var(--surface);border:1px solid var(--line);border-radius:16px}
+.qdo ul{padding-top:22px;position:relative;display:flex;justify-content:center;margin:0;padding-left:0}.qdo>.qdo-t{width:max-content;margin:0 auto}
+.qdo li{list-style:none;position:relative;padding:22px 7px 0;display:flex;flex-direction:column;align-items:center}
+.qdo li::before,.qdo li::after{content:'';position:absolute;top:0;right:50%;width:50%;height:22px;border-top:2px solid var(--line)}
+.qdo li::after{right:auto;left:50%;border-left:2px solid var(--line)}
+.qdo li:only-child::before,.qdo li:only-child::after{display:none}.qdo li:only-child{padding-top:0}
+.qdo li:first-child::before,.qdo li:last-child::after{border:0 none}
+.qdo li:last-child::before{border-right:2px solid var(--line);border-radius:0 8px 0 0}.qdo li:first-child::after{border-radius:8px 0 0 0}
+.qdo ul ul::before{content:'';position:absolute;top:0;left:50%;height:22px;border-left:2px solid var(--line)}
+.qdo>.qdo-t{padding-top:6px}.qdo>.qdo-t>li{padding-top:0}.qdo>.qdo-t>li::before,.qdo>.qdo-t>li::after{display:none}
+.qdo-n{position:relative;width:200px;background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--qa,var(--teal));border-radius:12px;padding:9px 10px 9px;text-align:left;box-shadow:0 1px 2px rgba(16,40,52,.06),0 3px 10px rgba(16,40,52,.06);cursor:pointer;display:flex;flex-direction:column;gap:5px}
+.qdo-n[data-qdon]{cursor:grab}.qdo-n:hover{box-shadow:0 4px 14px rgba(16,40,52,.14)}.qdo-n.sel{outline:2px solid var(--teal);outline-offset:1px}
+.qdo-n.drag{opacity:.4}.qdo-n.over{outline:3px dashed var(--teal);outline-offset:2px;background:color-mix(in srgb,var(--teal) 8%,var(--surface))}.qdo-n.nao{outline:3px dashed var(--crit);outline-offset:2px}
+.qdo-top{background:#143F54;color:#fff;border:0;border-top:0;width:180px;align-items:center;text-align:center}.qdo-top .qd-cc{background:rgba(255,255,255,.15);color:#fff}.qdo-top .qdo-rl{color:rgba(255,255,255,.75)}.qdo-top .qdo-nh{justify-content:center}
+.qdo-ar{background:color-mix(in srgb,var(--qa) 10%,var(--surface));border-color:color-mix(in srgb,var(--qa) 35%,var(--line));width:170px}
+.qdo-nh{display:flex;align-items:center;gap:6px;justify-content:space-between}.qdo-nh b{font-size:14px;font-weight:650;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qdo-r{font-size:12px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.qdo-rl{color:var(--muted);font-size:11px}
+.qdo-m{font-size:11px;font-weight:600;margin-top:-2px}.qdo-m.ok{color:var(--ok)}.qdo-m.warn{color:var(--warn)}.qdo-m.crit{color:var(--crit)}
+.qdo-avs{display:flex;flex-wrap:wrap;gap:3px}.qdo-av{font-style:normal;width:22px;height:22px;border-radius:50%;background:var(--ground);font-size:8.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1.5px var(--line)}
+.qdo-av.veio{box-shadow:inset 0 0 0 2px var(--ok)}.qdo-av.faltou{box-shadow:inset 0 0 0 2px var(--crit);color:var(--crit)}.qdo-av.ferias{box-shadow:inset 0 0 0 2px var(--pc-info,var(--teal))}.qdo-av.st-sai{opacity:.45}.qdo-av.mais{background:transparent;box-shadow:none;color:var(--muted);width:auto;padding:0 2px}
+.qdo-vz{font-size:11px;color:var(--muted)}
+.qdo-st{display:flex;flex-wrap:wrap;gap:2px 8px;font-size:11px}.qdo-st .crit{color:var(--crit)}.qdo-st .esp{color:var(--pc-info,var(--teal))}.qdo-st .warn{color:var(--warn)}
+.qdo-rb{position:absolute;left:50%;bottom:-12px;transform:translateX(-50%);z-index:2;border:1px solid var(--line);background:var(--surface);border-radius:999px;font:inherit;font-size:11px;padding:1px 9px;min-width:24px;height:22px;cursor:pointer;color:var(--muted);white-space:nowrap}.qdo-rb:hover{color:inherit;border-color:var(--teal)}
+.qdo-n.qdo-dim{opacity:.3}.qdo-n.qdo-hit{outline:2px solid var(--teal);outline-offset:1px}
+.qdo-pl{display:flex;flex-direction:column;gap:3px;margin-top:6px;max-height:40vh;overflow:auto}.qdo-pl small{color:var(--muted)}
+</style>`);
+/* zoom e rolagem do organograma (a rolagem não volta ao começo quando a tela é redesenhada) */
+function qdOz(){ try{ const z=parseFloat(localStorage.getItem('colafix.qd.oz')); return z>=0.3&&z<=1.5?z:1; }catch(e){ return 1; } }
+document.addEventListener('click',e=>{ const b=e.target.closest&&e.target.closest('[data-act="qdo-z"]'); if(!b||S.view!=='gxqd') return; let z=qdOz(); const v=b.dataset.v;
+  if(v==='+') z=Math.min(1.5,z+0.1); else if(v==='-') z=Math.max(0.3,z-0.1); else if(v==='1') z=1;
+  else if(v==='fit'){ const o=document.querySelector('.qdo'), t=o&&o.querySelector('.qdo-t'); if(t){ const w=t.scrollWidth*(parseFloat(t.style.zoom)||1); z=Math.max(0.3,Math.min(1,(o.clientWidth-16)/(w/(parseFloat(t.style.zoom)||1)))); } }
+  z=Math.round(z*100)/100; try{ localStorage.setItem('colafix.qd.oz',String(z)); }catch(er){} S.qd.osx=null; render(); },true);
+document.addEventListener('scroll',e=>{ const o=e.target; if(o&&o.classList&&o.classList.contains('qdo')) S.qd.osx=[o.scrollLeft,o.scrollTop]; },true);
+setTimeout(()=>{ try{ depoisDoRender(()=>{ if(S.view!=='gxqd'||S.qd.vis!=='org') return; const o=document.querySelector('.qdo'); if(!o) return;
+  if(S.qd.osx){ o.scrollLeft=S.qd.osx[0]; o.scrollTop=S.qd.osx[1]; } else { o.scrollLeft=Math.max(0,(o.scrollWidth-o.clientWidth)/2); S.qd.osx=[o.scrollLeft,0]; } },'quadro: rolagem do organograma'); }catch(e){} },0);
+document.head.insertAdjacentHTML('beforeend',`<style id="qd-org-css2">
+.qdo-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 8px}.qdo-bar .qdo-dica{margin:0;flex:1 1 300px}
+.qdo-zm{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}.qdo-zm button{font:inherit;font-size:12.5px;border:0;background:none;padding:5px 10px;cursor:pointer;color:inherit}.qdo-zm button+button{border-left:1px solid var(--line)}.qdo-zm button:hover{background:var(--ground)}
+.qdo{max-height:calc(100vh - 150px)}.qdo-n{width:190px}
+</style>`);

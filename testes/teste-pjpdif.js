@@ -1,0 +1,44 @@
+/* Pagamento dos PJ (17/11): fechar com outro valor (o que vai para a nota) e "Ajuste para a próxima quinzena" no valor
+   fechado; a diferença entra sozinha na quinzena seguinte. Dados inventados. */
+const H=require('./harness'); const {seedManut}=require('./manut-seed'); const res=[]; const ok=(n,c,d)=>{ res.push(!!c); console.log((c?'PASSOU ':'FALHOU ')+n+(d?' — '+String(d).slice(0,300):'')); };
+(async()=>{ const {d}=seedManut(); const D=d.docs;
+  d.users['rh@painel-colafix.app']={uid:'uRH',pass:'rh1234',nome:'Stefani RH'}; D['perfis/uRH']={nome:'Stefani RH',usuario:'rh'}; D['acessos/uRH']={perfil:'rh',mods:['rh'],locais:[],ativo:true};
+  D['rh/config']={setores:['Produção'],pjPag:{ini:'08:00',fim:'18:00',intv:72,fds:1}};
+  D['rh/dados/funcionarios/f2']={nome:'ANA LIMA TESTE',tipo:'PJ',empresa:'ZENITH',cpf:'55566677788',cnpj:'11222333000181',salario:4400,setor:'Produção',funcao:'Ajudante',status:'Ativo',admissao:'2025-01-10'};
+  const dO={}; ['19','20','21','22','23','26','27','28','29','30'].forEach(x=>{ dO['2026-10-'+x]={'55566677788':{p:1,a:1,t:['08:00:00 PORTARIA','18:00:00 PORTARIA']}}; });
+  D['rh/dados/almoco/2026-10']={mes:'2026-10',dias:dO,pessoas:{'55566677788':{n:'ANA LIMA TESTE',e:'ZENITH'}},imp:[]};
+  const dN={}; ['03','04','05'].forEach(x=>{ dN['2026-11-'+x]={'55566677788':{p:1,a:1,t:['08:00:00 PORTARIA','18:00:00 PORTARIA']}}; });
+  D['rh/dados/almoco/2026-11']={mes:'2026-11',dias:dN,pessoas:{'55566677788':{n:'ANA LIMA TESTE',e:'ZENITH'}},imp:[]};
+  const B=await H.abrir({viewport:{width:1440,height:950}}); const p=B.page; const er=[]; p.on('pageerror',e=>er.push(e.message));
+  await H.preparar(p,d); await p.goto(H.BASE); await H.entrar(p,'rh','rh1234'); await H.dorme(3000);
+  const gav=async(per,tab)=>{ await p.evaluate(([pr,t])=>{ const J=window.RHPJPag._J; J.mod=null; J.per=pr; J.aba='lista'; J.ab='f2'; J.tab=t||'horas'; __T.go('rhpjpag'); window.Painel.render(); },[per,tab]); await H.dorme(1800); return p.evaluate(()=>(document.querySelector('.pjp-g')||{}).innerText||''); };
+  const srv=async()=>JSON.parse(await p.evaluate(()=>localStorage.getItem('__srv'))).docs;
+  let g=await gav('2026-10-2'); const calc=await p.evaluate(()=>{ const t=(document.querySelector('.pg-big b')||{}).textContent||''; return +t.replace(/[^\d,]/g,'').replace(',','.'); });
+  ok('Na barra do total aparece "fechar com outro valor"', /fechar com outro valor/.test(g), g.slice(-300));
+  await p.click('.pjp-g [data-act="pjp-fechdif"]'); await H.dorme(700);
+  const pago=Math.round((calc-62.04)*100)/100; await p.fill('#pjp-fdv',String(pago).replace('.',',')); await p.fill('#pjp-fdm','Hora extra'); await H.dorme(300);
+  const pv=await p.evaluate(()=>document.getElementById('pjp-fdres').textContent);
+  ok('Prévia: pago a menos → R$ 62,04 como acréscimo na próxima quinzena', /62,04/.test(pv)&&/fechou a menos/.test(pv)&&/acréscimo/.test(pv), pv);
+  await p.selectOption('#pjp-fdt','desc'); await H.dorme(300);
+  ok('Dá para escolher: vira desconto', /desconto/.test(await p.evaluate(()=>document.getElementById('pjp-fdres').textContent)));
+  await p.selectOption('#pjp-fdt','auto');
+  await p.click('[data-act="pjp-fdok"]'); await H.dorme(1200);
+  let S=await srv(), x=S['rh/dados/pjpag/2026-10-2'].pes.f2;
+  ok('Fecha com o valor da nota (1.200 e pouco) e guarda o calculado e a diferença', x.st==='fechado'&&Math.abs(x.fech.valor-pago)<0.01&&Math.abs(x.fech.calc-calc)<0.01&&x.fech.dif.tipo==='acr'&&Math.abs(x.fech.dif.v-62.04)<0.01&&/Hora extra/.test(x.fech.dif.mot), JSON.stringify(x.fech&&x.fech.dif));
+  ok('O histórico diz o que vai para a próxima quinzena', (x.hist||[]).some(h=>/62,04 vai como acréscimo/.test(h.t)), JSON.stringify(x.hist));
+  g=await gav('2026-11-1','desc');
+  ok('Na quinzena seguinte, o acréscimo entra sozinho', /Ajuste da quinzena[\s\S]*Hora extra[\s\S]*62,04/.test(g)&&/paga a menos/.test(g), g.slice(0,900));
+  /* o RH muda de ideia: era desconto */
+  g=await gav('2026-10-2');
+  ok('Fechado: a folha mostra "calculado · fechado" e o botão "Ajuste para a próxima quinzena"', /Calculado[\s\S]*fechado/.test(g)&&/Ajuste para a próxima quinzena/.test(g), g.slice(-400));
+  await p.click('.pjp-g [data-act="pjp-fechdif"]'); await H.dorme(700);
+  ok('O ajuste abre com o valor fechado preenchido', await p.evaluate(()=>!!document.getElementById('pjp-fdv').value));
+  await p.selectOption('#pjp-fdt','desc'); await p.click('[data-act="pjp-fdok"]'); await H.dorme(1200);
+  g=await gav('2026-11-1','desc');
+  ok('Trocado para desconto: aparece em Outros descontos', /Outros descontos[\s\S]*Ajuste da quinzena[\s\S]*paga a mais/.test(g), g.slice(0,900));
+  const v0=await p.evaluate(()=>(document.querySelector('.pg-big b')||{}).textContent);
+  await p.click('.pjp-g [data-act="pjp-dxx"][data-id="dif"]'); await H.dorme(1000);
+  S=await srv(); const v1=await p.evaluate(()=>(document.querySelector('.pg-big b')||{}).textContent);
+  ok('"tirar" tira a diferença desta quinzena', !!S['rh/dados/pjpag/2026-11-1'].pes.f2.difX&&v0!==v1, v0+' → '+v1);
+  const e2=er.concat(B.erros||[]).filter(x=>!/404|cdnjs|ERR_NAME/.test(x)); ok('Nenhum erro de JavaScript', !e2.length, e2.join(' | '));
+  console.log(res.every(Boolean)?'PASSOU tudo ('+res.length+')':'FALHOU ('+res.filter(x=>!x).length+')'); await B.browser.close(); })().catch(e=>{ console.error(e); process.exit(1); });

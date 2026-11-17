@@ -167,6 +167,12 @@
     let e=hs[0]||'', s=hs.length>1?hs[hs.length-1]:''; if(a&&(a.e||a.s||a.zero)){ e=a.zero?'':(a.e||e); s=a.zero?'':(a.s||s); }
     if(!e||!s) return null; const real=contaDia(e,s,ch.h||h).m, falta=Math.max(0,(+ch.m||0)-real); if(falta<=0) return null;
     return {d:ch.d,falta,v:Math.round(hDec(falta)*(+fe.vh||0)*100)/100}; }
+  /* 17/11/2026 ("ele fez hora extra; o que foi pago foi 1.200 e pouco; o RH fecha em 1.300 e pouco e a diferença fica para a próxima
+     quinzena"): ao fechar, o RH pode fechar com outro valor (o que vai para a nota): fech.valor = esse valor, fech.calc = o calculado. 17/11 (2º pedido: "tem que fechar com os 1200, que é o que vai para a nota; no fechado, um botão Ajuste para a próxima quinzena"). A diferença (fech.dif {v,tipo:'desc'|'acr',mot})
+     entra sozinha na quinzena seguinte como desconto ou acréscimo; "tirar" grava difX. */
+  function difAnt0(f,p,x){ const pp=perDe(perMove(p.pid,-1)), D=J.docs[pp.pid], xp=D&&D.pes&&D.pes[f._id], fe=xp&&xp.fech, d=fe&&fe.dif;
+    if(!d||!(+d.v>0)||!['desc','acr'].includes(d.tipo)||(x&&x.difX)) return null;
+    return {v:Math.round(+d.v*100)/100,tipo:d.tipo,t:'Ajuste da quinzena '+pp.curto+(d.mot?' ('+d.mot+')':'')+': calculado '+R$(fe.calc!=null?fe.calc:fe.valor)+', fechado '+R$(fe.calc!=null?fe.valor:fe.pagoReal)}; }
   /* ---------- Face ID da entrada da fábrica (10/11, "existe um controle de Face ID paralelo, onde o pessoal entra na fábrica para
      trabalhar; o horário de trabalho é por esse e, se não tiver marcação dele, verificar no Face ID"): outro iDSecure, importado
      aqui como CSV "Acessos Gerais" em rh/dados/ponto/{AAAA-MM} (mesmo formato do Face ID do almoço: dias.{dia}.{cpf}={p,t,ar}).
@@ -263,10 +269,10 @@
        saída mais comum nos dias de semana com entrada e saída; se passa 2 h do fim do horário, avisa */
     const sais=out.filter(d=>!d.aj&&!d.fil&&d.esc&&d.dw>0&&d.dw<6&&d.hs.length>=2).map(d=>min(d.hs[d.hs.length-1])).filter(v=>v!=null).sort((a,b)=>a-b);
     const saiT=sais.length>=2?sais[Math.floor(sais.length/2)]:null, fimM=min(h.fim), horCurto=!fil&&saiT!=null&&fimM!=null&&saiT-fimM>120?{fim:h.fim,ini:h.ini,sai:hhmm(saiT),de:h.de.fim}:null;
-    const fa0=fechAnt(c,f,p,h);
+    const fa0=fechAnt(c,f,p,h), dfa=difAnt0(f,p,x);
     const uni=unifDe(c,f,p), ext=(x&&x.dsc&&Array.isArray(x.dsc.x)?x.dsc.x:[]).filter(z=>z&&!z.removido);
-    const descs=[].concat(num(x&&x.desc)>0?[{t:(x.descMot||'Desconto lançado'),v:num(x.desc),k:'leg'}]:[],uni.filter(u=>u.st==='ok').map(u=>({t:'Uniforme (entrega de '+brc(u.x.data)+')',v:u.v,k:'u'})),ext.map(z=>({t:z.t,v:num(z.v),k:'x',id:z.id})),fa0&&!(x&&x.fchX)?[{t:'Saiu mais cedo no dia do fechamento ('+brc(fa0.d)+'): '+hTxt(fa0.falta),v:fa0.v,k:'fch'}]:[]);
-    const acrs=(x&&x.dsc&&Array.isArray(x.dsc.a)?x.dsc.a:[]).filter(z=>z&&!z.removido).map(z=>({t:z.t,v:num(z.v),id:z.id})), acr=Math.round(acrs.reduce((a,z)=>a+z.v,0)*100)/100;
+    const descs=[].concat(num(x&&x.desc)>0?[{t:(x.descMot||'Desconto lançado'),v:num(x.desc),k:'leg'}]:[],uni.filter(u=>u.st==='ok').map(u=>({t:'Uniforme (entrega de '+brc(u.x.data)+')',v:u.v,k:'u'})),ext.map(z=>({t:z.t,v:num(z.v),k:'x',id:z.id})),fa0&&!(x&&x.fchX)?[{t:'Saiu mais cedo no dia do fechamento ('+brc(fa0.d)+'): '+hTxt(fa0.falta),v:fa0.v,k:'fch'}]:[],dfa&&dfa.tipo==='desc'?[{t:dfa.t,v:dfa.v,k:'dif'}]:[]);
+    const acrs=(x&&x.dsc&&Array.isArray(x.dsc.a)?x.dsc.a:[]).filter(z=>z&&!z.removido).map(z=>({t:z.t,v:num(z.v),id:z.id})).concat(dfa&&dfa.tipo==='acr'?[{t:dfa.t,v:dfa.v,id:'dif',k:'dif'}]:[]), acr=Math.round(acrs.reduce((a,z)=>a+z.v,0)*100)/100;
     const fixo=+((f.pjPag||{}).fixo)||0, desc=Math.round(descs.reduce((a,z)=>a+z.v,0)*100)/100, bruto=fixo>0?fixo:hDec(tot)*vh;
     return {f,k,h,vh,dias:out,min:tot,fixo,bruto,desc,descs,descMot:descs.map(z=>z.t+' '+R$(z.v)).join(' · ').replace(/\u00a0/g,' '),uni,uPend:uni.filter(u=>!u.st).length,acr,acrs,acrMot:acrs.map(z=>z.t+' '+R$(z.v)).join(' · ').replace(/\u00a0/g,' '),valor:Math.max(0,Math.round((bruto-desc+acr)*100)/100),saiu:sdF,horCurto,cheio,fd,alerta,comFid,comPto,kp:K.kp,fil,semFid:!fil&&(!(dados||pto)||!comFid),dados:!!(dados||pto)}; }
   /* ---------- banco ---------- */
@@ -434,9 +440,9 @@
       if(!r.fixo&&!r.min) return btn('pjp-ab','Ver os dias',fa);
       return btn('pjp-fech','Fechar valor',fa,''); }
     const emN=c.titulo(String(f.empresa||'empresa'));
-    if(st==='fechado'&&viaCw(c,f)) return sepDe(f._id,x)?btn('pjp-cwvai','Ver a nota separada',fa,'')+lks(lnk('pjp-cwsepx','voltar para a nota da '+emN,fa),lnk('pjp-reab','mudar o valor',fa))
-      :btn('pjp-cwvai','Ver na nota da '+emN,fa,'')+lks(lnk('pjp-cwsepr','nota separada',fa),lnk('pjp-pago','marcar pago',fa),lnk('pjp-reab','mudar o valor',fa),lnk('pjp-fin','e-mail ao financeiro',fa));
-    if(st==='fechado') return btn('pjp-ped','Pedir nota',fa,'')+lks(lnk('pjp-pago','marcar pago',fa),lnk('pjp-reab','mudar o valor',fa),lnk('pjp-fin','e-mail ao financeiro',fa));
+    if(st==='fechado'&&viaCw(c,f)) return sepDe(f._id,x)?btn('pjp-cwvai','Ver a nota separada',fa,'')+lks(lnk('pjp-cwsepx','voltar para a nota da '+emN,fa),lnk('pjp-reab','mudar o valor',fa),lnk('pjp-fechdif','ajuste para a próxima quinzena',fa))
+      :btn('pjp-cwvai','Ver na nota da '+emN,fa,'')+lks(lnk('pjp-cwsepr','nota separada',fa),lnk('pjp-pago','marcar pago',fa),lnk('pjp-reab','mudar o valor',fa),lnk('pjp-fechdif','ajuste para a próxima quinzena',fa),lnk('pjp-fin','e-mail ao financeiro',fa));
+    if(st==='fechado') return btn('pjp-ped','Pedir nota',fa,'')+lks(lnk('pjp-pago','marcar pago',fa),lnk('pjp-reab','mudar o valor',fa),lnk('pjp-fechdif','ajuste para a próxima quinzena',fa),lnk('pjp-fin','e-mail ao financeiro',fa));
     if(st==='pedido'&&pedCw(x)&&!x.ped.sep) return lks(lnk('pjp-cwvai','ver na nota da '+c.titulo(x.ped.emp||emN),fa),lnk('pjp-pago','marcar pago',fa),lnk('pjp-pedx','cancelar o pedido',fa));
     if(st==='pedido') return pedCw(x)?btn('pjp-cwok','Nota separada conferida',fa)+lks(lnk('pjp-cwvai','ver no quadro do Conectwork',fa),lnk('pjp-pago','marcar pago',fa),lnk('pjp-pedx','cancelar o pedido',fa))
       :btn('pjp-env','Mandar o link de novo',fa)+lks(lnk('pjp-pago','marcar pago',fa),lnk('pjp-pedx','cancelar o pedido',fa));
@@ -562,8 +568,8 @@
         const sit=u.st==='ok'?`<span class="pjp-pill ok">Vai descontar</span>${ed?lnk('pjp-ux','desfazer',xa):''}`:u.st==='falta'?`<span class="pjp-pill teal">Não desta vez · fica para a próxima quinzena</span>${ed?lnk('pjp-ux','desfazer',xa):''}`
           :ed?`${btn('pjp-uok','Descontar',xa,'')}${lnk('pjp-uno','Não descontar agora',xa)}`:`<span class="pjp-pill warn">Não confirmado</span>`;
         return `<div class="pg-ds"><div><b>Uniforme · entrega de ${esc(br(u.x.data))}</b><small>${esc(unifTxt(u.x)||'peças')} · parcela ${u.k||'?'} de ${I.n} · total ${R$(I.V)}${I.rest>0.004&&u.st!=='ok'?' · falta '+R$(I.rest):''}${u.atr?' · <b style="color:var(--warn-ink,#7A5310)">parcela atrasada</b>':''}</small></div><b class="pg-dv">${u.st==='falta'?'—':R$(u.v)}</b><div class="pg-da">${sit}</div></div>`; }).join('');
-      const oL=r.descs.filter(z=>z.k!=='u').map(z=>`<div class="pg-ds"><div><b>${esc(z.t)}</b><small>${z.k==='leg'?'lançado antes da aba Descontos':z.k==='fch'?'automático: a quinzena passada pagou o dia cheio':'lançado pelo RH'}</small></div><b class="pg-dv">${R$(z.v)}</b><div class="pg-da">${ed?lnk('pjp-dxx','tirar',`data-id="${esc(z.k==='fch'?'fch':(z.id||'leg'))}" ${fa}`):''}</div></div>`).join('');
-      const aL=r.acrs.map(z=>`<div class="pg-ds"><div><b>${esc(z.t)}</b><small>lançado pelo RH</small></div><b class="pg-dv" style="color:var(--ok,#2F7A4E)">+ ${R$(z.v)}</b><div class="pg-da">${ed?lnk('pjp-axx','tirar',`data-id="${esc(z.id)}" ${fa}`):''}</div></div>`).join('');
+      const oL=r.descs.filter(z=>z.k!=='u').map(z=>`<div class="pg-ds"><div><b>${esc(z.t)}</b><small>${z.k==='leg'?'lançado antes da aba Descontos':z.k==='fch'?'automático: a quinzena passada pagou o dia cheio':z.k==='dif'?'automático: a quinzena passada foi paga a mais':'lançado pelo RH'}</small></div><b class="pg-dv">${R$(z.v)}</b><div class="pg-da">${ed?lnk('pjp-dxx','tirar',`data-id="${esc(z.k==='fch'?'fch':z.k==='dif'?'dif':(z.id||'leg'))}" ${fa}`):''}</div></div>`).join('');
+      const aL=r.acrs.map(z=>`<div class="pg-ds"><div><b>${esc(z.t)}</b><small>${z.k==='dif'?'automático: a quinzena passada foi paga a menos':'lançado pelo RH'}</small></div><b class="pg-dv" style="color:var(--ok,#2F7A4E)">+ ${R$(z.v)}</b><div class="pg-da">${ed?lnk('pjp-axx','tirar',`data-id="${esc(z.id)}" ${fa}`):''}</div></div>`).join('');
       corpo=`<div class="pjp-mini"><div><span>Total de descontos</span><b>${R$(r.desc)}</b></div><div><span>Uniforme</span><b>${R$(uT)}</b></div><div><span>Outros</span><b>${R$(oT)}</b></div><div class="${r.uPend?'pg-w':''}"><span>Para confirmar</span><b>${r.uPend}</b></div></div>
         ${!ed?`<div class="pjp-av" style="background:var(--teal-tint,#E2ECF1);color:var(--teal-strong)">O valor já foi fechado. Para mudar os descontos, toque em ${lnk('pjp-reab','mudar o valor',fa).replace('class="lnk"','class="lnk" style="display:inline;margin:0"')}.</div>`:''}
         <div class="pjp-sec"><h4>Uniforme</h4>${uL||'<p class="ps" style="margin:0;color:var(--muted)">Nenhuma parcela de uniforme para esta quinzena.</p>'}
@@ -609,9 +615,17 @@
       ${tab==='horas'||tab==='desc'?`<div class="pjp-tot"><div>Horas (decimal)<b>${r.fixo?'fixo':n2(hDec(r.min))+' h'}</b>${r.fixo?'':`<small>${hTxt(r.min)}</small>`}</div><div>× Valor da hora<b>${r.fixo?'—':r.vh?R$(r.vh):'falta'}</b></div>
         ${r.acr?`<div>+ Acréscimos<b>${R$(r.acr)}</b></div>`:''}<div>− Descontos<b>${r.desc?R$(r.desc):'—'}</b>${tab==='horas'?`<button class="lnk" data-act="pjp-tab" data-v="desc" style="display:inline;margin:0;font-size:12.5px">ver descontos</button>`:''}</div>
         <div>${r.uPend?`<span class="pjp-pill warn">${r.uPend} de uniforme para confirmar</span>`:''}</div>
-        <div class="pg-big"><span>Total a pagar</span><b>${R$(r.valor)}</b>${antTxt(r)}</div><div style="grid-column:1/-1;display:flex;justify-content:flex-end;gap:8px;align-items:center">${acoes(c,pid,f,x,r).replace(/<br>/g,' ')}</div></div>`:''}
+        <div class="pg-big"><span>Total a pagar</span><b>${R$(r.valor)}</b>${antTxt(r)}</div>${x.fech&&x.fech.dif?`<div class="pjp-difp" style="grid-column:1/-1;font-size:12.5px;color:var(--teal-strong)">${esc(difTxt(x.fech))}</div>`:''}<div style="grid-column:1/-1;display:flex;justify-content:flex-end;gap:8px;align-items:center">${acoes(c,pid,f,x,r).replace(/<br>/g,' ')}${x.st==='fechado'?btn('pjp-fechdif','Ajuste para a próxima quinzena',fa,'sec'):(!x.st&&(r.fixo||(r.vh&&r.min)))?lnk('pjp-fechdif','fechar com outro valor',fa):''}</div></div>`:''}
     </aside></div>`; }
   function modal(c){ const M=J.mod, esc=c.esc; if(!M) return ''; if(M.k==='fin') return finModal(c); if(M.k==='cw') return cwModal(c); if(M.k==='cwconv') return cwConvModal(c); 
+    if(M.k==='fechdif'){ const f=fDe(M.f), x=pesDe(J.per,M.f), fe=x.fech||null, calc=calcOf(c,f,x), vn=fe&&fe.calc!=null?fe.valor:'', tp=(fe&&fe.dif&&fe.dif.tipoEsc)||'auto', pp=perDe(perMove(J.per,1));
+      return `<div class="pjp-fundo" data-pjp-fundo><div class="pjp-mod" role="dialog" aria-label="Ajuste para a próxima quinzena"><h3>${x.st?'Ajuste para a próxima quinzena':'Fechar com outro valor'}</h3>
+        <p class="sub">${esc(c.titulo(f.nome))} · ${esc(perDe(J.per).curto)}. Pelas horas, o valor calculado é <b>${R$(calc)}</b>. Feche com o valor que vai para a nota; a diferença entra sozinha na quinzena seguinte (${esc(pp.curto)}).</p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin:10px 0"><label class="f" style="flex:1;min-width:150px"><span>Fechar com (vai para a nota) R$</span><input id="pjp-fdv" inputmode="decimal" placeholder="0,00" value="${vn!==''?esc(n2(vn)):''}"></label>
+          <label class="f" style="flex:1;min-width:180px"><span>A diferença vai como</span><select id="pjp-fdt"><option value="auto" ${tp==='auto'?'selected':''}>Automático: fechou a menos = acréscimo · a mais = desconto</option><option value="desc" ${tp==='desc'?'selected':''}>Desconto na próxima quinzena</option><option value="acr" ${tp==='acr'?'selected':''}>Acréscimo na próxima quinzena</option><option value="nada" ${tp==='nada'?'selected':''}>Não lançar a diferença</option></select></label></div>
+        <label class="f"><span>Motivo</span><input id="pjp-fdm" maxlength="80" list="pjp-fdms" placeholder="ex.: Hora extra" value="${esc((fe&&fe.dif&&fe.dif.mot)||'')}"><datalist id="pjp-fdms"><option value="Hora extra"><option value="Valor pago antes de conferir"><option value="Adiantamento"></datalist></label>
+        <p class="ps" id="pjp-fdres" style="font-size:13px;margin:10px 0 0;color:var(--teal-strong)"></p>
+        <div class="pjp-ac" style="margin-top:12px">${btn('pjp-modx','Cancelar')}${fe&&fe.dif?btn('pjp-fdx','Tirar o ajuste'):''}${btn('pjp-fdok',x.st?'Salvar o ajuste':'Fechar o valor','data-f="'+esc(M.f)+'"','')}</div></div></div>`; }
     if(M.k==='perdias'){ const p=perDe(J.per), b=perBase(J.per), o=perAjs()[J.per]||null, mn=diaMais(b.de,-10), mx=diaMais(b.ate,10);
       const pa=perBase(perMove(J.per,-1)), pn=perBase(perMove(J.per,1)), Da=J.docs[pa.pid], fa=Da&&Da.pes?Object.values(Da.pes).filter(x=>x&&x.st).length:0;
       return `<div class="pjp-fundo" data-pjp-fundo><div class="pjp-mod" role="dialog" aria-label="Dias deste período"><h3>Dias deste período</h3>
@@ -1524,13 +1538,24 @@
   /* 11/11 ("marquei fechar valor na quinzena passada, por que aparece aqui?"): a tela abre na quinzena ATUAL; fechar antes do último dia útil pergunta antes */
   function fechaCedo(c,n){ const p=perDe(J.per), fd=fechDia(p); if(hojeS()>=fd) return true;
     return confirm('Atenção: esta é a quinzena de '+p.curto+', que ainda não terminou (o valor fecha em '+brc(fd)+').\n\nSe você queria fechar a quinzena passada, cancele e use a seta ‹ ao lado da quinzena.\n\nFechar '+(n>1?'o valor dos '+n+' PJ':'este valor')+' agora mesmo assim?'); }
-  async function fechar(c,f){ const pid=J.per, p=perDe(pid), x=pesDe(pid,f._id), r=calcPessoa(c,f,p,x);
+  async function fechar(c,f,extra){ const pid=J.per, p=perDe(pid), x=pesDe(pid,f._id), r=calcPessoa(c,f,p,x);
     if(!r.fixo&&!r.vh) throw Object.assign(new Error(c.titulo(f.nome)+': falta o valor da hora (abra a pessoa e preencha).'),{aviso:true});
     if(!r.fixo&&!r.min) throw Object.assign(new Error(c.titulo(f.nome)+': não tem horas neste período (confira os dias no Face ID ou corrija à mão).'),{aviso:true});
     if(r.uPend) throw Object.assign(new Error(c.titulo(f.nome)+': confirme o desconto do uniforme na aba Descontos antes de fechar.'),{aviso:true});
     const fech={cheio:r.cheio||null,min:r.min,vh:r.vh,fixo:r.fixo,bruto:r.bruto,desc:r.desc,descMot:r.descMot,descs:r.descs.map(z=>({t:z.t,v:z.v})),acr:r.acr,acrMot:r.acrMot,acrs:r.acrs.map(z=>({t:z.t,v:z.v})),valor:r.valor,dias:r.dias.map(d=>({d:d.d,e:d.E!=null?hhmm(d.E):'',s:d.S!=null?hhmm(d.S):'',m:d.m})),h:r.h,em:agora(),por:c.eu()};
-    await grava(c,pid,f._id,{st:'fechado',fech},'Valor fechado: '+(r.fixo?'fixo ':hTxt(r.min)+' × '+R$(r.vh)+' ')+(r.desc?'− '+R$(r.desc)+' ':'')+(r.acr?'+ '+R$(r.acr)+' ':'')+'= '+R$(r.valor)); }
+    if(extra) Object.assign(fech,extra);
+    await grava(c,pid,f._id,{st:'fechado',fech},'Valor fechado: '+(r.fixo?'fixo ':hTxt(r.min)+' × '+R$(r.vh)+' ')+(r.desc?'− '+R$(r.desc)+' ':'')+(r.acr?'+ '+R$(r.acr)+' ':'')+'= '+R$(r.valor)+(extra&&extra.dif?' · '+difTxt(fech):'')); }
+  const difTxt=fe=>{ const d=fe.dif||{}, cal=fe.calc!=null?fe.calc:fe.valor; return 'Calculado '+R$(cal)+' · fechado '+R$(fe.valor)+(d.tipo==='nada'||!(+d.v>0)?' (diferença não lançada)':' · '+R$(d.v)+' vai como '+(d.tipo==='desc'?'desconto':'acréscimo')+' na próxima quinzena'); };
+  const calcOf=(c,f,x)=>x.fech?(x.fech.calc!=null?+x.fech.calc:+x.fech.valor):calcPessoa(c,f,perDe(J.per),x).valor;
+  /* diferença: fechado − pago. Pago a menos → acréscimo; pago a mais → desconto (o RH pode trocar ou não lançar) */
+  function difCalc(valor,pago,tipo){ const d=Math.round((valor-pago)*100)/100, auto=d>0?'acr':'desc'; const t=!tipo||tipo==='auto'?auto:tipo; return {v:Math.abs(d),tipo:Math.abs(d)<0.005?'nada':t}; }
+  function difPrevia(c){ const M=J.mod, el=document.getElementById('pjp-fdres'); if(!M||M.k!=='fechdif'||!el) return; const x=pesDe(J.per,M.f), f=fDe(M.f);
+    const val=calcOf(c,f,x), pg=num((document.getElementById('pjp-fdv')||{}).value), tp=(document.getElementById('pjp-fdt')||{}).value||'auto';
+    if(!(pg>0)){ el.textContent=''; return; } const d=difCalc(val,pg,tp);
+    el.textContent=d.v<0.005?'Igual ao calculado: nada vai para a próxima quinzena.':d.tipo==='nada'?'Diferença de '+R$(d.v)+': não vai ser lançada.':'Fecha em '+R$(pg)+'. Diferença de '+R$(d.v)+' ('+(pg<val?'fechou a menos':'fechou a mais')+'): entra como '+(d.tipo==='desc'?'desconto':'acréscimo')+' na próxima quinzena.'; }
+  document.addEventListener('input',ev=>{ const t=ev.target; if(C&&t&&(t.id==='pjp-fdv'||t.id==='pjp-fdm')) difPrevia(C); });
   document.addEventListener('change',async ev=>{ const t=ev.target; if(!C||!t||!t.closest) return; const P=C.P;
+    if(t.id==='pjp-fdt'){ difPrevia(C); return; }
     if(t.id==='pjp-cmodo'){ const k=document.getElementById('pjp-ccorte'); if(k) k.disabled=t.value==='mes'; return; }
     if(t.matches&&t.matches('[data-pjp-qsel]')){ if(t.value&&perDe(t.value)){ J.per=t.value; J.ab=''; C.P.render(); } return; }
     if(t.matches&&t.matches('[data-pjp-pto]')){ const fl=t.files&&t.files[0]; t.value=''; if(fl) await ptoImporta(C,fl); return; }
@@ -1625,6 +1650,16 @@
         await grava(c,J.per,f._id,{aj},'Corrigiu '+brc(d)+(a==='pjp-dzero'?': não trabalhou':': '+(aj[d].e||'')+' às '+(aj[d].s||''))+(mot?' ('+mot+')':'')); J.edDia=null; P.render(); return; }
       if(a==='pjp-ppad'){ const f=fDe(b.dataset.f); if(!confirm('Voltar o horário e o valor de '+c.titulo(f.nome)+' para o padrão?')) return; f.pjPag={}; await P.db().doc('rh/dados/funcionarios/'+f._id).update({pjPag:{}}); P.toast('Regras de '+c.titulo(f.nome)+' voltaram ao padrão.'); P.render(); return; }
       if(a==='pjp-modx'){ J.mod=null; P.render(); return; }
+      if(a==='pjp-fechdif'){ ev.preventDefault&&ev.preventDefault(); J.mod={k:'fechdif',f:b.dataset.f}; P.render(); setTimeout(()=>{ const i=document.getElementById('pjp-fdv'); if(i){ i.focus(); difPrevia(c); } },30); return; }
+      if(a==='pjp-fdx'){ const fid=J.mod.f, x=pesDe(J.per,fid); if(x.st!=='fechado') return; const fe=Object.assign({},x.fech||{}); if(fe.calc!=null) fe.valor=fe.calc; delete fe.dif; delete fe.calc; delete fe.pagoReal; await grava(c,J.per,fid,{fech:fe},'Ajuste tirado: volta para '+R$(fe.valor)); J.mod=null; P.render(); return; }
+      if(a==='pjp-fdok'){ const fid=b.dataset.f, f=fDe(fid), x=pesDe(J.per,fid), pg=num((document.getElementById('pjp-fdv')||{}).value), tp=(document.getElementById('pjp-fdt')||{}).value||'auto', mot=((document.getElementById('pjp-fdm')||{}).value||'').trim().slice(0,80);
+        if(!(pg>0)){ P.toast('Informe o valor com que vai fechar (o da nota).'); return; }
+        if(x.st&&x.st!=='fechado'){ P.toast('A nota já foi pedida: para mudar o valor, cancele o pedido antes.'); return; }
+        if(!x.st&&!fechaCedo(c,1)) return;
+        const cal=calcOf(c,f,x), d=difCalc(cal,pg,tp), dif={v:d.v,tipo:d.tipo,tipoEsc:tp,mot,em:agora(),por:c.eu()}, ex={calc:cal,valor:pg,dif};
+        if(x.st){ const fe=Object.assign({},x.fech,ex); delete fe.pagoReal; await grava(c,J.per,fid,{fech:fe},'Ajuste para a próxima quinzena: '+difTxt(fe)); }
+        else await fechar(c,f,ex);
+        J.mod=null; P.toast('Fechado em '+R$(pg)+'.'+(d.tipo==='nada'||d.v<0.005?'':' '+R$(d.v)+' vai como '+(d.tipo==='desc'?'desconto':'acréscimo')+' na próxima quinzena.')); P.render(); return; }
       if(a==='pjp-perdias'){ ev.preventDefault&&ev.preventDefault(); J.mod={k:'perdias'}; P.render(); return; }
       if(a==='pjp-perok'||a==='pjp-perpad'){ const b0=perBase(J.per), mn=diaMais(b0.de,-10), mx=diaMais(b0.ate,10); let v=null;
         if(a==='pjp-perok'){ const de=(document.getElementById('pjp-pde')||{}).value||'', ate=(document.getElementById('pjp-pate')||{}).value||'';
@@ -1670,6 +1705,7 @@
         const mm=raw.match(/^\s*(\d+(?:[.,]\d+)?)\s*[x×*]\s*(\d+(?:[.,]\d+)?)\s*$/i), v=Math.round((mm?num(mm[1])*num(mm[2]):num(raw))*100)/100;
         if(!(v>0)) return P.toast('Digite o valor do acréscimo (ex.: 200,00 ou 5 x 40).');
         const as=((x.dsc&&x.dsc.a)||[]).concat([{id:'a'+Date.now().toString(36),t,v,em:agora(),por:c.eu()}]); await grava(c,J.per,f._id,{dsc:Object.assign({},x.dsc||{},{a:as})},'Acréscimo: '+t+' '+R$(v)); P.render(); return; }
+      if(a==='pjp-axx'&&b.dataset.id==='dif'){ const f=fDe(b.dataset.f), x=pesDe(J.per,f._id); if(x.st) return; await grava(c,J.per,f._id,{difX:{em:agora(),por:c.eu()}},'Diferença da quinzena passada tirada'); P.render(); return; }
       if(a==='pjp-axx'){ const f=fDe(b.dataset.f), x=pesDe(J.per,f._id); if(x.st) return; const id=b.dataset.id, z=((x.dsc&&x.dsc.a)||[]).find(y=>y.id===id), as=((x.dsc&&x.dsc.a)||[]).filter(y=>y.id!==id);
         await grava(c,J.per,f._id,{dsc:Object.assign({},x.dsc||{},{a:as})},'Acréscimo tirado: '+(z?z.t+' '+R$(z.v):'')); P.render(); return; }
       if(a==='pjp-dshe'||a==='pjp-dshex'){ const f=fDe(b.dataset.f), d=b.dataset.d, x=pesDe(J.per,f._id); if(x.st) return; const aj=Object.assign({},x.aj||{}), cur=Object.assign({},aj[d]||{});
@@ -1686,6 +1722,7 @@
         await grava(c,J.per,f._id,{aj},a==='pjp-spd'?'Descontou '+hTxt(+b.dataset.v)+' de saída no meio do dia '+brc(d):a==='pjp-spok'?'Conferiu a saída no meio do dia '+brc(d)+': está certo':'Desfez a conferência da saída de '+brc(d)); P.render(); return; }
       if(a==='pjp-dxx'){ const f=fDe(b.dataset.f), x=pesDe(J.per,f._id); if(x.st) return; const id=b.dataset.id;
         if(id==='fch'){ await grava(c,J.per,f._id,{fchX:{em:agora(),por:c.eu()}},'Desconto do dia do fechamento tirado'); P.render(); return; }
+        if(id==='dif'){ await grava(c,J.per,f._id,{difX:{em:agora(),por:c.eu()}},'Diferença da quinzena passada tirada'); P.render(); return; }
         if(id==='leg'){ await grava(c,J.per,f._id,{desc:0,descMot:''},'Desconto tirado: '+(x.descMot||'desconto lançado')+' '+R$(x.desc)); P.render(); return; }
         const z=((x.dsc&&x.dsc.x)||[]).find(y=>y.id===id), xs=((x.dsc&&x.dsc.x)||[]).filter(y=>y.id!==id); await grava(c,J.per,f._id,{dsc:Object.assign({},x.dsc||{},{x:xs})},'Desconto tirado: '+(z?z.t+' '+R$(z.v):'')); P.render(); return; }
       if(a==='pjp-diax'){ const f=fDe(b.dataset.f), x=pesDe(J.per,f._id), aj=Object.assign({},x.aj||{}), o=aj[b.dataset.d]; aj[b.dataset.d]=o&&o.fer?{fer:true,ferNome:o.ferNome,pago:!!o.pago}:null; await grava(c,J.per,f._id,{aj}); P.render(); return; }

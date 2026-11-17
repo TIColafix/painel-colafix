@@ -39,5 +39,13 @@ document.head.insertAdjacentHTML('beforeend',`<style id="sm-css">
  body.side-min .side .navbtn{font-size:0}
  body.side-min .side .navbtn svg{width:20px;height:20px;flex-shrink:0}
  body.side-min .side .sm-bt .sm-ar{font-size:18px}
+ /* 17/11: recolhida sem nada cortado e o topo na cor da lateral */
+ body.side-min .side{overflow-x:hidden}
+ body.side-min .side #navlist{overflow-x:hidden}
+ body.side-min .side .gxe-h{display:none}
+ body.side-min .side .brand{background:transparent;box-shadow:none;border-bottom:1px solid rgba(255,255,255,.12);margin:0 -6px 6px}
+ body.side-min .side .brand>img:not(.assin){content:url(icons/logo-colafix-escuro.png);width:58px;max-width:58px}
+ body.side-min .side .navbtn{position:relative}
+ body.side-min .side .navbtn .badge{display:inline-flex!important;position:absolute;top:2px;right:3px;min-width:16px;height:16px;padding:0 4px;font-size:10px;line-height:16px;justify-content:center;border-radius:8px}
 }
 </style>`);

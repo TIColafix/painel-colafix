@@ -129,7 +129,7 @@ function qdVerPainel(){ if(S.qd.painel!=='ver') return ''; const V=(qdD().versoe
       <div class="qd-via"><button class="lnk" data-act="qd-vcmp" data-v="${esc(v.id)}">Comparar com agora</button><button class="lnk" data-act="qd-vvolta" data-v="${esc(v.id)}">${S.qd.vconf===v.id?'Toque de novo para voltar':'Voltar para esta'}</button><button class="lnk t-crit" data-act="qd-vx" data-v="${esc(v.id)}">${S.qd.vxconf===v.id?'Toque de novo para apagar':'Apagar'}</button></div></div>`).join('')
       :'<div class="sub">Nenhuma versão guardada ainda.</div>'}</div>`; }
 function vGxQuadro(){ qdAssina(); try{ if(typeof gxpAssina==='function') gxpAssina(); }catch(e){} const D=qdD(), t=qdTot(); S.qd._rh=qdPessoasRH();
-  const k=(v,l,c,f,i)=>`<button class="qd-k ${c||''} ${S.qd.fil===f?'on':''}" data-act="qd-fil" data-v="${f}" aria-pressed="${S.qd.fil===f}" title="${f?'Mostrar em destaque só quem está assim (toque de novo para ver todos)':'Ver todos'}">${i?`<i class="qd-lgs ${c||''}">${i}</i>`:''}<b>${v}</b><span>${l}</span></button>`;
+  const k=(v,l,c,f,i)=>`<button class="qd-k ${c||''} ${v?'':'z'} ${S.qd.fil===f?'on':''}" data-act="qd-fil" data-v="${f}" aria-pressed="${S.qd.fil===f}" title="${f?'Mostrar em destaque só quem está assim (toque de novo para ver todos)':'Ver todos'}">${i?`<i class="qd-lgs ${c||''}">${i}</i>`:''}<b>${v}</b><span>${l}</span></button>`;
   let mFal=0, mSob=0, mTem=false; D.cols.forEach(c=>{ const M=qdMetaDe(c); if(M.meta){ mTem=true; if(M.df<0) mFal-=M.df; else mSob+=M.df; } });
   const mk=mTem?`<div class="qd-k ${mFal?'crit':'ok'}" title="Soma das colunas com meta (quantas pessoas cada uma precisa). Quem está marcado Sai não conta."><b>${mFal||'✓'}</b><span>${mFal?'faltam pelas metas':'metas completas'}${mSob?' · sobram '+mSob:''}</span></div>`:'';
   const colH=(c,ci,nA)=>{ const cnt=Object.entries(QD_ST).map(([q,v])=>{ const n=c.ps.filter(p=>p.st===q).length; return n?`<i class="qd-ci ${v.c}">${n} ${q==='fica'?'fica':q==='sai'?'sai':v.t.toLowerCase()}</i>`:''; }).join('');
@@ -372,8 +372,8 @@ function qdRecol(){ try{ return JSON.parse(localStorage.getItem('colafix.qd.reco
 function qdTotalHtml(){ const D=qdD(), t=qdTot(); let at=0, meta=0, falta=0, sobra=0; D.cols.forEach(c=>{ const M=qdMetaDe(c); at+=M.at; if(M.meta){ meta+=M.meta; if(M.df<0) falta-=M.df; else sobra+=M.df; } });
   const pc=meta?Math.min(100,Math.round(at/meta*100)):0;
   return `<section class="qd-tot"><div class="qd-tote">TOTAL DA FÁBRICA</div><div class="qd-totn"><b>${at}</b><span>${meta?'de '+meta+' pela meta':at===1?'pessoa':'pessoas'}</span></div>
-    ${meta?`<div class="qd-totb"><i style="width:${pc}%"></i></div>`:'<div class="qd-totsm">Ponha "quantos precisa" em cada setor para ver as vagas.</div>'}
-    <div class="qd-totg"><span>Faltam <b>${falta}</b></span><span>Sobram <b>${sobra}</b></span><span>Saem <b>${t.sai}</b></span><span>Em espera <b>${t.esp}</b></span></div></section>`; }
+    ${meta?`<div class="qd-totb"><i style="width:${pc}%"></i></div>`:'<div class="qd-totsm">sem meta · ponha "quantos precisa" nos setores</div>'}
+    <div class="qd-totg">${meta?`<span class="${falta?'c':''}">Faltam <b>${falta}</b></span><span>Sobram <b>${sobra}</b></span>`:''}<span class="qd-sr">Saem <b>${t.sai}</b> Em espera <b>${t.esp}</b></span></div></section>`; }
 function qdLivres(){ const L=(S.qd._rh||qdPessoasRH()).map(p=>({n:p.n,s:p.s,e:p.e}));
   (S.qd.cad||[]).forEach(c=>{ if(c&&c.n&&!L.some(x=>qdMesma(x.n,c.n))) L.push({n:c.n,s:c.s||'',e:c.e||''}); });
   return L.filter(p=>!qdOnde(p.n)).sort((a,b)=>a.n.localeCompare(b.n,'pt-BR')); }
@@ -676,4 +676,44 @@ document.head.insertAdjacentHTML('beforeend',`<style id="qd-css4">
 .qd-lv0 .qd-lvi{width:28px;height:28px;font-size:10.5px}.qd-lv0 .qd-lvt b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}.qd-lv0 .qd-lvt small{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
 .qd-lvsel{font-size:13px}
 @media (max-width:900px){.qd-sum{grid-template-columns:1fr}.qd-ac{width:100%}}
+</style>`);
+
+/* visual mais calmo (17/11/2026, "visualmente não está agradável: muita informação, cor e desproporção"):
+   topo numa faixa branca só (total sem o bloco escuro, números como texto com um pontinho de cor, zeros apagados),
+   Histórico/Versões/Excel como botões leves, e os controles dos setores, áreas e cartões só aparecem ao passar o mouse. */
+document.head.insertAdjacentHTML('beforeend',`<style id="qd-css5">
+.qd-top{margin-bottom:12px}.qd-tt h1{font-size:28px}
+.qd-ac{gap:4px}.qd-ac>.btn.sec{background:none!important;border-color:transparent!important;box-shadow:none!important;color:var(--muted);font-weight:500;padding:0 10px;height:36px}
+.qd-ac>.btn.sec:hover{background:var(--ground)!important;color:inherit}.qd-ac .qd-vis{margin-right:6px}.qd-ac .btn,.qd-ac .qd-impm>summary{height:36px}
+.qd-sum{display:flex;align-items:center;gap:0;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 14px;margin:0 0 12px;flex-wrap:wrap;row-gap:8px}
+.qd-sum .qd-tot{background:none;color:inherit;padding:0 18px 0 0;margin-right:14px;border-radius:0;border-right:1px solid var(--line);min-width:200px;display:flex;flex-direction:column;justify-content:center}
+.qd-sum .qd-tote{font-size:11px;color:var(--muted);opacity:1;letter-spacing:.06em}
+.qd-sum .qd-totn{margin-top:2px;gap:6px}.qd-sum .qd-totn b{font-size:26px;font-weight:400}.qd-sum .qd-totn span{opacity:1;color:var(--muted);font-size:13px}
+.qd-sum .qd-totb{background:var(--ground);height:4px;margin-top:6px}.qd-sum .qd-totb i{height:4px;background:var(--teal,#1F5F7A)}
+.qd-sum .qd-totsm{opacity:1;color:var(--muted);font-size:11.5px;margin-top:4px}
+.qd-sum .qd-totg{display:flex;gap:12px;margin-top:6px;font-size:12px;color:var(--muted)}.qd-sum .qd-totg b{font-size:13px;font-weight:600;color:var(--pc-txt,inherit)}.qd-sum .qd-totg .c b{color:var(--crit)}
+.qd-sum .qd-totg:empty{display:none}
+.qd-sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.qd-sumr{background:none;border:0;padding:0;flex:1;min-width:0;gap:4px}
+.qd-sum .qd-ks{gap:2px}
+.qd-sum .qd-k,.qd-sum .qd-k:first-child{background:none;border:1px solid transparent;padding:4px 9px;border-radius:8px;gap:6px;box-shadow:none}
+.qd-sum .qd-k:hover{background:var(--ground);border-color:transparent}.qd-sum .qd-k.on{background:var(--ground);outline:0;border-color:var(--teal,#1F5F7A)}
+.qd-sum .qd-k b,.qd-sum .qd-k.ok b,.qd-sum .qd-k.warn b,.qd-sum .qd-k.crit b,.qd-sum .qd-k.esp b,.qd-sum .qd-k.nef b{color:inherit;font-size:15px;font-weight:600}
+.qd-sum .qd-k span{color:var(--muted);font-size:12.5px}
+.qd-sum .qd-k .qd-lgs{min-width:8px;width:8px;height:8px;padding:0;border-radius:50%;font-size:0;order:-1}
+.qd-sum .qd-k.z b,.qd-sum .qd-k.z span{color:var(--muted);opacity:.6;font-weight:400}.qd-sum .qd-k.z .qd-lgs{opacity:.35}
+.qd-sum .qd-lg{padding-left:9px;font-size:11.5px}
+.qd-fb{padding:6px 8px}.qd-fb .txt,.qd-fb select{height:34px;font-size:13.5px}.qd-fbb{height:34px!important}
+.qd-lv0{padding:10px 12px}.qd-lv0 .qd-lvl{max-height:96px}.qd-lv0 .qd-lv{background:var(--ground);border-color:transparent}
+.qd-lv0 .qd-lvi{width:24px;height:24px;font-size:10px}.qd-lv0 .qd-lvt small{opacity:.8}
+.qd-c{border-top-width:2px}.qd-c footer{flex-wrap:nowrap;white-space:nowrap;gap:8px;font-size:12.5px}
+.qd-ar{margin-bottom:18px}.qd-arh .lnk.t-crit{color:var(--muted)}.qd-arh .lnk.t-crit:hover{color:var(--crit)}
+@media (hover:hover){
+ .qd-c footer .lnk[data-act="qd-cesq"],.qd-c footer .lnk[data-act="qd-cdir"],.qd-c footer .lnk[data-act="qd-cx"],.qd-c footer .lnk[data-act="qd-meta"]:not(:hover){transition:opacity .15s}
+ .qd-c:not(:hover):not(:focus-within) footer .lnk[data-act="qd-cesq"],.qd-c:not(:hover):not(:focus-within) footer .lnk[data-act="qd-cdir"],.qd-c:not(:hover):not(:focus-within) footer .lnk[data-act="qd-cx"]{opacity:0}
+ .qd-arh>.lnk{transition:opacity .15s}.qd-ar:not(:hover):not(:focus-within) .qd-arh>.lnk:not([data-act="qd-arrec"]){opacity:0}
+ .qd-p:not(:hover):not(:focus-within):not(.sel) .qd-st:not(.on){opacity:.45}
+}
+.qd-p .qd-sts{background:none;padding:0}.qd-p .qd-st:not(.on){background:none;border-color:transparent}.qd-p .qd-st{transition:opacity .15s}
+@media (max-width:900px){.qd-sum .qd-tot{border-right:0;padding:0 0 8px;margin:0 0 6px;border-bottom:1px solid var(--line);width:100%}}
 </style>`);

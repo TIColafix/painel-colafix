@@ -143,6 +143,9 @@
     let k=0; hist.forEach(h=>{ if(h.st==='ok') h._k=++k; });
     const nOk=k, pago=r2(hist.filter(h=>h.st==='ok').reduce((a,h)=>a+(+h.v||0),0)), rest=r2(Math.max(0,V-pago)), vp=r2(V/n), pend=[];
     if(rest>0.004){ const m=Math.max(1,n-nOk), us=new Set(hist.map(h=>h.q)); let q=ini, falta=rest;
+      /* 18/11: parcela descontada mais tarde (ex.: no fechamento dos PJ) empurra as que faltam para depois dela; antes elas
+         continuavam marcadas nas quinzenas que já passaram e apareciam como atrasadas */
+      const ult=hist.filter(h=>h.st==='ok').map(h=>h.q).sort().pop(); if(ult&&ult>=q) q=qProx(ult);
       for(let i=0;i<m&&falta>0.004;i++){ while(us.has(q)) q=qProx(q); const v=i===m-1?r2(falta):r2(Math.min(vp,falta)); pend.push({q,v,k:nOk+i+1}); falta=r2(falta-v); us.add(q); q=qProx(q); } }
     return {V,n,ini,hist,pago,rest,pend,vp,nOk,proprio:!!x.parc,fim:pend.length?pend[pend.length-1].q:null}; }
   const parcTxt=I=>I.n===1?'à vista (1×)':I.n+'× de '+brl(I.vp);

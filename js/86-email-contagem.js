@@ -99,3 +99,55 @@ if(window.Painel) Painel.emailContagem={linhas:()=>iemCfg().itens.map(iemLinha),
 .iem-aj,.iem-add{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:12px 0 0}.iem-aj label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);flex:1 1 220px}
 .iem-add input{flex:1 1 280px}.iem-t td{vertical-align:top}.iem-fis{display:flex;gap:8px}.iem-fis label{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--muted)}.iem-fis input{width:86px}
 .iem-obs{width:100%;min-width:200px}.iem-sis{width:96px;text-align:right}.iem-bt{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-end;margin-top:12px}`; document.head.appendChild(s); })();
+/* Histórico das contagens do e-mail (18/11/2026, pedido "salvar as contagens do cimento para ter um histórico").
+   - Cada dia fica em `invemail/{AAAA-MM-DD}` {dia, em, por, porNome, como, itens:{cód:{d, fis, sis, dif, obs, fonte}}}: gravado ao mandar
+     (Outlook, cópia, "já mandei") e também sozinho alguns segundos depois de digitar (merge; o mesmo dia é atualizado, não repete).
+   - Botão "Histórico" no cartão: últimos 30/60/90 dias (leitura sob demanda, até 120 documentos), por dia o físico, o sistema e a
+     diferença de cada item, resumo por item (dias contados, dias iguais, maior falta e maior sobra) e Excel. Prefixo `iem`. */
+async function iemSalvaDia(como){ try{ const C=iemCfg(); if(!C.itens.length) return; const L=C.itens.map(iemLinha), it={};
+    L.forEach(x=>{ if(x.fis==null&&x.sis==null) return; it[x.c]={d:x.d,fis:x.fis,sis:x.sis,dif:x.dif,obs:x.obs||'',fonte:x.fonte||''}; });
+    if(!Object.keys(it).length) return;
+    const o={dia:hojeStr(),em:new Date().toISOString(),por:S.uid||'',porNome:(S.nomes&&S.nomes[S.uid])||'',itens:it}; if(como) o.como=como;
+    await S.db.collection('invemail').doc(hojeStr()).set(o,{merge:true});
+    if(S.iem.H&&S.iem.H.xs){ const i=S.iem.H.xs.findIndex(x=>x.dia===o.dia); const n=Object.assign({},i>=0?S.iem.H.xs[i]:{},o); if(i>=0) S.iem.H.xs[i]=n; else S.iem.H.xs.unshift(n); }
+  }catch(e){ console.warn('[e-mail da contagem] histórico',e); } }
+{ const _m=iemMarca; iemMarca=async function(como){ await iemSalvaDia(como); return _m.apply(this,arguments); }; }
+document.addEventListener('input',ev=>{ const el=ev.target; if(!el||!el.dataset||!el.dataset.iem) return; clearTimeout(S.iem._ts); S.iem._ts=setTimeout(()=>iemSalvaDia(),4000); });
+document.addEventListener('click',ev=>{ const b=ev.target.closest&&ev.target.closest('[data-act="iem-cop"]'); if(b) setTimeout(()=>iemSalvaDia('copiado'),50); },true);
+async function iemHistCarrega(forca){ const H=S.iem.H=S.iem.H||{dias:30}; if(H.carr||(H.xs&&!forca&&H.de===H.dias)) return; H.carr=true;
+  const d=new Date(); d.setDate(d.getDate()-H.dias); const desde=d.toISOString().slice(0,10);
+  try{ const s=await S.db.collection('invemail').where('dia','>=',desde).orderBy('dia','desc').limit(120).get(); H.xs=s.docs.map(x=>Object.assign({_id:x.id},x.data())); H.de=H.dias; H.erro=''; }
+  catch(e){ H.erro=String(e&&e.message||e); H.xs=H.xs||[]; } H.carr=false; render(); }
+function iemHistItens(xs){ const m=new Map(); iemCfg().itens.forEach(c=>m.set(c,iemDesc(c))); xs.forEach(r=>Object.entries(r.itens||{}).forEach(([c,v])=>{ if(!m.has(c)) m.set(c,(v&&v.d)||c); })); return [...m.entries()]; }
+function iemHistHtml(){ const H=S.iem.H||{}; if(!H.xs) return `<div class="iem-hs"><p class="sub" style="margin:0">Carregando o histórico…</p></div>`;
+  const xs=H.xs.slice().sort((a,b)=>b.dia.localeCompare(a.dia)), IT=iemHistItens(xs);
+  const per=`<div class="seg iem-hper" role="group" aria-label="Período">${[30,60,90].map(n=>`<button data-act="iem-hdias" data-v="${n}" aria-pressed="${H.dias===n}">${n} dias</button>`).join('')}</div>`;
+  if(!xs.length) return `<div class="iem-hs"><div class="iem-hh"><b>Histórico das contagens</b>${per}</div><p class="sub" style="margin:6px 0 0">${H.erro?'Não consegui ler o histórico: '+esc(H.erro):'Ainda não há contagem guardada neste período. A contagem de hoje entra sozinha ao digitar ou mandar o e-mail.'}</p></div>`;
+  const res=IT.map(([c,d])=>{ const v=xs.map(r=>(r.itens||{})[c]).filter(y=>y&&y.dif!=null); const ig=v.filter(y=>y.dif===0).length;
+    const fal=v.reduce((a,y)=>Math.min(a,y.dif),0), sob=v.reduce((a,y)=>Math.max(a,y.dif),0);
+    return `<div class="iem-hr"><b>${esc(d)}</b><small>${esc(c)}</small><span>${v.length} ${v.length===1?'dia contado':'dias contados'} · ${ig} ${ig===1?'igual':'iguais'}${fal<0?` · maior falta <b class="cm-neg">${invdS(fal)}</b>`:''}${sob>0?` · maior sobra <b class="ivd-pos">${invdS(sob)}</b>`:''}</span></div>`; }).join('');
+  const cel=y=>!y?'<td colspan="3" class="iem-hv">—</td>':`<td>${y.fis==null?'—':iemN(y.fis)}</td><td>${y.sis==null?'—':iemN(y.sis)}</td><td class="${y.dif==null?'':y.dif<0?'cm-neg':y.dif>0?'ivd-pos':''}">${y.dif==null?'—':y.dif===0?'igual':invdS(y.dif)}</td>`;
+  const tab=`<div class="cm-tw"><table class="cm-t iem-ht"><thead><tr><th class="l" rowspan="2">Dia</th>${IT.map(([c,d])=>`<th colspan="3" class="iem-hit" title="${esc(c)}">${esc(d)}</th>`).join('')}<th class="l" rowspan="2">Quem</th></tr>
+    <tr>${IT.map(()=>'<th>Físico</th><th>Sistema</th><th>Dif.</th>').join('')}</tr></thead>
+    <tbody>${xs.map(r=>`<tr><td class="l"><b>${esc(dm(r.dia))}</b><small class="xf-de">${esc(['dom','seg','ter','qua','qui','sex','sáb'][new Date(r.dia+'T12:00:00').getDay()])}${r.como?' · mandado':''}</small></td>${IT.map(([c])=>cel((r.itens||{})[c])).join('')}<td class="l"><small>${esc(r.porNome||'')}</small></td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="iem-hs"><div class="iem-hh"><b>Histórico das contagens</b><span class="sub" style="margin:0">${xs.length} ${xs.length===1?'dia':'dias'}</span><span style="flex:1"></span>${per}<button class="btn sec" data-act="iem-hxls">Baixar Excel</button></div>
+    <div class="iem-hres">${res}</div>${tab}</div>`; }
+function iemHistXls(){ const H=S.iem.H||{}, xs=(H.xs||[]).slice().sort((a,b)=>b.dia.localeCompare(a.dia)), IT=iemHistItens(xs); if(!xs.length) return toast('Não há contagem no histórico.');
+  if(!window.PainelXls) return toast('O gerador de Excel ainda está carregando. Tente de novo em alguns segundos.');
+  const lin=[]; xs.forEach(r=>IT.forEach(([c,d])=>{ const y=(r.itens||{})[c]; if(!y) return; lin.push([r.dia,c,d,y.fis,y.sis,y.dif,y.obs||'',r.porNome||'',r.como?'sim':'']); }));
+  return window.PainelXls.gerar('Contagens do e-mail '+hojeStr()+'.xlsx',[{nome:'Contagens',cab:['Dia','Código','Item','Físico','Sistema','Diferença','Obs','Quem','E-mail mandado'],linhas:lin,tipos:['data','txt','txt','int','int','int','txt','txt','txt']}],
+    {tit:'Contagens do e-mail da contagem do dia',sub:'Últimos '+(H.dias||30)+' dias · '+xs.length+' dias com contagem',filtros:'Divergências do inventário'}); }
+{ const _c=iemCard; iemCard=function(){ let h=_c.apply(this,arguments); if(!h) return h; const ab=!!S.iem.hab;
+    h=h.replace('<button class="btn sec" data-act="iem-cfg">',`<button class="btn sec" data-act="iem-hist" aria-pressed="${ab}">${ab?'Fechar o histórico':'Histórico'}</button><button class="btn sec" data-act="iem-cfg">`);
+    if(ab){ if(!(S.iem.H&&S.iem.H.xs)) setTimeout(()=>iemHistCarrega(),0); const i=h.lastIndexOf('</section>'); h=h.slice(0,i)+iemHistHtml()+h.slice(i); }
+    return h; }; }
+document.addEventListener('click',async ev=>{ const b=ev.target.closest&&ev.target.closest('[data-act="iem-hist"],[data-act="iem-hdias"],[data-act="iem-hxls"]'); if(!b) return; ev.preventDefault(); ev.stopImmediatePropagation(); const a=b.dataset.act;
+  if(a==='iem-hist'){ S.iem.hab=!S.iem.hab; if(S.iem.hab){ await iemSalvaDia(); S.iem.H=S.iem.H||{dias:30}; S.iem.H.xs=null; iemHistCarrega(true); } render(); return; }
+  if(a==='iem-hdias'){ S.iem.H=S.iem.H||{}; S.iem.H.dias=+b.dataset.v||30; S.iem.H.xs=null; render(); iemHistCarrega(true); return; }
+  if(a==='iem-hxls'){ try{ await iemHistXls(); }catch(e){ erro(e); } } },true);
+if(window.Painel&&Painel.emailContagem){ Painel.emailContagem.salvaDia=iemSalvaDia; Painel.emailContagem.historico=()=>(S.iem.H||{}).xs||null; }
+(function(){ const s=document.createElement('style'); s.id='iem-css2'; s.textContent=`
+.iem-hs{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}.iem-hh{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.iem-hres{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin-bottom:10px}.iem-hr{background:var(--ground);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.iem-hr small{color:var(--muted);font-size:11.5px}.iem-hr span{font-size:12.5px}.iem-ht th,.iem-ht td{text-align:right;white-space:nowrap}.iem-ht .l{text-align:left}.iem-hit{text-align:center!important;border-left:1px solid var(--line);max-width:200px;overflow:hidden;text-overflow:ellipsis}
+.iem-hv{text-align:center!important;color:var(--muted)}`; document.head.appendChild(s); })();

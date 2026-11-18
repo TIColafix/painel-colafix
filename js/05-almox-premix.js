@@ -47,7 +47,8 @@ function pmxApModal(){ const A=S.pmx.ap; if(!A) return ''; const f=S.pmx.fichas.
    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px">
     <label><span class="label">PREMIX PRODUZIDOS</span><input class="txt num" id="pmx-ap-q" inputmode="decimal" autocomplete="off" placeholder="${falta>0?pmxF(falta):'0'}" value="${esc(A.qtd||'')}" style="height:46px;font-size:20px"></label>
     <label><span class="label">HORA</span><input class="txt num" id="pmx-ap-h" type="time" value="${esc(A.hora||'')}" style="height:46px"></label>
-    <label style="grid-column:1/-1"><span class="label">NOME</span><input class="txt" id="pmx-ap-n" autocomplete="off" value="${esc(A.nome||'')}" placeholder="Quem produziu" style="height:46px"></label></div>
+    <label style="grid-column:1/-1"><span class="label">NOME</span><input class="txt" id="pmx-ap-n" autocomplete="off" value="${esc(A.nome||'')}" placeholder="Quem produziu" style="height:46px"></label>
+    <label style="grid-column:1/-1"><span class="label">OBSERVAÇÃO <small style="font-weight:400;letter-spacing:0;color:var(--muted)">(opcional · sai na ficha)</small></span><textarea class="txt" id="pmx-ap-o" rows="2" placeholder="Ex.: faltou matéria-prima, troca de turno, máquina parou…" style="min-height:58px">${esc(A.obs!=null?A.obs:(f.obs||''))}</textarea></label></div>
    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px"><button class="btn sec" data-act="pmx-ap-x">Cancelar</button><button class="btn" data-act="pmx-ap-ok">${ic('check',18,2.2)}Salvar apontamento</button></div>
    ${(f.aponts||[]).length?`<div class="label" style="margin:20px 0 6px">JÁ APONTADO</div>${(f.aponts||[]).map(a=>`<div class="num" style="display:flex;gap:12px;padding:8px 0;border-top:1px solid var(--line-2);font-size:14px"><b style="min-width:60px">${pmxF(pmxNum(a.qtd))}</b><span style="color:var(--muted)">${esc(a.hora||'—')}${a.turno?' · '+esc(a.turno):''}</span><span style="margin-left:auto">${esc(a.nome||'')}</span></div>`).join('')}`:''}
   </div></div></div>`; }
@@ -123,9 +124,20 @@ function pmxCard(f){ const pl=pmxNum(f.qtd), pr=pmxProd(f), en=pmxEnc(f), pc=pl>
       <div class="pmx-fh"><span class="pmx-op num">${esc(pmxOp(f))}</span><span class="pill ${pmxSt(f).c}">${pmxSt(f).t}</span></div>
       <div class="pmx-fm">${esc(f.material||'—')}</div>
       <div class="pmx-fi num">${esc(dataBR(f.data)||'—')} · ${pmxF(pl)} premix</div>
+      ${String(f.obs||'').trim()?`<div class="pmx-fo" title="${esc(f.obs)}">Obs.: ${esc(f.obs)}</div>`:''}
       ${pmxPodeEd()&&!String(f.num||'').trim()?`<div class="pmx-fw" data-act="pmx-ir-pend" role="button" title="Ir para o bloco do PCP">Sem OP do sistema · colocar no bloco 2</div>`:''}
       <div class="pmx-fp"><div class="bar"><i style="width:${pc}%"></i></div><span class="num">${pmxF(pr)} de ${pmxF(pl)} produzidos</span></div>
       <div class="pmx-fb">${en?'':`<button class="btn" data-act="pmx-apontar" data-id="${esc(f._id)}" style="height:36px;flex:1">Apontar</button><button class="btn sec" data-act="pmx-feita" data-id="${esc(f._id)}" style="height:36px;flex:1${S.pmx.confF===f._id?';border-color:var(--ok);color:var(--ok-ink)':''}">${S.pmx.confF===f._id?'Confirmar?':'Feita'}</button>`}${pmxPodeEd()?`<button class="btn sec" data-act="pmx-editar" data-id="${esc(f._id)}" style="height:36px;flex:1">Editar</button>`:''}<button class="btn sec" data-act="pmx-pdf" data-id="${esc(f._id)}" style="height:36px;padding:0 10px;flex:0 0 auto" title="Baixar a ficha em PDF" aria-label="Baixar a ficha em PDF">${ic('baixar',16,2)}</button></div></article>`; }
+function pmxHistLista(xs,mst){ const dh=iso=>iso?dataBR(hojeStr(new Date(iso))).slice(0,5)+' '+hora(iso):'';
+  return `<div class="dbtw" style="margin-top:12px"><table class="dbti pmx-hl"><thead><tr><th>Nº</th><th>Material</th><th>Data</th><th class="r">Produzido</th><th class="pmx-hlm">Feita</th><th>Situação</th><th class="pmx-hlm">Observação</th><th></th></tr></thead><tbody>
+  ${xs.map(f=>{ const pl=pmxNum(f.qtd), pr=pmxProd(f), st=pmxSt(f), ob=String(f.obs||'').trim();
+    return `<tr data-act="pmx-abrir" data-id="${esc(f._id)}" ${mst?'style="cursor:pointer"':''}><td class="num"><b class="pmx-op">${esc(pmxOp(f))}</b>${f.numProv&&String(f.num||'').trim()?`<small>${esc(f.numProv)}</small>`:''}</td>
+     <td>${esc(f.material||'—')}${ob?`<small class="pmx-hlo">Obs.: ${esc(ob)}</small>`:''}</td><td class="num">${esc(dataBR(f.data)||'—')}</td>
+     <td class="r num"><b>${pmxF(pr)}</b><small>de ${pmxF(pl)}</small></td>
+     <td class="num pmx-hlm">${f.feitaEm?esc(dh(f.feitaEm))+(f.feitaPor?`<small>${esc(nomeDe(f.feitaPor))}</small>`:''):'—'}</td>
+     <td><span class="pill ${st.c}" style="font-size:11px;white-space:normal">${esc(st.t)}</span></td>
+     <td class="pmx-hlm pmx-hlob" title="${esc(ob)}">${ob?esc(ob):'<span style="color:var(--muted)">—</span>'}</td>
+     <td style="white-space:nowrap">${mst?`<button class="dbb" data-act="pmx-editar" data-id="${esc(f._id)}">Editar</button> `:''}<button class="dbb" data-act="pmx-pdf" data-id="${esc(f._id)}" title="Ver a ficha em PDF">${ic('baixar',14,2)} PDF</button></td></tr>`; }).join('')}</tbody></table></div>`; }
 function vPmxFichas(){ const P=S.pmx, q=P.busca.trim().toLowerCase(); const ord=(a,b)=>String(b.data||'').localeCompare(String(a.data||''))||String(b.criadoEm||'').localeCompare(String(a.criadoEm||''));
   const bate=f=>{ if(!q) return true; const t=[f.num,f.numProv,f.material,f.data,dataBR(f.data),f.rancho,f.ordemRef,f.obs].map(x=>String(x||'').toLowerCase()).join(' | '); return q.split(/\s+/).every(w=>t.includes(w)); };
   const all0=pmxFichasVis(), all=all0.filter(bate), ab=all.filter(f=>!pmxEnc(f)).sort(ord), pend=all.filter(pmxPendSis), mst=pmxPodeEd();
@@ -148,7 +160,7 @@ function vPmxFichas(){ const P=S.pmx, q=P.busca.trim().toLowerCase(); const ord=
   <details class="card pmx-blk pmx-hist" ${P.hsAberto||q?'open':''}><summary class="head" style="align-items:center;cursor:pointer;list-style:none"><div class="label">${mst?'3':'2'} · HISTÓRICO · ${all.filter(pmxEnc).length} FICHAS FEITAS${q?' COM ESSA PESQUISA':''}</div><span class="lnk">ver</span></summary>
    <div class="pmx-fil" style="margin-top:10px">
     <div class="chips">${[['todas','Todas',all.filter(pmxEnc).length],...(mst?[['pendsis','Falta PCP',all.filter(pmxEnc).filter(pmxPendSis).length]]:[]),['apontadas','Apontadas no sistema',nAp]].map(([k,n,c])=>`<button class="chip" data-act="pmx-st" data-v="${k}" aria-pressed="${(P.st==='abertas'||P.st==='encerradas'?'todas':P.st)===k}">${n} <span class="num" style="opacity:.75">${c}</span></button>`).join('')}</div></div>
-   ${hs.length?`<div class="pmx-fg">${hs.slice(0,lim).map(pmxCard).join('')}</div>${hs.length>lim?`<div style="text-align:center;margin-top:12px"><button class="btn sec" data-act="pmx-hs-mais">Mostrar mais (${hs.length-lim})</button></div>`:''}`:'<div class="empty">Nenhuma ficha neste filtro.</div>'}</details>
+   ${hs.length?`${pmxHistLista(hs.slice(0,lim),mst)}${hs.length>lim?`<div style="text-align:center;margin-top:12px"><button class="btn sec" data-act="pmx-hs-mais">Mostrar mais (${hs.length-lim})</button></div>`:''}`:'<div class="empty">Nenhuma ficha neste filtro.</div>'}</details>
   ${pmxApModal()}`; }
 
 /* ---------- Receitas ---------- */
@@ -392,11 +404,14 @@ document.addEventListener('click',async ev=>{ const b=ev.target.closest('[data-a
   if(act==='pmx-apontar'){ ev.stopPropagation(); const n=new Date(); P.ap={id:b.dataset.id,qtd:'',hora:pad(n.getHours())+':'+pad(n.getMinutes()),nome:pmxNomeUser()}; render(); setTimeout(()=>{ const x=document.getElementById('pmx-ap-q'); if(x) x.focus(); },40); return; }
   if(act==='pmx-ap-x'){ P.ap=null; render(); return; }
   if(act==='pmx-ap-ok'&&P.ap){ const f=P.fichas.find(x=>x._id===P.ap.id); if(!f||!S.db) return; const q=pmxNum(($('#pmx-ap-q')||{}).value), h=String(($('#pmx-ap-h')||{}).value||''), nm=String(($('#pmx-ap-n')||{}).value||'').trim();
-    if(!(q>0)){ toast('Informe quantos premix foram produzidos.'); const x=$('#pmx-ap-q'); x&&x.focus(); return; }
+    const ob=String(($('#pmx-ap-o')||{}).value!=null?$('#pmx-ap-o').value:(f.obs||'')).trim(), obMudou=ob!==String(f.obs||'').trim();
+    if(!(q>0)){ if(obMudou&&!String(($('#pmx-ap-q')||{}).value||'').trim()){ const ag=new Date().toISOString(); try{ await S.db.doc('pmxfichas/'+f._id).update({obs:ob,alteradoEm:ag,alteradoPor:S.uid,hist:histAdd(f,ob?'Observação: '+ob:'Observação apagada')}); }catch(e){ erro(e); return; } f.obs=ob; if(P.ed&&P.ed._id===f._id&&!pmxSujo()){ P.ed.obs=ob; P.edSnap=JSON.stringify(P.ed); } P.ap=null; render(); toast('Observação salva na '+pmxOp(f)+'.'); return; }
+      toast('Informe quantos premix foram produzidos.'); const x=$('#pmx-ap-q'); x&&x.focus(); return; }
     const hh=+(h.split(':')[0]||new Date().getHours()); const turno=hh<12?'Manhã':hh<18?'Tarde':'Noite'; const agora=new Date().toISOString();
     const aponts=[...(f.aponts||[]),{id:pmxId(),qtd:q,hora:h,turno,nome:nm,assin:'',em:agora,por:S.uid}];
-    try{ await S.db.doc('pmxfichas/'+f._id).update({aponts,alteradoEm:agora,alteradoPor:S.uid,hist:histAdd(f,'Apontamento: '+pmxF(q)+' premix'+(nm?' · '+nm:''))}); }catch(e){ erro(e); return; }
-    f.aponts=aponts; if(P.ed&&P.ed._id===f._id&&!pmxSujo()){ P.ed.aponts=JSON.parse(JSON.stringify(aponts)); P.ed._apIds=aponts.map(a=>a.id); P.edSnap=JSON.stringify(P.ed); } P.ap=null; render(); toast(pmxF(q)+' premix apontado'+(q===1?'':'s')+' na '+pmxOp(f)+'. Total '+pmxF(pmxProd(f))+' de '+pmxF(pmxNum(f.qtd))+'.'); return; }
+    const upA={aponts,alteradoEm:agora,alteradoPor:S.uid,hist:histAdd(f,'Apontamento: '+pmxF(q)+' premix'+(nm?' · '+nm:'')+(obMudou?(ob?' · observação: '+ob:' · observação apagada'):''))}; if(obMudou) upA.obs=ob;
+    try{ await S.db.doc('pmxfichas/'+f._id).update(upA); }catch(e){ erro(e); return; }
+    f.aponts=aponts; if(obMudou) f.obs=ob; if(P.ed&&P.ed._id===f._id&&!pmxSujo()){ P.ed.aponts=JSON.parse(JSON.stringify(aponts)); P.ed._apIds=aponts.map(a=>a.id); if(obMudou) P.ed.obs=ob; P.edSnap=JSON.stringify(P.ed); } P.ap=null; render(); toast(pmxF(q)+' premix apontado'+(q===1?'':'s')+' na '+pmxOp(f)+'. Total '+pmxF(pmxProd(f))+' de '+pmxF(pmxNum(f.qtd))+'.'); return; }
   if(act==='pmx-nova'){ P.lote=null; pmxNovaFicha(null); return; }
   if(act==='pmx-lote'){ pmxLoteNovo(); window.scrollTo(0,0); return; }
   if(act==='pmx-lote-x'){ P.lote=null; render(); return; }
@@ -449,6 +464,7 @@ document.addEventListener('click',async ev=>{ const b=ev.target.closest('[data-a
     if(!x||!(q>0)){ toast('Informe uma quantidade maior que zero.'); return; } if(q>x.saldo+1e-9){ toast('Quantidade maior que o saldo ('+pmxF(x.saldo,2)+' premix).'); return; }
     if(await salvar('pmxbaixas',{codigo:x.codigo,material:x.material,qtd:q,em:new Date().toISOString(),por:S.uid})){ P.usar=null; render(); toast('Baixa de '+pmxF(q,2)+' premix '+x.codigo+' lançada.'); } return; }
 });
+document.addEventListener('input',ev=>{ const t=ev.target; if(t&&t.id==='pmx-ap-o'&&S.pmx&&S.pmx.ap) S.pmx.ap.obs=t.value; });
 document.addEventListener('keydown',ev=>{ if(ev.key!=='Enter'||ev.shiftKey) return; const t=ev.target; if(!t||!t.id) return;
   const clica=sel=>{ const b=document.querySelector(sel); if(b&&!b.disabled){ ev.preventDefault(); b.click(); } };
   if(t.id==='pmx-qtd') clica('[data-act="pmx-salvar-pdf"]');

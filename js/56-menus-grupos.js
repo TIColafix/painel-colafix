@@ -8,7 +8,7 @@
    Busca na lateral (a mesma caixa do js/55, `#gxs`): cada perfil com o que é dele — vazia mostra os avisos; digitando acha
      ações, telas, ordens/ranchos/fichas/itens (busca do topo, tpBusca), chamados abertos e pessoas do RH (window.RHBusca). */
 "use strict";
-const ADMG=[{id:'inicio'},{g:'Produção',ms:['producao','analise','relatorios','tabprod']},{g:'Almoxarifado',ms:['premix','almox','monitor']},{g:'Silos',ms:['silos','silosver','silocel']},
+const ADMG=[{id:'inicio'},{g:'Produção',ms:['producao','analise','importar','relatorios','tabprod']},{g:'Almoxarifado',ms:['premix','almox','monitor']},{g:'Silos',ms:['silos','silosver','silocel']},
   {id:'manut'},{id:'rh'},{id:'frota'},{id:'gestor'},{id:'telas'},{g:'Sistema',ic:'ajuste',ms:['meumenu','backup']}];
 /* menu do RH reorganizado (30/10, escolha da usuária): cada item abre direto a tela; Uniformes em Pessoas */
 if(typeof P==='object'&&!P.dinheiro) P.dinheiro='<rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v5M18 9.5v5"/>';
@@ -29,11 +29,13 @@ function sbPerfil(){ try{ if(typeof gxSolo==='function'&&gxSolo()) return 'gx'; 
    os indicadores vão para "Relatórios" (item próprio no grupo Produção, com as abas dele) e a TV sai das abas. */
 const ADM_PROD=['prodpainel','programacao','calendario','apconf'], ADM_REL=['prodind','indicadores'];
 const admRelVis=()=>ADM_REL.filter(v=>{ try{ return !!VIEWS[v]&&viewOk(v); }catch(e){ return false; } });
-const admEhRel=()=>S.mod==='producao'&&ADM_REL.includes(S.view);
-{ const _mt=mTabs; mTabs=function(m){ const r=_mt.apply(this,arguments); try{ if(sbPerfil()==='adm'&&m&&m.id==='rh'){ const g=rhgDe(S.view); if(!g||!g.vs) return []; const xs=g.vs.map(t=>t[0]).filter(v=>r.includes(v)); return xs.length>1?xs:[]; } if(sbPerfil()!=='adm'||!m||m.id!=='producao') return r; if(admEhRel()) return admRelVis(); const xs=ADM_PROD.filter(v=>r.includes(v)); return xs.length?xs:r; }catch(e){ return r; } }; }
+const admEhRel=()=>ADM_REL.includes(S.view)&&(S.mod==='producao'||S.mod==='analise'); /* 18/11: o Previsto × Realizado (Análise) também fica em Relatórios */
+const admEhImp=()=>S.view==='anlbase'; /* 18/11: Importar dados (Base de dados) fica na lateral, abaixo da Análise PCP */
+{ const _mt=mTabs; mTabs=function(m){ const r=_mt.apply(this,arguments); try{ if(sbPerfil()==='adm'&&m&&m.id==='rh'){ const g=rhgDe(S.view); if(!g||!g.vs) return []; const xs=g.vs.map(t=>t[0]).filter(v=>r.includes(v)); return xs.length>1?xs:[]; } if(sbPerfil()==='adm'&&m&&m.id===S.mod&&admEhRel()) return admRelVis(); if(sbPerfil()==='adm'&&m&&m.id==='analise'){ if(admEhImp()) return []; return r.filter(v=>v!=='anlbase'&&!ADM_REL.includes(v)); } if(sbPerfil()!=='adm'||!m||m.id!=='producao') return r; if(admEhRel()) return admRelVis(); const xs=ADM_PROD.filter(v=>r.includes(v)); return xs.length?xs:r; }catch(e){ return r; } }; }
 function admNav(){ const nl=$('#navlist'); if(!nl) return; const ms=modsVis(), por={}; ms.forEach(m=>por[m.id]=m); const usados=new Set();
   const rv=admRelVis(); if(por.producao&&rv.length) por.relatorios={id:'relatorios',nome:'Relatórios',ic:'grafico',go:rv[0]};
-  const fora=['ajustes','itens','acessos'].includes(S.view), cur=id=>!fora&&(id==='relatorios'?admEhRel():id==='producao'?S.mod==='producao'&&!admEhRel():S.mod===id);
+  try{ if(por.analise&&VIEWS.anlbase&&viewOk('anlbase')) por.importar={id:'importar',nome:'Importar dados',ic:'baixar',go:'anlbase'}; }catch(e){}
+  const fora=['ajustes','itens','acessos'].includes(S.view), cur=id=>!fora&&(id==='relatorios'?admEhRel():id==='importar'?admEhImp():S.mod===id&&!admEhRel()&&!admEhImp());
   const alvo=m=>m.go?`data-go="${m.go}"`:`data-mod="${m.id}"`;
   const um=m=>`<button class="navbtn" ${alvo(m)} ${cur(m.id)?'aria-current="page"':''}>${ic(m.ic)}<span>${esc(m.nome)}</span></button>`;
   let h=''; ADMG.forEach(g=>{ if(!g.ms){ const m=por[g.id]; if(m){ usados.add(m.id); h+=um(m); } return; }

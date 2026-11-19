@@ -12,7 +12,7 @@ const H=require('./harness'); const res=[]; const ok=(n,c,d)=>{ res.push({n,ok:!
  ok('Link antigo do Resumo abre "O que precisa produzir"', await p.evaluate(()=>__T.S().view)==='anlest'&&!!(await p.$('.esw-hd')));
  const tabs=await p.evaluate(()=>[...document.querySelectorAll('[data-grp],.tabs [data-go]')].map(x=>x.innerText.trim()).filter(Boolean).join('|'));
  const tx=await p.evaluate(()=>(document.querySelector('.tabs')||document.querySelector('.navsub')||document.body).innerText);
- ok('Abas da Análise PCP: Produzir · Mês · Linhas · Sistema (sem Hoje, Estoque, Capacidade, Outros)', /Produzir/.test(tx)&&/Mês/.test(tx)&&/Linhas/.test(tx)&&/Sistema/.test(tx)&&!/\bHoje\b/.test(tx)&&!/Outros/.test(tx)&&!/Capacidade/.test(tx), tx.replace(/\n/g,' | ').slice(0,200));
+ ok('Abas da Análise PCP: Produzir · Mês · Sistema (Carga das linhas saiu em 18/11; sem Hoje, Estoque, Capacidade, Outros)', /Produzir/.test(tx)&&/Mês/.test(tx)&&!/Linhas/.test(tx)&&/Sistema/.test(tx)&&!/\bHoje\b/.test(tx)&&!/Outros/.test(tx)&&!/Capacidade/.test(tx), tx.replace(/\n/g,' | ').slice(0,200));
  const fr=await p.evaluate(()=>(document.querySelector('.ao-fr')||{}).innerText||'');
  ok('Produzir mostra quando a base foi atualizada e "Ver projeção dia a dia"', /Saldo/.test(fr)&&/Atualizar base/.test(fr)&&/Ver projeção dia a dia/.test(fr), fr.replace(/\n/g,' | '));
  await p.selectOption('[data-esw="sit"]','todas'); await H.dorme(600);

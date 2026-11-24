@@ -17,7 +17,7 @@ function pdf(linhas){ const cont=linhas.map(([x,y,t])=>`BT /F1 7 Tf ${x} ${y} Td
 function mapa(ped,itens,emp){ const L=[[480,770,'Focco3i RPDV0206_MIT'],[480,760,'Data: 24/11/2026 14:51:08'],[250,745,'Mapa de Itens'],[17,720,'Empresa.........: '+(emp||'1 - EMPRESA TESTE INDUSTRIA LTDA')],
     [17,710,'Pedido..........: '+(ped||'Todos')],[17,700,'Cliente.........: Todos'],[17,690,'Data de Entrega.: Todos'],
     [91,600,'Descrição'],[253,600,'Un.'],[296,600,'Quantidade'],[336,600,'Qtd. Atendida'],[378,600,'Qtd. Cancelada'],[430,600,'Qtd. Pendent'],[490,600,'Saldo Est.'],[551,600,'Valor Total'],[20,592,'Item']];
-  let y=575, tot=0; itens.forEach(i=>{ L.push([19,y,i[0]],[90,y,i[1]],[252,y,i[2]],[307,y,i[3]],[360,y,'0,000'],[407,y,'0,000'],[447,y,i[3]],[498,y,i[4]],[556,y,i[5]]); tot+=+i[5].replace(/\./g,'').replace(',','.'); y-=12; });
+  let y=575, tot=0; itens.forEach(i=>{ const pend=i[7]?(+i[3].replace(/\./g,'').replace(',','.')-(+i[6].replace(',','.'))-(+i[7].replace(',','.'))).toFixed(3).replace('.',','):i[3]; L.push([19,y,i[0]],[90,y,i[1]],[252,y,i[2]],[307,y,i[3]],[360,y,i[6]||'0,000'],[407,y,i[7]||'0,000'],[447,y,pend],[498,y,i[4]],[556,y,i[5]]); tot+=+i[5].replace(/\./g,'').replace(',','.'); y-=12; });
   L.push([422,y-6,'Total'],[555,y-6,tot.toLocaleString('pt-BR',{minimumFractionDigits:2})]); return pdf(L); }
 const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','15.000,000'],['ZZ0002','REJUNTE TESTE BRANCO 1 KG','CX','20,000','45,000','1.200,500'],['ZZ0003','PRIMER TESTE 3,6 LT','BD','10,000','0,000','385,360']];
 
@@ -32,7 +32,7 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   fs.writeFileSync('/tmp/agend/p500b.pdf',mapa('900011',[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','500,000','0,000','6.250,000']],'9 - OUTRA FILIAL LTDA')); /* empresa 9 sem saldo: precisa transferir */
   fs.writeFileSync('/tmp/agend/146001.pdf',mapa('900001',ITENS));
   fs.writeFileSync('/tmp/agend/146001b.pdf',mapa('900001',ITENS.map(i=>i[0]==='ZZ0001'?[...i.slice(0,4),'1.500,000',i[5]]:i)));
-  fs.writeFileSync('/tmp/agend/varios.pdf',mapa('900030,900031,900032',ITENS.slice(0,2)));
+  fs.writeFileSync('/tmp/agend/varios.pdf',mapa('900030,900031,900032',ITENS.slice(0,2).concat([['ZZ0009','ARGAMASSA CANCELADA AC2','SC','90,000','581,000','1.208,160','0,000','90,000']])));
   fs.writeFileSync('/tmp/agend/sem-numero.pdf',mapa('',ITENS.slice(1)));
   fs.writeFileSync('/tmp/agend/outro1.pdf',mapa('900002',ITENS.slice(0,1))); fs.writeFileSync('/tmp/agend/outro2.pdf',mapa('900003',ITENS.slice(2)));
   const abre=async(u,s,vp)=>{ const B=await H.abrir(vp?{viewport:vp}:{});
@@ -97,7 +97,7 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   await p.setInputFiles('#ag-file','/tmp/agend/varios.pdf'); await p.waitForSelector('dialog.ag-jan',{timeout:15000}); await H.dorme(300); j=await jan(p);
   doc=await banco(p,'p900030_900031_900032'); await p.keyboard.press('Escape'); await H.dorme(200);
   const lv=await p.evaluate(()=>{ const l=document.querySelector('.ag-ln[data-v="p900030_900031_900032"]'); return l?{pd:l.querySelector('.ag-pd').innerText,sub:l.querySelector('.ag-sub').innerText,larg:l.querySelector('.ag-pd').scrollWidth<=l.querySelector('.ag-pd').clientWidth+1}:null; });
-  ok('PDF com vários pedidos: um agendamento com a lista, número curto (+2) e a lista embaixo, sem sobrepor', doc&&doc.pedidos.join()==='900030,900031,900032'&&doc.itens.length===2&&/3 pedidos: 900030, 900031, 900032/.test(j)&&lv&&/900030 \+2/.test(lv.pd)&&/carga com 3 pedidos: 900030, 900031, 900032/.test(lv.sub)&&lv.larg, JSON.stringify(lv));
+  ok('PDF com vários pedidos: um agendamento com a lista, número curto (+2) e a lista embaixo, sem sobrepor', doc&&doc.pedidos.join()==='900030,900031,900032'&&doc.itens.length===3&&doc.itens[2].pend===0&&doc.itens[2].canc===90&&/Cancelado 90/.test(j)&&/de 90 · cancelado 90/.test(j)&&!/Atendido/.test(j)&&/1\.200 SC/.test(j)&&/3 pedidos: 900030, 900031, 900032/.test(j)&&lv&&/900030 \+2/.test(lv.pd)&&/carga com 3 pedidos: 900030, 900031, 900032/.test(lv.sub)&&lv.larg, JSON.stringify(lv));
   ok('Já entra marcado como uma carga ("Estes 3 pedidos são uma carga")', doc.ehCarga===true&&/✓ Estes 3 pedidos são uma carga/.test(j));
   await p.click('.ag-ln[data-v="p900030_900031_900032"] .ag-mid'); await p.waitForSelector('dialog.ag-jan'); await p.click('dialog.ag-jan [data-act="ag-dt"]:nth-child(4)'); await p.click('dialog.ag-jan [data-act="ag-salvar"]'); await H.dorme(600);
   let dv=await p.evaluate(()=>document.getElementById('ag-corpo').innerText);
@@ -126,6 +126,10 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   const fx=await p.evaluate(()=>{ const x=document.querySelector('.ag-cal'); return x?x.innerText:''; });
   const lv2=await p.evaluate(()=>document.querySelector('.ag-ln[data-v="p900011"] .ag-sub').innerText);
   ok('Cada pedido mostra a empresa', /Empresa 9 \(Outra\)/.test(lv2), lv2);
+  await p.selectOption('#ag-emp','Empresa 9 (Outra)'); await H.dorme(300);
+  const fe=await p.evaluate(()=>({ids:[...document.querySelectorAll('#ag-corpo .ag-ln')].map(l=>l.dataset.v),chip:(document.querySelector('[data-act="ag-aba"][data-v="agendado"]')||{}).innerText,cal:(document.querySelector('.ag-cal')||{}).innerText||''}));
+  ok('Filtro de empresa: só os pedidos da Empresa 9 na lista, nas abas e no calendário', fe.ids.join()==='p900011'&&/Agendados\s*1/.test(fe.chip)&&/5,20/.test(fe.cal)&&!/10,41/.test(fe.cal), JSON.stringify(fe).slice(0,300));
+  await p.selectOption('#ag-emp',''); await H.dorme(300);
   ok('Calendário do lado mostra os paletes do dia', /10,41/.test(fx), fx.replace(/\n/g,' ').slice(0,200));
   /* sem carga por enquanto */
   await p.click('.ag-ln[data-v="p900010"] .ag-mid'); await p.waitForSelector('dialog.ag-jan'); await p.click('dialog.ag-jan [data-act="ag-semcarga"]');
@@ -150,6 +154,7 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   ok('Mudar o diário de bordo num pedido muda nos outros da mesma carga', (await banco(p,'p900011')).diario==='4');
   await p.evaluate(()=>__T.go('agendamentos')); await H.dorme(300);
   ok('As linhas não mostram mais paletes por pedido', !(await p.$('.ag-ln .ag-pa')));
+  ok('Pedido importado antes da empresa mostra "sem empresa"', /sem empresa/.test(await p.evaluate(()=>{ const l=document.querySelector('.ag-ln[data-v="p800001"] .ag-sub'); return l?l.innerText:''; })));
   await p.click('.ag-cd[data-v="'+mais2+'"]'); await H.dorme(250);
   const te=await p.evaluate(()=>{ const l=[...document.querySelectorAll('.ag-tl>li')].find(x=>x.innerText.includes('ZZ0001')); return l?l.innerText:''; });
   ok('Por empresa no item: Empresa 1 tem saldo, Empresa 9 precisa transferir 500', /Empresa 1 \(Empresa\)[^]*500 sacos · saldo 2\.000[^]*tem/.test(te)&&/Empresa 9 \(Outra\)[^]*500 sacos · saldo 0[^]*transferir 500/.test(te), te.replace(/\n/g,' | '));
@@ -158,7 +163,7 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   ok('PDF do dia: baixa o arquivo com o total, por empresa, a transferência e os pedidos', dl.suggestedFilename()==='carregamentos-'+mais2+'.pdf'&&(!process.env.JSPDF_REAL||(/Carregamentos/.test(txtPdf)&&/10,41/.test(txtPdf)&&/Transferir entre empresas/.test(txtPdf)&&/Empresa 9 \(Outra\)/.test(txtPdf)&&/500 SC/.test(txtPdf)&&/900010/.test(txtPdf)&&/Por empresa/.test(txtPdf))), dl.suggestedFilename()+' '+txtPdf.replace(/\s+/g,' ').slice(0,300));
   await p.click('.ag-cd[data-v="'+ymd(new Date(h.getTime()+864e5))+'"]'); await H.dorme(250);
   const tam=await p.evaluate(()=>document.querySelector('.ag-tot2').innerText);
-  ok('Amanhã: paletes dos itens com palete e balde na unidade; total do dia "13,00 paletes + 10 baldes" e o valor', /12,50/.test(tam)&&/10 baldes/.test(tam)&&/Total do dia\s*13,00 paletes/.test(tam)&&/\+ 10 baldes/.test(tam)&&/Valor/.test(tam), tam.replace(/\n/g,' | '));
+  ok('Amanhã: paletes dos itens com palete e balde na unidade; total do dia "13,00 paletes + 10 baldes" e o valor', /12,50/.test(tam)&&/10 baldes/.test(tam)&&/Total do dia\s*13,00 paletes/.test(tam)&&/\+ 10 baldes/.test(tam)&&/Valor/.test(tam)&&/Empresa 1 \(Empresa\)\s*1\.200 sacos · saldo 1\.500/.test(tam), tam.replace(/\n/g,' | '));
   await p.fill('#ag-tq','primer'); await H.dorme(150);
   const vis2=await p.evaluate(()=>[...document.querySelectorAll('.ag-tl>li')].filter(l=>l.style.display!=='none').map(l=>l.innerText.split('\n')[0]));
   ok('Busca nos itens do dia (primer → só o ZZ0003), sem redesenhar', vis2.length===1&&vis2[0]==='ZZ0003', JSON.stringify(vis2));

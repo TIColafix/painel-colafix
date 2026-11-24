@@ -26,7 +26,7 @@
   if(P.icone) P.icone('agendar','<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="m9 15 2 2 4-4"/>');
   if(P.icone) P.icone('caminhao2','<path d="M2.5 6.5h11v9h-11z"/><path d="M13.5 9.5h4l3 3v3h-7z"/><circle cx="6.5" cy="17" r="1.8"/><circle cx="16.5" cy="17" r="1.8"/>');
   const COL='agendamentos', PDFJS='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
-  const A={abertos:[],fechados:[],cfg:{transps:[],pp:{}},lido:{a:false,f:false},aba:'aguardando',dia:'',cal:'',mes:'',sel:new Set(),pi:{},q:'',lendo:'',jan:null,ed:null};
+  const A={abertos:[],fechados:[],cfg:{transps:[],pp:{}},lido:{a:false,f:false},aba:'aguardando',emp:'',dia:'',cal:'',mes:'',sel:new Set(),pi:{},q:'',lendo:'',jan:null,ed:null};
   window.__agend=A;
   const esc=P.esc, U=()=>P.ui, hoje=()=>P.hojeStr();
   const eu=()=>(P.S.nomes||{})[P.S.uid]||P.nomeDe(P.S.uid)||'';
@@ -95,6 +95,7 @@
     if(!R.total) R.total=Math.round(R.itens.reduce((s,i)=>s+i.valor,0)*100)/100;
     return R; }
   window.agLerMapa=lerMapa;
+  /* a conta usa a PENDENTE do Focco (o que falta carregar: quantidade − atendida − cancelada; confirmado com a Iasmyn em 24/11) */
   const falta=i=>Math.max(0,(+i.pend||0)-Math.max(0,+i.saldo||0));
   const semSaldo=x=>(x.itens||[]).filter(i=>falta(i)>0);
 
@@ -165,6 +166,10 @@
   /* empresa do pedido (cabeçalho do PDF do Focco: "Empresa: 1 - COLFIX INDUSTRIA E COMERCIO LTDA") */
   const empCurto=e=>{ const w=String(e&&e.nome||'').trim().split(/\s+/)[0]||''; return w?w[0].toUpperCase()+w.slice(1).toLowerCase():''; };
   const empTxt=x=>x.empresa&&x.empresa.cod?'Empresa '+x.empresa.cod+(empCurto(x.empresa)?' ('+empCurto(x.empresa)+')':''):'';
+  /* filtro de empresa (24/11: "um filtro de empresa pra mim entrar nos pedidos"): vale para a lista, as abas, o calendário e o PDF */
+  const empK=x=>empTxt(x)||'Sem empresa';
+  const fE=xs=>A.emp?xs.filter(x=>empK(x)===A.emp):xs;
+  const empOpcoes=()=>[...new Set(todos().map(empK))].sort((a,b)=>a==='Sem empresa'?1:b==='Sem empresa'?-1:a.localeCompare(b,'pt-BR',{numeric:true}));
   const diarioTxt=x=>x.diario?'Diário nº '+x.diario:'';
   /* tabela "paletes por item" de um grupo (dia, carga ou pedidos marcados) */
   function porItem(r,o){ o=o||{}; if(!r.it.length) return '';
@@ -172,11 +177,12 @@
       <tfoot><tr><td>Total</td><td class="dir">${esc(unTxt(r))}</td><td></td><td class="dir"><b>${!(r.pal>0)&&r.semPal.length?'—':esc(fP(r.pal))}</b></td></tr></tfoot></table></div>`; }
 
   /* ---------- janela do pedido (layout 24/11, 3ª: formulário à esquerda, resumo com paletes à direita, itens embaixo) ---------- */
-  function estoqueSelo(i){ const f=falta(i); return (+i.pend||0)<=0?U().selo('Atendido','ok'):f>0?U().selo('Falta '+fN(f),(+i.saldo||0)>0?'warn':'crit'):U().selo('Tem','ok'); }
+  /* pendente 0: cancelado (Qtd. Cancelada) ou já atendido — não confundir (24/11: AC0003 com 90 cancelados aparecia "Atendido") */
+  function estoqueSelo(i){ const f=falta(i); if((+i.pend||0)<=0) return (+i.canc||0)>0&&(+i.canc||0)>=(+i.atend||0)?U().selo('Cancelado '+fN(i.canc),'crit'):U().selo('Atendido','ok'); return f>0?U().selo('Falta '+fN(f),(+i.saldo||0)>0?'warn':'crit'):U().selo('Tem','ok'); }
   function itensTab(x){ const its=x.itens||[];
     if(!its.length) return '<div class="empty">Sem itens.</div>';
     return `<div class="pc-rola ag-itw"><table class="pc-tab ag-it"><thead><tr><th>Produto</th><th class="dir">Pendente</th><th class="dir">Saldo est.</th><th>Estoque</th><th class="dir">Por palete</th><th class="dir">Paletes</th></tr></thead><tbody>${its.map((i,k)=>{ const pp=ppDe(i), cad=ppCad(i.cod);
-      return `<tr><td><div class="ag-prod"><b>${esc(i.cod)}</b><span>${esc(i.desc)}</span></div></td><td class="dir ag-nq">${fN(i.pend)} <small>${esc(i.un||'')}</small></td><td class="dir ag-nq">${fN(i.saldo)}</td><td>${estoqueSelo(i)}</td>
+      return `<tr><td><div class="ag-prod"><b>${esc(i.cod)}</b><span>${esc(i.desc)}</span></div></td><td class="dir ag-nq">${fN(i.pend)} <small>${esc(i.un||'')}</small>${(+i.canc||0)>0||(+i.atend||0)>0?`<small class="ag-qx">de ${fN(i.qtd)}${(+i.atend||0)>0?' · atendido '+fN(i.atend):''}${(+i.canc||0)>0?' · cancelado '+fN(i.canc):''}</small>`:''}</td><td class="dir ag-nq">${fN(i.saldo)}</td><td>${estoqueSelo(i)}</td>
         <td class="dir"><input class="txt ag-pp${pp>0?'':' vz'}" type="number" min="0" step="1" inputmode="numeric" data-k="${k}" value="${pp>0?pp:''}" placeholder="—" aria-label="${esc(i.un||'')} por palete de ${esc(i.cod)}" title="${cad?'Ajustes › Itens: '+cad+' por palete':'Sem palete em Ajustes › Itens: digite quantos '+esc(i.un||'')+' vão num palete'}"${pode()?'':' disabled'}></td>
         <td class="dir ag-pl" data-k="${k}">${pp>0&&qtdDe(i)>0?fP(qtdDe(i)/pp):'—'}</td></tr>`; }).join('')}</tbody></table></div>
       <p class="ag-dica">Saldo em estoque do momento em que o PDF foi tirado${x.relData?' ('+esc(br(x.relData.slice(0,10))+(x.relData.length>10?' às '+x.relData.slice(11):''))+')':''}. "Por palete" vem de Ajustes › Itens; o que você digitar fica guardado para os próximos pedidos.</p>`; }
@@ -263,7 +269,7 @@
   function filtra(xs){ const ps=norm(A.q).split(/\s+/).filter(Boolean); if(!ps.length) return xs;
     return xs.filter(x=>{ const t=norm([x.pedido,x.cliente,x.carga,x.diario,x.transp,x.obs,empTxt(x),x.empresa&&x.empresa.nome,(x.itens||[]).map(i=>i.cod+' '+i.desc).join(' ')].join(' ')); return ps.every(p=>t.includes(p)); }); }
   function linha(x,o){ o=o||{}; const ss=semSaldo(x), h=hoje(), atras=x.status==='agendado'&&x.data&&x.data<h, r=soma([x]), n=(x.itens||[]).length;
-    const sub=[empTxt(x)?`<span class="ag-emp" title="${esc(x.empresa.nome||'')}">${esc(empTxt(x))}</span>`:'',pedList(x).length>1?`<span class="ag-pls">${ehCarga(x)?'carga com '+pedList(x).length+' pedidos: ':'pedidos '}${esc(pedTodos(x))}</span>`:'',o.st?`<span class="ag-stx ${STT[x.status]}">${esc(STN[x.status])}${x.data?' '+esc(brC(x.data)):''}</span>`:'',!o.semCarga&&cargaTxt(x)?esc(cargaTxt(x)):'',!o.semCarga&&x.diario?esc(diarioTxt(x)):'',!o.semCarga&&x.transp?esc(x.transp):'',n+' ite'+(n>1?'ns':'m'),esc(fR(x.total)),ss.length?`<span class="ag-wn${ss.length===n?' c':''}">falta estoque em ${ss.length} ite${ss.length>1?'ns':'m'}</span>`:''].filter(Boolean).join(' · ');
+    const sub=[empTxt(x)?`<span class="ag-emp" title="${esc(x.empresa.nome||'')}">${esc(empTxt(x))}</span>`:`<span class="ag-semp" title="Importado antes de o painel ler a empresa: importe o PDF de novo">sem empresa</span>`,pedList(x).length>1?`<span class="ag-pls">${ehCarga(x)?'carga com '+pedList(x).length+' pedidos: ':'pedidos '}${esc(pedTodos(x))}</span>`:'',o.st?`<span class="ag-stx ${STT[x.status]}">${esc(STN[x.status])}${x.data?' '+esc(brC(x.data)):''}</span>`:'',!o.semCarga&&cargaTxt(x)?esc(cargaTxt(x)):'',!o.semCarga&&x.diario?esc(diarioTxt(x)):'',!o.semCarga&&x.transp?esc(x.transp):'',n+' ite'+(n>1?'ns':'m'),esc(fR(x.total)),ss.length?`<span class="ag-wn${ss.length===n?' c':''}">falta estoque em ${ss.length} ite${ss.length>1?'ns':'m'}</span>`:''].filter(Boolean).join(' · ');
     return `<div class="ag-ln${atras?' atr':''}${A.sel.has(x._id)?' sel':''}" data-act="ag-abrir" data-v="${esc(x._id)}" data-b="${esc(norm([x.pedido,x.cliente,x.carga,x.transp,x.obs,cargaTxt(x),diarioTxt(x),empTxt(x),x.empresa&&x.empresa.nome].join(' ')))}">
       <div class="ag-pd">${o.ck&&pode()?`<input type="checkbox" class="ag-ck" data-act="ag-sel" data-v="${esc(x._id)}" aria-label="Marcar o pedido ${esc(x.pedido)}"${A.sel.has(x._id)?' checked':''}>`:''}<b title="${esc(pedTodos(x))}">${esc(pedCurto(x))}</b></div>
       <div class="ag-mid"><div class="ag-cl">${x.cliente?esc(x.cliente):'<i>sem cliente</i>'}</div><div class="ag-sub">${sub}</div>${x.obs?`<div class="ag-obs">${esc(x.obs)}</div>`:''}</div>
@@ -303,8 +309,8 @@
       const v=r?(r.pal>0?fP(r.pal):fora(r).length?fN(fora(r)[0][1])+' '+String(fora(r)[0][0]).toLowerCase():'•'):'';
       cel.push(`<button type="button" class="ag-cd${d===h?' hj':''}${d===A.cal?' on':''}${xs.length?' tem':''}${xs.length&&d<h?' atr':''}" data-act="ag-cal" data-v="${d}" aria-pressed="${d===A.cal}" aria-label="${esc(br(d))}${xs.length?': '+esc(totDia(r)):''}"><b>${dd}</b>${v?`<small>${esc(v)}</small>`:''}</button>`); }
     const d=A.cal, xs=g[d]||[], r=soma(xs), nc=new Set(xs.map(x=>x.carga?'c'+x.carga:ehCarga(x)?'r'+x._id:'s'+x._id)).size;
-    const multiE=new Set(xs.map(x=>empTxt(x)||'Sem empresa')).size>1;
-    const empL=i=>{ const ls=i.trf.filter(t=>multiE||t.falta>0); if(!ls.length) return '';
+    /* empresa de cada item sempre à vista (24/11: "não puxou as empresas") */
+    const empL=i=>{ const ls=i.trf; if(!ls.length) return '';
       return `<div class="ag-te">${ls.map(t=>`<div><span>${esc(t.emp)}</span><span>${esc(qtdUn(t.q,i.un))}${t.saldo!=null?' · saldo '+esc(fN(t.saldo)):''}</span>${t.falta>0?`<b>transferir ${esc(fN(t.falta))}</b>`:'<i>tem</i>'}</div>`).join('')}</div>`; };
     const its=r.it.map(i=>`<li data-b="${esc(norm(i.cod+' '+(i.desc||'')))}"><div class="ag-li"><div class="ag-ti"><b>${esc(i.cod)}</b><span>${esc(i.desc||'')}</span><span class="ag-tvl">${esc(fR(i.v))}</span></div><div class="ag-tv">${i.pal!=null?`<b>${fP(i.pal)} <small>pal.</small></b><span>${esc(qtdUn(i.q,i.un))}</span>`:`<b>${esc(qtdUn(i.q,i.un))}</b><span>${i.un==='SC'?'sem palete cadastrado':'&nbsp;'}</span>`}</div></div>${empL(i)}</li>`).join('');
     const tit=d<h?'Já passou':d===h?'Hoje':d===addD(h,1)?'Amanhã':semana(d)[0].toUpperCase()+semana(d).slice(1);
@@ -320,10 +326,10 @@
   async function pdfDia(d){ const PP=window.Painel&&window.Painel.pdf; if(!PP||!PP.novo){ P.toast('O gerador de PDF ainda não carregou. Tente de novo.'); return; }
     try{ if(!(window.jspdf&&window.jspdf.jsPDF)&&PP.carregar) await PP.carregar(); }catch(e){}
     if(!(window.jspdf&&window.jspdf.jsPDF)){ P.toast('O gerador de PDF não carregou. Confira a internet e tente de novo.'); return; }
-    const xs=A.abertos.filter(x=>x.status==='agendado'&&x.data===d); if(!xs.length){ P.toast('Nada agendado neste dia.'); return; }
+    const xs=fE(A.abertos).filter(x=>x.status==='agendado'&&x.data===d); if(!xs.length){ P.toast('Nada agendado neste dia.'); return; }
     const r=soma(xs), es=[...new Set(xs.map(x=>empTxt(x)||'Sem empresa'))].sort(), h=hoje();
     const nome=d===h?'Hoje':d===addD(h,1)?'Amanhã':semana(d)[0].toUpperCase()+semana(d).slice(1);
-    try{ const img=await PP.imgs(), Q=PP.novo('Carregamentos · '+br(d),nome+' · '+xs.length+' pedido'+(xs.length>1?'s':''),img); Q.capa();
+    try{ const img=await PP.imgs(), Q=PP.novo('Carregamentos · '+br(d),nome+' · '+xs.length+' pedido'+(xs.length>1?'s':'')+(A.emp?' · só '+A.emp:''),img); Q.capa();
       Q.secao('Total do dia');
       Q.kpis([{t:'Paletes',v:r.pal>0?fP(r.pal):'—',s:r.semPal.length?'+ '+foraTxt(r):unTxt(r),c:'pet'},{t:'Quantidade',v:unTxt(r)},{t:'Valor',v:fR(r.vp)},{t:'Pedidos',v:String(xs.length),s:es.join(' · ')}],4);
       const cols=[{t:'Item',w:16},{t:'Descrição',w:44},{t:'Quantidade',w:20,al:'r'},{t:'Paletes',w:13,al:'r'}].concat(es.length>1?es.map(e=>({t:e,w:22,al:'r'})):[]);
@@ -340,18 +346,20 @@
       const ord=xs.slice().sort((a,b)=>String(a.carga||'~').localeCompare(String(b.carga||'~'),'pt-BR',{numeric:true}));
       Q.tabela([{t:'Carga',w:16},{t:'Diário',w:9},{t:'Pedido(s)',w:26},{t:'Empresa',w:20},{t:'Cliente',w:30},{t:'Transportadora',w:24},{t:'Quantidade',w:22,al:'r'}],
         ord.map(x=>[x.carga||(ehCarga(x)?'(sem número)':'—'),x.diario||'',pedTodos(x),empTxt(x),x.cliente||'',x.transp||'',unTxt(soma([x]))]));
-      Q.fim('carregamentos-'+d+'.pdf'); P.toast('PDF do dia '+br(d)+' baixado.'); }
+      Q.fim('carregamentos-'+d+(A.emp?'-'+norm(A.emp).replace(/[^a-z0-9]+/g,'-').replace(/-+$/,''):'')+'.pdf'); P.toast('PDF do dia '+br(d)+' baixado.'); }
     catch(e){ console.warn('[agend] pdf',e); P.toast('Não foi possível gerar o PDF ('+((e&&e.message)||'erro')+').'); } }
   const ic=(n,t)=>{ try{ return U().ic(n,t); }catch(e){ return ''; } };
   function vTela(){ const u=U(); if(!u) return '<section class="card"><div class="empty">Carregando…</div></section>';
-    const h=hoje(), ag=A.abertos.filter(x=>x.status!=='agendado'), agd=A.abertos.filter(x=>x.status==='agendado');
+    const h=hoje(), ab=fE(A.abertos), ag=ab.filter(x=>x.status!=='agendado'), agd=ab.filter(x=>x.status==='agendado');
     const atr=agd.filter(x=>x.data<h);
-    const car=A.fechados.filter(x=>x.status==='carregado'), can=A.fechados.filter(x=>x.status==='cancelado');
+    const car=fE(A.fechados).filter(x=>x.status==='carregado'), can=fE(A.fechados).filter(x=>x.status==='cancelado');
+    const eo=empOpcoes(); if(A.emp&&!eo.includes(A.emp)) A.emp='';
     const head=`<div class="head ag-head"><div><div class="eyebrow">AGENDAMENTOS</div><h1>Agendamentos de pedidos</h1><div class="sub">Importe o PDF do Focco (ou arraste para esta tela), confira o estoque e escolha a data.</div>
         ${ag.length||atr.length?`<div class="ag-alt">${ag.length?`<button type="button" class="ag-al1 warn" data-act="ag-aba" data-v="aguardando">${ag.length} esperando data</button>`:''}${atr.length?`<button type="button" class="ag-al1 crit" data-act="ag-aba" data-v="agendado">${atr.length} com a data passada</button>`:''}</div>`:''}</div>
       <div class="ag-acts">${pode()?`<label class="btn ag-imp">${ic('agendar',16)}Importar PDF<input type="file" id="ag-file" accept=".pdf,application/pdf" multiple hidden></label>`:''}</div></div>
       ${A.lendo?`<div class="ag-lendo" id="ag-drop"><span class="ag-spin"></span>${esc(A.lendo)}</div>`:`<div class="ag-drop" id="ag-drop" aria-hidden="true"><div><b>Solte o PDF do Focco aqui</b><span>Pode ser mais de um</span></div></div>`}`;
     const barra=`<div class="ag-bar">${u.chips([['aguardando','Esperando data',ag.length,A.aba==='aguardando'],['agendado','Agendados',agd.length,A.aba==='agendado'],['carregado','Carregados',car.length,A.aba==='carregado'],['cancelado','Cancelados',can.length,A.aba==='cancelado']],'ag-aba')}
+      ${eo.length>1||A.emp?`<select id="ag-emp" class="txt ag-esel${A.emp?' on':''}" aria-label="Filtrar por empresa"><option value="">Todas as empresas</option>${eo.map(e=>`<option value="${esc(e)}"${A.emp===e?' selected':''}>${esc(e)}</option>`).join('')}</select>`:''}
       <input type="search" id="ag-q" class="txt ag-q" aria-label="Buscar agendamento" autocomplete="off" placeholder="Buscar pedido, cliente, carga, item…" value="${esc(A.q)}"></div>`;
     let corpo='';
     if(!A.lido.a) corpo='<div class="empty">Carregando…</div>';
@@ -436,6 +444,7 @@
       P.db().collection(COL).doc(v).delete().then(()=>{ A.abertos=A.abertos.filter(y=>y._id!==v); A.fechados=A.fechados.filter(y=>y._id!==v); if(A.jan) A.jan.fechar(); P.toast('Pedido apagado.'); P.rerender(); }).catch(er=>P.erro(er)); return; }
   });
   document.addEventListener('toggle',e=>{ const d=e.target; if(d&&d.classList&&d.classList.contains('ag-pid')) A.pi[d.dataset.d]=d.open; },true);
+  document.addEventListener('change',e=>{ if(e.target&&e.target.id==='ag-emp'){ A.emp=e.target.value; A.cal=''; P.render(); } });
   document.addEventListener('change',e=>{ if(e.target&&e.target.id==='ag-file'){ const fs=e.target.files; importar(fs); e.target.value=''; } });
   /* busca filtra sem redesenhar (o campo não perde o foco) e guarda o texto para o próximo desenho */
   document.addEventListener('input',e=>{ if(e.target&&(e.target.classList.contains('ag-pp')||e.target.id==='ag-data')&&e.target.closest('dialog.ag-jan')) janAtualiza(); });
@@ -510,13 +519,13 @@
   .ag-tl li{flex-direction:column;gap:4px}.ag-li{display:flex;justify-content:space-between;gap:12px}
   .ag-te{display:flex;flex-direction:column;gap:2px;padding:6px 8px;border-radius:8px;background:color-mix(in srgb,var(--muted) 7%,transparent)}
   .ag-te div{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:8px;font-size:12px;align-items:baseline;padding:2px 0}.ag-te span:first-child{grid-column:1/-1;color:var(--muted)}
-  .ag-te span{font-variant-numeric:tabular-nums}.ag-te b{color:var(--crit);font-weight:600;white-space:nowrap}.ag-te i{color:var(--ok);font-style:normal}.ag-emp{color:var(--text,inherit);font-weight:600}
+  .ag-te span{font-variant-numeric:tabular-nums}.ag-te b{color:var(--crit);font-weight:600;white-space:nowrap}.ag-te i{color:var(--ok);font-style:normal}.ag-emp{color:var(--text,inherit);font-weight:600}.ag-semp{color:var(--warn)}
   .ag-tfe{margin-top:8px;display:flex;flex-direction:column;gap:3px}.ag-tfe div{display:flex;justify-content:space-between;gap:10px;font-size:13px}.ag-tfe span{color:var(--muted)}.ag-tfe b{font-size:13.5px;font-weight:600;color:var(--teal-strong);line-height:1.4}.ag-tvl{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
   .ag-tfv{display:flex;justify-content:space-between;align-items:baseline;margin-top:8px;padding-top:8px;border-top:1px solid color-mix(in srgb,var(--teal) 25%,transparent)}.ag-tfv span{font-size:12.5px;color:var(--muted)}.ag-tfv b{font-size:17px;font-weight:600;color:inherit;font-variant-numeric:tabular-nums}
   @media (max-width:1180px){.ag-lay{grid-template-columns:minmax(0,1fr) 300px}}
   @media (max-width:980px){.ag-lay{grid-template-columns:1fr}.ag-side{position:static;order:-1}}
   /* lista */
-  .ag-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px}.ag-q{flex:1;min-width:200px;max-width:320px;margin-left:auto;height:38px}
+  .ag-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px}.ag-q{flex:1;min-width:200px;max-width:320px;height:38px;margin-left:auto}.ag-esel+.ag-q{margin-left:0}.ag-esel{height:38px;margin-left:auto;max-width:220px;padding:0 10px}.ag-esel.on{border-color:var(--teal);color:var(--teal-strong);font-weight:600}
   .ag-dm{margin:4px 2px 4px;font-size:12px;color:var(--muted)}
   .ag-fil{margin:8px 0;font-size:13px;color:var(--muted)}.ag-fil b{color:var(--teal-strong);font-weight:600}
   .ag-ln{display:grid;grid-template-columns:118px minmax(0,1fr) 120px 104px;gap:14px;align-items:center;padding:11px 10px;border-radius:10px;cursor:pointer}
@@ -592,7 +601,7 @@
   .ag-jan .pc-jb>*{flex-shrink:0}.ag-jan .ag-h3{margin:8px 0 0;font-size:14px;font-weight:600}
   .ag-it td,.ag-it th{font-size:13px;padding-top:7px;padding-bottom:7px}
   .ag-prod{display:flex;flex-direction:column;min-width:220px}.ag-prod b{font-size:12px;color:var(--muted);font-weight:500}.ag-prod span{line-height:1.3}
-  .ag-nq{white-space:nowrap;font-variant-numeric:tabular-nums}.ag-nq small{color:var(--muted)}
+  .ag-nq{white-space:nowrap;font-variant-numeric:tabular-nums}.ag-qx{display:block;font-size:11px;color:var(--muted)}.ag-nq small{color:var(--muted)}
   .ag-pp{width:66px;height:30px;text-align:right;padding:3px 8px}.ag-pp.vz{border-color:color-mix(in srgb,var(--warn) 60%,transparent)}
   .ag-it .ag-pl{font-weight:600;color:var(--teal-strong);font-variant-numeric:tabular-nums}
   .ag-cpl{display:flex;flex-direction:column}.ag-cpl>div{display:grid;grid-template-columns:90px minmax(0,1fr) auto 100px;gap:12px;padding:8px 2px;border-top:1px solid color-mix(in srgb,var(--line) 60%,transparent);font-size:13px;align-items:center}
@@ -602,7 +611,7 @@
   @media (max-width:900px){.ag-jg{grid-template-columns:1fr}.ag-res{position:static;padding-left:0;border-left:0;border-top:1px solid var(--line);padding-top:14px}}
   @media (max-width:760px){.ag-ln{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"pd mid ac" ". qt qt";row-gap:4px}
     .ag-pd{grid-area:pd}.ag-mid{grid-area:mid}.ag-qt{grid-area:qt;text-align:left}.ag-ac{grid-area:ac}
-    .ag-cl{white-space:normal;overflow-wrap:anywhere}.ag-q{max-width:none;margin-left:0}.ag-fx{grid-template-columns:repeat(7,92px)}
+    .ag-cl{white-space:normal;overflow-wrap:anywhere}.ag-q{max-width:none;margin-left:0}.ag-esel{margin-left:0;max-width:none;flex:1 1 100%}.ag-fx{grid-template-columns:repeat(7,92px)}
     .ag-pit th:nth-child(3),.ag-pit td:nth-child(3){display:none}.ag-pit td span{display:block;font-size:12px}
     .ag-cpl>div{grid-template-columns:70px minmax(0,1fr) 90px}.ag-cpl>div>span:nth-of-type(2){display:none}}
   </style>`);

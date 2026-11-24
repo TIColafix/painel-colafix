@@ -168,6 +168,18 @@
   const empTxt=x=>x.empresa&&x.empresa.cod?'Empresa '+x.empresa.cod+(empCurto(x.empresa)?' ('+empCurto(x.empresa)+')':''):'';
   /* filtro de empresa (24/11: "um filtro de empresa pra mim entrar nos pedidos"): vale para a lista, as abas, o calendário e o PDF */
   const empK=x=>empTxt(x)||'Sem empresa';
+  /* vincular empresa à mão (24/11: "os que estão sem empresa posso vincular?"): lista das empresas que já vieram nos PDFs */
+  function empConhecidas(){ const m=new Map(); todos().forEach(x=>{ if(x.empresa&&x.empresa.cod&&!m.has(String(x.empresa.cod))) m.set(String(x.empresa.cod),x.empresa); });
+    (A.cfg.empresas||[]).forEach(e=>{ if(e&&e.cod&&!m.has(String(e.cod))) m.set(String(e.cod),e); });
+    return [...m.values()].sort((a,b)=>String(a.cod).localeCompare(String(b.cod),'pt-BR',{numeric:true})); }
+  function empCampo(atual,manter){ const ls=empConhecidas(), cod=atual&&atual.cod?String(atual.cod):(manter?'__manter':'');
+    return `<label class="pc-campo pc-c6"><span>Empresa</span><select id="ag-empsel">${manter?'<option value="__manter" selected>Manter a de cada pedido</option>':''}<option value=""${!manter&&!cod?' selected':''}>Sem empresa</option>${ls.map(e=>`<option value="${esc(e.cod)}"${cod===String(e.cod)?' selected':''}>${esc(empTxt({empresa:e}))}</option>`).join('')}<option value="__outra">Outra…</option></select>
+      <input id="ag-empnova" type="text" placeholder="Código - nome (ex.: 9 - FIXCOL INDUSTRIA)" hidden autocomplete="off"><em>${atual&&atual.cod?'':'Vem do PDF do Focco; aqui dá para escolher à mão.'}</em></label>`; }
+  /* lê o campo: undefined = não mexer; null = sem empresa; {cod,nome} */
+  function empLida(){ const sel=A.jan&&A.jan.el.querySelector('#ag-empsel'); if(!sel) return undefined; const v=sel.value;
+    if(v==='__manter') return undefined; if(!v) return null;
+    if(v==='__outra'){ const t=val('#ag-empnova'), m=t.match(/^\s*(\d+)\s*[-–]?\s*(.*)$/); if(!m){ P.toast('Digite a empresa como "código - nome", ex.: 9 - FIXCOL.'); return false; } return {cod:m[1],nome:(m[2]||'').trim().toUpperCase()}; }
+    return empConhecidas().find(e=>String(e.cod)===v)||{cod:v,nome:''}; }
   const fE=xs=>A.emp?xs.filter(x=>empK(x)===A.emp):xs;
   const empOpcoes=()=>[...new Set(todos().map(empK))].sort((a,b)=>a==='Sem empresa'?1:b==='Sem empresa'?-1:a.localeCompare(b,'pt-BR',{numeric:true}));
   const diarioTxt=x=>x.diario?'Diário nº '+x.diario:'';
@@ -200,7 +212,8 @@
     const dts=[h,addD(h,1),addD(h,2),addD(h,3)], sc=!!x.semCarga&&!x.carga, tl=transps();
     const form=`<div class="pc-form ag-fm">
         ${novo?u.campo({r:'Número do pedido',id:'ag-ped',v:'',obr:1,col:12,im:'numeric',dica:'O PDF não trouxe o número.'}):''}
-        ${u.campo({r:'Cliente',id:'ag-cli',v:x.cliente||'',col:12,ph:'Nome do cliente'})}
+        ${u.campo({r:'Cliente',id:'ag-cli',v:x.cliente||'',col:6,ph:'Nome do cliente'})}
+        ${empCampo(x.empresa,false)}
         <label class="pc-campo pc-c6 ag-cg"><span>Carga do sistema</span><input id="ag-carga" type="text" value="${esc(x.carga||'')}" placeholder="${sc?'Sem carga por enquanto':'Nº da carga no Focco'}"${sc?' disabled':''}>
           <button type="button" class="ag-sc${sc?' on':''}" data-act="ag-semcarga" aria-pressed="${sc}">${sc?'✓ ':''}Sem carga por enquanto</button>${pedList(x).length>1?`<button type="button" class="ag-sc ag-ec${ehCarga(x)?' on':''}" data-act="ag-ehcarga" aria-pressed="${ehCarga(x)}">${ehCarga(x)?'✓ ':''}Estes ${pedList(x).length} pedidos são uma carga</button>`:''}</label>
         ${u.campo({r:'Ordem no diário de bordo',id:'ag-diario',v:x.diario||'',col:6,im:'numeric',ph:'Nº do caminhão no diário',dica:'Vale para todos os pedidos da mesma carga.'})}
@@ -238,17 +251,18 @@
   async function salvarCfg(o){ try{ await P.db().doc('config/agendamentos').set(o,{merge:true}); Object.keys(o).forEach(k=>{ A.cfg[k]=typeof o[k]==='object'&&!Array.isArray(o[k])?Object.assign({},A.cfg[k]||{},o[k]):o[k]; }); }catch(e){ console.warn('[agend] config',e); } }
   async function salvar(id){ const novo=!!(A.ed&&A.ed.novo), base=A.ed&&A.ed.x;
     const scBt=A.jan&&A.jan.el.querySelector('[data-act="ag-semcarga"]'), sc=!!(scBt&&scBt.classList.contains('on'));
-    const ecBt=A.jan&&A.jan.el.querySelector('[data-act="ag-ehcarga"]');
+    const ecBt=A.jan&&A.jan.el.querySelector('[data-act="ag-ehcarga"]'); const emp=empLida(); if(emp===false) return;
     const o={...(ecBt?{ehCarga:ecBt.classList.contains('on')}:{}),cliente:val('#ag-cli'),carga:sc?'':val('#ag-carga'),semCarga:sc,diario:val('#ag-diario'),transp:val('#ag-transp'),obs:val('#ag-obs'),data:val('#ag-data')};
     const its=base?itensJan(base):null;
     let x; if(novo){ const ped=val('#ag-ped').replace(/\s+/g,''); if(!ped){ P.toast('Digite o número do pedido.'); return; } id=docId(ped); x=deId(id);
       Object.assign(o,{...(A.ed.R.empresa?{empresa:A.ed.R.empresa}:{}),itens:its||A.ed.R.itens,total:A.ed.R.total,relData:A.ed.R.relData,arquivo:A.ed.arquivo}); if(!x) o.pedido=ped; }
     else { x=deId(id); if(its) o.itens=its; }
-    if(o.carga) o.semCarga=false;
+    if(o.carga) o.semCarga=false; if(emp!==undefined) o.empresa=emp;
     const st=x&&(x.status==='carregado'||x.status==='cancelado')?x.status:(o.data?'agendado':'aguardando');
     o.status=st; o.aberto=st==='aguardando'||st==='agendado';
     const mud=[]; if(!x) mud.push('Criado à mão (PDF sem número)');
     else { if((x.data||'')!==o.data) mud.push(o.data?(x.data?'Data mudou de '+br(x.data)+' para '+br(o.data):'Agendado para '+br(o.data)):'Data tirada (voltou a esperar data)');
+      if(emp!==undefined&&empTxt({empresa:emp})!==empTxt(x)) mud.push(emp?'Empresa: '+empTxt({empresa:emp})+' (à mão)':'Empresa tirada');
       [['cliente','Cliente'],['carga','Carga'],['diario','Diário de bordo'],['transp','Transportadora'],['obs','Observação']].forEach(([k,r])=>{ if((x[k]||'')!==o[k]) mud.push(r+(o[k]?': '+o[k].slice(0,60):' apagado')); });
       if(!!x.semCarga!==sc&&sc) mud.push('Sem carga por enquanto'); }
     try{ await grava(id,o,mud.join(' · ')||null);
@@ -387,6 +401,7 @@
     const dts=[h,addD(h,1),addD(h,2),addD(h,3)], tl=transps(), r=soma(xs), sc=c0.semCarga;
     A.ed={carga:ids};
     const corpo=`<div class="ag-jg"><div class="pc-form ag-fm">
+        ${empCampo(null,true)}
         <label class="pc-campo pc-c6 ag-cg"><span>Carga do sistema</span><input id="ag-carga" type="text" value="${esc(c0.carga)}" placeholder="${sc?'Sem carga por enquanto':'Nº da carga no Focco'}"${sc?' disabled':''}>
           <button type="button" class="ag-sc${sc?' on':''}" data-act="ag-semcarga" aria-pressed="${sc}">${sc?'✓ ':''}Sem carga por enquanto</button></label>
         ${u.campo({r:'Ordem no diário de bordo',id:'ag-diario',v:c0.diario,col:6,im:'numeric',ph:'Nº do caminhão no diário'})}
@@ -399,12 +414,13 @@
     A.jan=u.janela({tit:'Montar carga · '+xs.length+' pedido'+(xs.length>1?'s':''),sub:xs.map(pedTodos).join(', '),corpo,rodape:`<span style="flex:1"></span>${u.bt('Salvar carga','ag-cgsalvar')}`,larga:true,aoFechar:()=>{ A.jan=null; A.ed=null; }});
     A.jan.el.classList.add('ag-jan'); }
   async function salvarCarga(){ const ids=(A.ed&&A.ed.carga)||[]; const scBt=A.jan&&A.jan.el.querySelector('[data-act="ag-semcarga"]'), sc=!!(scBt&&scBt.classList.contains('on'));
-    const c={carga:sc?'':val('#ag-carga'),semCarga:sc&&!val('#ag-carga'),diario:val('#ag-diario'),transp:val('#ag-transp'),data:val('#ag-data')};
+    const emp=empLida(); if(emp===false) return;
+    const c={...(emp!==undefined?{empresa:emp}:{}),carga:sc?'':val('#ag-carga'),semCarga:sc&&!val('#ag-carga'),diario:val('#ag-diario'),transp:val('#ag-transp'),data:val('#ag-data')};
     const st=c.data?'agendado':'aguardando', peds=ids.map(deId).filter(Boolean).map(x=>x.pedido).join(', ');
     try{ for(const id of ids){ const x=deId(id); if(!x) continue; const fech=x.status==='carregado'||x.status==='cancelado';
         const o=Object.assign({},c,fech?{}:{status:st,aberto:true}); const mud=[];
         if((x.carga||'')!==c.carga) mud.push(c.carga?'Carga '+c.carga:'Sem carga'); if((x.diario||'')!==c.diario&&c.diario) mud.push('Diário de bordo nº '+c.diario);
-        if((x.data||'')!==c.data) mud.push(c.data?'Agendado para '+br(c.data):'Data tirada'); if((x.transp||'')!==c.transp&&c.transp) mud.push('Transportadora: '+c.transp);
+        if(emp!==undefined&&empTxt({empresa:emp})!==empTxt(x)) mud.push(emp?'Empresa: '+empTxt({empresa:emp})+' (à mão)':'Empresa tirada'); if((x.data||'')!==c.data) mud.push(c.data?'Agendado para '+br(c.data):'Data tirada'); if((x.transp||'')!==c.transp&&c.transp) mud.push('Transportadora: '+c.transp);
         await grava(id,o,mud.length?mud.join(' · ')+' (carga montada com '+peds+')':null); }
       if(c.transp&&!(A.cfg.transps||[]).includes(c.transp)) salvarCfg({transps:(A.cfg.transps||[]).concat([c.transp]).sort((a,b)=>a.localeCompare(b,'pt-BR')).slice(-300)});
       const r=soma(ids.map(deId).filter(Boolean)); A.sel.clear(); if(A.jan) A.jan.fechar(); if(c.data) A.aba='agendado';
@@ -444,6 +460,7 @@
       P.db().collection(COL).doc(v).delete().then(()=>{ A.abertos=A.abertos.filter(y=>y._id!==v); A.fechados=A.fechados.filter(y=>y._id!==v); if(A.jan) A.jan.fechar(); P.toast('Pedido apagado.'); P.rerender(); }).catch(er=>P.erro(er)); return; }
   });
   document.addEventListener('toggle',e=>{ const d=e.target; if(d&&d.classList&&d.classList.contains('ag-pid')) A.pi[d.dataset.d]=d.open; },true);
+  document.addEventListener('change',e=>{ if(e.target&&e.target.id==='ag-empsel'){ const n=A.jan&&A.jan.el.querySelector('#ag-empnova'); if(n){ n.hidden=e.target.value!=='__outra'; if(!n.hidden) n.focus(); } } });
   document.addEventListener('change',e=>{ if(e.target&&e.target.id==='ag-emp'){ A.emp=e.target.value; A.cal=''; P.render(); } });
   document.addEventListener('change',e=>{ if(e.target&&e.target.id==='ag-file'){ const fs=e.target.files; importar(fs); e.target.value=''; } });
   /* busca filtra sem redesenhar (o campo não perde o foco) e guarda o texto para o próximo desenho */

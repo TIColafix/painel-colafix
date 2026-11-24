@@ -155,6 +155,14 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   await p.evaluate(()=>__T.go('agendamentos')); await H.dorme(300);
   ok('As linhas não mostram mais paletes por pedido', !(await p.$('.ag-ln .ag-pa')));
   ok('Pedido importado antes da empresa mostra "sem empresa"', /sem empresa/.test(await p.evaluate(()=>{ const l=document.querySelector('.ag-ln[data-v="p800001"] .ag-sub'); return l?l.innerText:''; })));
+  await p.click('.ag-ln[data-v="p800001"] .ag-mid'); await p.waitForSelector('dialog.ag-jan #ag-empsel'); await p.selectOption('#ag-empsel','1'); await p.click('dialog.ag-jan [data-act="ag-salvar"]'); await H.dorme(600);
+  let e1=await banco(p,'p800001');
+  ok('Vincular a empresa à mão: escolhe da lista das empresas que já vieram nos PDFs', e1.empresa&&e1.empresa.cod==='1'&&/EMPRESA TESTE/.test(e1.empresa.nome)&&(e1.hist||[]).some(h=>/Empresa: Empresa 1 \(Empresa\) \(à mão\)/.test(h.t))&&/Empresa 1 \(Empresa\)/.test(await p.evaluate(()=>document.querySelector('.ag-ln[data-v="p800001"] .ag-sub').innerText)), JSON.stringify(e1.empresa));
+  await p.click('[data-act="ag-aba"][data-v="aguardando"]'); await H.dorme(300);
+  await p.click('.ag-ln[data-v="p800003"] .ag-mid'); await p.waitForSelector('dialog.ag-jan #ag-empsel'); await p.selectOption('#ag-empsel','__outra'); await p.fill('#ag-empnova','7 - nova empresa ltda'); await p.click('dialog.ag-jan [data-act="ag-salvar"]'); await H.dorme(600);
+  e1=await banco(p,'p800003');
+  ok('"Outra…": digita código e nome de uma empresa nova', e1.empresa&&e1.empresa.cod==='7'&&e1.empresa.nome==='NOVA EMPRESA LTDA', JSON.stringify(e1.empresa));
+  await p.evaluate(()=>{ window.__agend.aba='agendado'; __T.go('agendamentos'); }); await H.dorme(300);
   await p.click('.ag-cd[data-v="'+mais2+'"]'); await H.dorme(250);
   const te=await p.evaluate(()=>{ const l=[...document.querySelectorAll('.ag-tl>li')].find(x=>x.innerText.includes('ZZ0001')); return l?l.innerText:''; });
   ok('Por empresa no item: Empresa 1 tem saldo, Empresa 9 precisa transferir 500', /Empresa 1 \(Empresa\)[^]*500 sacos · saldo 2\.000[^]*tem/.test(te)&&/Empresa 9 \(Outra\)[^]*500 sacos · saldo 0[^]*transferir 500/.test(te), te.replace(/\n/g,' | '));

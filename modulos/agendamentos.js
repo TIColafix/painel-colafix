@@ -18,7 +18,10 @@
    no filtro do Focco ("146474,146475,…") = um agendamento com `pedidos[]` (id p<n1>_<n2>…), mostrado como "146474 +6".
    24/11 (7ª): bloco do lado com CALENDÁRIO do mês (A.cal/A.mes) e, embaixo, os itens do dia escolhido: em paletes os que têm
    palete, na unidade (fardos, caixas, baldes) os que não têm; TOTAL DO DIA (paletes + unidades), VALOR (do pendente) e, com mais
-   de uma, por EMPRESA (empresa do cabeçalho do PDF, `empresa:{cod,nome}`, mostrada em cada pedido). */
+   de uma, por EMPRESA (empresa do cabeçalho do PDF, `empresa:{cod,nome}`, mostrada em cada pedido).
+   24/11 (8ª): busca nos itens do dia (#ag-tq, sem redesenhar); em cada item, a quantidade de CADA EMPRESA com o saldo daquela empresa
+   no PDF mais recente e "transferir N" quando falta (item.trf); "Baixar PDF do dia" (pdfDia, Painel.pdf: total, itens, por empresa,
+   transferências, pedidos e cargas). */
 (function(){ const P=window.Painel; if(!P) return;
   if(P.icone) P.icone('agendar','<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="m9 15 2 2 4-4"/>');
   if(P.icone) P.icone('caminhao2','<path d="M2.5 6.5h11v9h-11z"/><path d="M13.5 9.5h4l3 3v3h-7z"/><circle cx="6.5" cy="17" r="1.8"/><circle cx="16.5" cy="17" r="1.8"/>');
@@ -149,8 +152,11 @@
      {un:{SC:1000}, it:[{cod,desc,un,q,pp,pal}], pal, semPal:[códigos], n, val} */
   function soma(xs){ const r={un:{},it:[],pal:0,semPal:[],n:xs.length,val:0}, m=new Map();
     xs.forEach(x=>{ r.val+=+x.total||0; (x.itens||[]).forEach(i=>{ const q=qtdDe(i); if(!(q>0)) return; const c=String(i.cod).toUpperCase();
-      const u=i.un||'un'; r.un[u]=(r.un[u]||0)+q; const o=m.get(c)||{cod:i.cod,desc:i.desc,un:u,q:0,pp:0}; o.q+=q; o.v=(o.v||0)+(+i.qtd>0?(+i.valor||0)*q/(+i.qtd):(+i.valor||0)); if(!o.pp) o.pp=ppDe(i); m.set(c,o); }); });
-    r.it=[...m.values()].map(o=>Object.assign(o,{pal:o.pp>0?o.q/o.pp:null})).sort((a,b)=>(b.pal||0)-(a.pal||0)||b.q-a.q);
+      const u=i.un||'un'; r.un[u]=(r.un[u]||0)+q; const o=m.get(c)||{cod:i.cod,desc:i.desc,un:u,q:0,pp:0}; o.q+=q; o.v=(o.v||0)+(+i.qtd>0?(+i.valor||0)*q/(+i.qtd):(+i.valor||0)); if(!o.pp) o.pp=ppDe(i);
+      /* empresa: quanto o pedido pede e o saldo daquela empresa no PDF mais recente (para saber o que transferir) */
+      const ek=empTxt(x)||'Sem empresa', e=(o.emp=o.emp||{})[ek]||(o.emp[ek]={q:0,saldo:null,rel:''}); e.q+=q;
+      if(e.saldo==null||String(x.relData||'')>=e.rel){ e.saldo=+i.saldo||0; e.rel=String(x.relData||''); } m.set(c,o); }); });
+    r.it=[...m.values()].map(o=>Object.assign(o,{pal:o.pp>0?o.q/o.pp:null,trf:Object.entries(o.emp||{}).map(([k,e])=>({emp:k,q:e.q,saldo:e.saldo,falta:Math.max(0,e.q-Math.max(0,e.saldo||0))}))})).sort((a,b)=>(b.pal||0)-(a.pal||0)||b.q-a.q);
     r.vp=0; r.it.forEach(o=>{ r.vp+=o.v||0; if(o.pal!=null) r.pal+=o.pal; else r.semPal.push(o.cod); }); return r; }
   const unTxt=r=>Object.keys(r.un).sort((a,b)=>r.un[b]-r.un[a]).map(u=>fN(r.un[u])+' '+u).join(' · ')||'0';
   const palTxt=r=>!(r.pal>0)&&r.semPal.length?'palete ?':fP(r.pal)+' palete'+(Math.floor(r.pal*100+1e-6)===100?'':'s');
@@ -297,15 +303,45 @@
       const v=r?(r.pal>0?fP(r.pal):fora(r).length?fN(fora(r)[0][1])+' '+String(fora(r)[0][0]).toLowerCase():'•'):'';
       cel.push(`<button type="button" class="ag-cd${d===h?' hj':''}${d===A.cal?' on':''}${xs.length?' tem':''}${xs.length&&d<h?' atr':''}" data-act="ag-cal" data-v="${d}" aria-pressed="${d===A.cal}" aria-label="${esc(br(d))}${xs.length?': '+esc(totDia(r)):''}"><b>${dd}</b>${v?`<small>${esc(v)}</small>`:''}</button>`); }
     const d=A.cal, xs=g[d]||[], r=soma(xs), nc=new Set(xs.map(x=>x.carga?'c'+x.carga:ehCarga(x)?'r'+x._id:'s'+x._id)).size;
-    const its=r.it.map(i=>`<li><div class="ag-ti"><b>${esc(i.cod)}</b><span>${esc(i.desc||'')}</span><span class="ag-tvl">${esc(fR(i.v))}</span></div><div class="ag-tv">${i.pal!=null?`<b>${fP(i.pal)} <small>pal.</small></b><span>${esc(qtdUn(i.q,i.un))}</span>`:`<b>${esc(qtdUn(i.q,i.un))}</b><span>${i.un==='SC'?'sem palete cadastrado':'&nbsp;'}</span>`}</div></li>`).join('');
+    const multiE=new Set(xs.map(x=>empTxt(x)||'Sem empresa')).size>1;
+    const empL=i=>{ const ls=i.trf.filter(t=>multiE||t.falta>0); if(!ls.length) return '';
+      return `<div class="ag-te">${ls.map(t=>`<div><span>${esc(t.emp)}</span><span>${esc(qtdUn(t.q,i.un))}${t.saldo!=null?' · saldo '+esc(fN(t.saldo)):''}</span>${t.falta>0?`<b>transferir ${esc(fN(t.falta))}</b>`:'<i>tem</i>'}</div>`).join('')}</div>`; };
+    const its=r.it.map(i=>`<li data-b="${esc(norm(i.cod+' '+(i.desc||'')))}"><div class="ag-li"><div class="ag-ti"><b>${esc(i.cod)}</b><span>${esc(i.desc||'')}</span><span class="ag-tvl">${esc(fR(i.v))}</span></div><div class="ag-tv">${i.pal!=null?`<b>${fP(i.pal)} <small>pal.</small></b><span>${esc(qtdUn(i.q,i.un))}</span>`:`<b>${esc(qtdUn(i.q,i.un))}</b><span>${i.un==='SC'?'sem palete cadastrado':'&nbsp;'}</span>`}</div></div>${empL(i)}</li>`).join('');
     const tit=d<h?'Já passou':d===h?'Hoje':d===addD(h,1)?'Amanhã':semana(d)[0].toUpperCase()+semana(d).slice(1);
     return `<aside class="ag-side" aria-label="Calendário de carregamentos">
       <div class="ag-cal"><div class="ag-ch"><button type="button" class="ag-mv" data-act="ag-mes" data-v="-1" aria-label="Mês anterior">‹</button><b>${esc(nomeMes)}</b><button type="button" class="ag-mv" data-act="ag-mes" data-v="1" aria-label="Próximo mês">›</button></div>
         <div class="ag-cg7">${['D','S','T','Q','Q','S','S'].map(x=>`<span class="ag-cw">${x}</span>`).join('')}${cel.join('')}</div></div>
       <div class="ag-tot2"><div class="ag-th"><h3>${esc(tit)} <span>${esc(br(d))}</span></h3><p>${xs.length?`${xs.length} pedido${xs.length>1?'s':''}${nc?' · '+nc+' carga'+(nc>1?'s':''):''}`:'Nada agendado neste dia.'}</p></div>
-        ${xs.length?`<ul class="ag-tl">${its}</ul>
+        ${xs.length?`${r.it.length>=3?`<input type="search" id="ag-tq" class="txt ag-tq" placeholder="Buscar item do dia…" aria-label="Buscar item do dia" autocomplete="off" value="${esc(A.tq||'')}">`:''}<ul class="ag-tl">${its}</ul><p class="ag-tqv" hidden>Nenhum item com essa busca.</p>
         <div class="ag-tf"><span>Total do dia</span><b>${esc(r.pal>0?fP(r.pal)+' paletes':foraTxt(r))}</b>${r.pal>0&&fora(r).length?`<em>+ ${esc(foraTxt(r))}</em>`:''}${r.pal>0?`<small>${esc(unTxt(r))}</small>`:''}${(()=>{ const es=[...new Set(xs.map(x=>empTxt(x)||'Sem empresa'))]; if(es.length<2) return ''; return `<div class="ag-tfe">${es.map(e=>{ const re=soma(xs.filter(x=>(empTxt(x)||'Sem empresa')===e)); return `<div><span>${esc(e)}</span><b>${esc(totDia(re))}</b></div>`; }).join('')}</div>`; })()}<div class="ag-tfv"><span>Valor</span><b>${esc(fR(r.vp))}</b></div></div>
-        ${A.aba==='agendado'&&A.dia===d?'':`<button type="button" class="lnk ag-vd" data-act="ag-dia" data-v="${d}">Ver os pedidos deste dia</button>`}`:''}</div></aside>`; }
+        <div class="ag-tb">${A.aba==='agendado'&&A.dia===d?'<span></span>':`<button type="button" class="lnk ag-vd" data-act="ag-dia" data-v="${d}">Ver os pedidos deste dia</button>`}<button type="button" class="ag-bt" data-act="ag-pdfdia" data-v="${d}">Baixar PDF do dia</button></div>`:''}</div></aside>`; }
+
+  /* ---------- PDF do dia (24/11: "precisamos da quantidade de cada empresa para poder transferir e um PDF") ---------- */
+  async function pdfDia(d){ const PP=window.Painel&&window.Painel.pdf; if(!PP||!PP.novo){ P.toast('O gerador de PDF ainda não carregou. Tente de novo.'); return; }
+    try{ if(!(window.jspdf&&window.jspdf.jsPDF)&&PP.carregar) await PP.carregar(); }catch(e){}
+    if(!(window.jspdf&&window.jspdf.jsPDF)){ P.toast('O gerador de PDF não carregou. Confira a internet e tente de novo.'); return; }
+    const xs=A.abertos.filter(x=>x.status==='agendado'&&x.data===d); if(!xs.length){ P.toast('Nada agendado neste dia.'); return; }
+    const r=soma(xs), es=[...new Set(xs.map(x=>empTxt(x)||'Sem empresa'))].sort(), h=hoje();
+    const nome=d===h?'Hoje':d===addD(h,1)?'Amanhã':semana(d)[0].toUpperCase()+semana(d).slice(1);
+    try{ const img=await PP.imgs(), Q=PP.novo('Carregamentos · '+br(d),nome+' · '+xs.length+' pedido'+(xs.length>1?'s':''),img); Q.capa();
+      Q.secao('Total do dia');
+      Q.kpis([{t:'Paletes',v:r.pal>0?fP(r.pal):'—',s:r.semPal.length?'+ '+foraTxt(r):unTxt(r),c:'pet'},{t:'Quantidade',v:unTxt(r)},{t:'Valor',v:fR(r.vp)},{t:'Pedidos',v:String(xs.length),s:es.join(' · ')}],4);
+      const cols=[{t:'Item',w:16},{t:'Descrição',w:44},{t:'Quantidade',w:20,al:'r'},{t:'Paletes',w:13,al:'r'}].concat(es.length>1?es.map(e=>({t:e,w:22,al:'r'})):[]);
+      const rows=r.it.map(i=>[i.cod,i.desc||'',qtdUn(i.q,i.un),i.pal!=null?fP(i.pal):'—'].concat(es.length>1?es.map(e=>{ const t=i.trf.find(z=>z.emp===e); return t?fN(t.q)+' '+i.un:''; }):[]));
+      const tr=['Total','',unTxt(r),r.pal>0?fP(r.pal):'—'].concat(es.length>1?es.map(e=>totDia(soma(xs.filter(x=>(empTxt(x)||'Sem empresa')===e)))):[]); tr._tot=1; rows.push(tr);
+      Q.secao('Itens do dia','soma de todos os pedidos'); Q.tabela(cols,rows);
+      if(es.length>1){ Q.secao('Por empresa'); const re=es.map(e=>{ const ys=xs.filter(x=>(empTxt(x)||'Sem empresa')===e), z=soma(ys); return [e,String(ys.length),unTxt(z),totDia(z),fR(z.vp)]; });
+        Q.tabela([{t:'Empresa',w:30},{t:'Pedidos',w:10,al:'r'},{t:'Quantidade',w:30,al:'r'},{t:'Paletes / unidades',w:30,al:'r'},{t:'Valor',w:20,al:'r'}],re); }
+      const trf=[]; r.it.forEach(i=>i.trf.filter(t=>t.falta>0).forEach(t=>trf.push([i.cod,i.desc||'',t.emp,qtdUn(t.q,i.un),t.saldo!=null?fN(t.saldo):'—',fN(t.falta)+' '+i.un])));
+      Q.secao('Transferir entre empresas','pedido da empresa maior que o saldo dela no PDF do Focco');
+      if(trf.length){ const c=[{t:'Item',w:14},{t:'Descrição',w:40},{t:'Empresa',w:24},{t:'Pedido',w:18,al:'r'},{t:'Saldo',w:12,al:'r'},{t:'Transferir',w:18,al:'r'}]; trf.forEach(t=>{ t._cor=[null,null,null,null,null,'crit']; }); Q.tabela(c,trf); }
+      else Q.vazio('Nenhuma transferência: cada empresa tem saldo para os próprios pedidos.');
+      Q.secao('Pedidos e cargas');
+      const ord=xs.slice().sort((a,b)=>String(a.carga||'~').localeCompare(String(b.carga||'~'),'pt-BR',{numeric:true}));
+      Q.tabela([{t:'Carga',w:16},{t:'Diário',w:9},{t:'Pedido(s)',w:26},{t:'Empresa',w:20},{t:'Cliente',w:30},{t:'Transportadora',w:24},{t:'Quantidade',w:22,al:'r'}],
+        ord.map(x=>[x.carga||(ehCarga(x)?'(sem número)':'—'),x.diario||'',pedTodos(x),empTxt(x),x.cliente||'',x.transp||'',unTxt(soma([x]))]));
+      Q.fim('carregamentos-'+d+'.pdf'); P.toast('PDF do dia '+br(d)+' baixado.'); }
+    catch(e){ console.warn('[agend] pdf',e); P.toast('Não foi possível gerar o PDF ('+((e&&e.message)||'erro')+').'); } }
   const ic=(n,t)=>{ try{ return U().ic(n,t); }catch(e){ return ''; } };
   function vTela(){ const u=U(); if(!u) return '<section class="card"><div class="empty">Carregando…</div></section>';
     const h=hoje(), ag=A.abertos.filter(x=>x.status!=='agendado'), agd=A.abertos.filter(x=>x.status==='agendado');
@@ -333,6 +369,7 @@
     const marc=ms.length&&(A.aba==='aguardando'||A.aba==='agendado')?`<div class="ag-mk" role="region" aria-label="Pedidos marcados"><span><b>${ms.length} pedido${ms.length>1?'s':''} marcado${ms.length>1?'s':''}</b> · ${esc(ms.map(pedCurto).join(', '))}</span><span class="ag-mkt">${esc(unTxt(rm))} · <b>${esc(totDia(rm))}</b></span>
       <span class="ag-mkb"><button type="button" class="lnk" data-act="ag-selnada">Desmarcar</button><button type="button" class="btn" data-act="ag-montar">Montar carga</button></span></div>`:'';
     const dicaM=pode()&&(A.aba==='aguardando'||A.aba==='agendado')&&!ms.length&&A.abertos.length>1?`<p class="ag-dm">Marque os pedidos do mesmo caminhão para montar a carga.</p>`:'';
+    if(A.tq) setTimeout(tqFiltra,0);
     return head+`<div class="ag-lay"><div class="ag-main">${u.cartao({cls:'ag-lista',corpo:barra+dicaM+`<div id="ag-corpo">${corpo}</div>`+marc})}</div>${ladoHtml(agd)}</div>`; }
 
   /* ---------- montar carga: vários pedidos no mesmo caminhão (carga do sistema + ordem no diário de bordo) ---------- */
@@ -382,7 +419,8 @@
     if(act==='ag-montar'){ janCarga([...A.sel]); return; }
     if(act==='ag-cgedit'){ janCarga(v.split(',').filter(Boolean)); return; }
     if(act==='ag-cgsalvar'){ salvarCarga(); return; }
-    if(act==='ag-cal'){ A.cal=v; P.rerender(); return; }
+    if(act==='ag-pdfdia'){ pdfDia(v); return; }
+    if(act==='ag-cal'){ A.cal=v; A.tq=''; P.rerender(); return; }
     if(act==='ag-mes'){ const [y,m]=(A.mes||hoje().slice(0,7)).split('-').map(Number), x=new Date(y,m-1+(+v),1,12); A.mes=x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0'); P.rerender(); return; }
     if(act==='ag-dia'){ A.dia=v&&A.dia!==v?v:''; if(v){ A.cal=v; A.mes=v.slice(0,7); } A.aba='agendado'; P.rerender(); return; }
     if(act==='ag-abrir'){ editar(v); return; } /* closest() pega o botão antes da linha: Carregou/Reabrir não abrem a janela */
@@ -402,6 +440,9 @@
   /* busca filtra sem redesenhar (o campo não perde o foco) e guarda o texto para o próximo desenho */
   document.addEventListener('input',e=>{ if(e.target&&(e.target.classList.contains('ag-pp')||e.target.id==='ag-data')&&e.target.closest('dialog.ag-jan')) janAtualiza(); });
   document.addEventListener('change',e=>{ if(e.target&&e.target.id==='ag-data'&&e.target.closest('dialog.ag-jan')) janAtualiza(); });
+  /* busca dos itens do dia: filtra na tela, sem redesenhar */
+  const tqFiltra=()=>{ const ps=norm(A.tq).split(/\s+/).filter(Boolean); let n=0; document.querySelectorAll('.ag-tl>li').forEach(l=>{ const ok=ps.every(p=>(l.dataset.b||'').includes(p)); l.style.display=ok?'':'none'; if(ok) n++; }); const v=document.querySelector('.ag-tqv'); if(v) v.hidden=!!n; };
+  document.addEventListener('input',e=>{ if(e.target&&e.target.id==='ag-tq'){ A.tq=e.target.value; tqFiltra(); } });
   document.addEventListener('input',e=>{ if(!e.target||e.target.id!=='ag-q') return; A.q=e.target.value;
     const ps=norm(A.q).split(/\s+/).filter(Boolean); document.querySelectorAll('#ag-corpo .ag-ln').forEach(l=>{ const t=l.dataset.b||''; l.style.display=ps.every(p=>t.includes(p))?'':'none'; });
     document.querySelectorAll('#ag-corpo .ag-dia').forEach(d=>{ d.style.display=[...d.querySelectorAll('.ag-ln')].some(l=>l.style.display!=='none')?'':'none'; }); });
@@ -457,14 +498,19 @@
   .ag-cd.on,.ag-cd.on:hover{background:var(--teal-strong)}.ag-cd.on b,.ag-cd.on small{color:#fff}
   .ag-th h3{margin:0;font-size:16px;font-weight:600}.ag-th h3 span{font-weight:400;font-size:13px;color:var(--muted);margin-left:4px}.ag-th p{margin:2px 0 0;font-size:13px;color:var(--muted)}
   .ag-tl{list-style:none;margin:12px 0 0;padding:0}
-  .ag-tl li{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
+  .ag-tl li{display:flex;padding:9px 0;border-top:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
   .ag-ti{min-width:0;display:flex;flex-direction:column}.ag-ti b{font-size:13px;font-weight:600}.ag-ti span{font-size:12px;color:var(--muted);line-height:1.3}
   .ag-tv{text-align:right;white-space:nowrap;display:flex;flex-direction:column}.ag-tv b{font-size:16px;font-weight:600;color:var(--teal-strong);font-variant-numeric:tabular-nums}.ag-tv b small{font-size:11px;font-weight:500;color:var(--muted)}
   .ag-tv span{font-size:12px;color:var(--muted)}
   .ag-tf{display:flex;flex-direction:column;gap:1px;margin-top:6px;padding:12px 14px;border-radius:12px;background:color-mix(in srgb,var(--teal) 9%,transparent)}
   .ag-tf span{font-size:12.5px;color:var(--muted)}.ag-tf b{font-size:24px;font-weight:600;color:var(--teal-strong);font-variant-numeric:tabular-nums;line-height:1.2}
   .ag-tf em{font-style:normal;font-size:15px;font-weight:600;color:var(--teal-strong)}.ag-tf small{font-size:12px;color:var(--muted);margin-top:2px}
-  .ag-vd{margin-top:10px;font-size:13px}.ag-emp{color:var(--text,inherit);font-weight:600}
+  .ag-vd{font-size:13px}.ag-tb{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px}
+  .ag-tq{width:100%;height:36px;margin-top:12px}.ag-tqv{font-size:13px;color:var(--muted);margin:10px 0 0}
+  .ag-tl li{flex-direction:column;gap:4px}.ag-li{display:flex;justify-content:space-between;gap:12px}
+  .ag-te{display:flex;flex-direction:column;gap:2px;padding:6px 8px;border-radius:8px;background:color-mix(in srgb,var(--muted) 7%,transparent)}
+  .ag-te div{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:8px;font-size:12px;align-items:baseline;padding:2px 0}.ag-te span:first-child{grid-column:1/-1;color:var(--muted)}
+  .ag-te span{font-variant-numeric:tabular-nums}.ag-te b{color:var(--crit);font-weight:600;white-space:nowrap}.ag-te i{color:var(--ok);font-style:normal}.ag-emp{color:var(--text,inherit);font-weight:600}
   .ag-tfe{margin-top:8px;display:flex;flex-direction:column;gap:3px}.ag-tfe div{display:flex;justify-content:space-between;gap:10px;font-size:13px}.ag-tfe span{color:var(--muted)}.ag-tfe b{font-size:13.5px;font-weight:600;color:var(--teal-strong);line-height:1.4}.ag-tvl{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
   .ag-tfv{display:flex;justify-content:space-between;align-items:baseline;margin-top:8px;padding-top:8px;border-top:1px solid color-mix(in srgb,var(--teal) 25%,transparent)}.ag-tfv span{font-size:12.5px;color:var(--muted)}.ag-tfv b{font-size:17px;font-weight:600;color:inherit;font-variant-numeric:tabular-nums}
   @media (max-width:1180px){.ag-lay{grid-template-columns:minmax(0,1fr) 300px}}

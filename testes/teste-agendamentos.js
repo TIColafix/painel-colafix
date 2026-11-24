@@ -1,6 +1,7 @@
 /* Teste do módulo Agendamentos (modulos/agendamentos.js). Precisa do leitor de PDF de verdade: npm i --no-save pdfjs-dist@3.11.174
    O PDF é gerado aqui no formato do "Mapa de Itens" do Focco, com dados inventados (o repositório é público).
    AGEND_PDF=<arquivo> testa também a leitura de um PDF de verdade, só localmente (não suba o arquivo). */
+if(require('fs').existsSync(__dirname+'/node_modules/jspdf/dist/jspdf.umd.min.js')) process.env.JSPDF_REAL='1'; /* PDF do dia de verdade (npm i --no-save jspdf@2.5.1) */
 const H=require('./harness'); const {seedManut}=require('./manut-seed'); const fs=require('fs'); const res=[];
 const ok=(n,c,d)=>{ res.push({n,ok:!!c}); console.log((c?'PASSOU ':'FALHOU ')+n+(d?' — '+String(d).slice(0,220):'')); };
 const PDFJS=__dirname+'/node_modules/pdfjs-dist/build/';
@@ -28,7 +29,7 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   d.docs['itens/ZZ0001']={codigo:'ZZ0001',palete:96,desc:'Argamassa teste'}; /* Ajustes › Itens: 96 sacos por palete */
   fs.mkdirSync('/tmp/agend',{recursive:true});
   fs.writeFileSync('/tmp/agend/p500a.pdf',mapa('900010',[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','500,000','2.000,000','6.250,000']]));
-  fs.writeFileSync('/tmp/agend/p500b.pdf',mapa('900011',[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','500,000','2.000,000','6.250,000']],'9 - OUTRA FILIAL LTDA'));
+  fs.writeFileSync('/tmp/agend/p500b.pdf',mapa('900011',[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','500,000','0,000','6.250,000']],'9 - OUTRA FILIAL LTDA')); /* empresa 9 sem saldo: precisa transferir */
   fs.writeFileSync('/tmp/agend/146001.pdf',mapa('900001',ITENS));
   fs.writeFileSync('/tmp/agend/146001b.pdf',mapa('900001',ITENS.map(i=>i[0]==='ZZ0001'?[...i.slice(0,4),'1.500,000',i[5]]:i)));
   fs.writeFileSync('/tmp/agend/varios.pdf',mapa('900030,900031,900032',ITENS.slice(0,2)));
@@ -148,6 +149,20 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   await p.click('.ag-ln[data-v="p900010"] .ag-mid'); await p.waitForSelector('dialog.ag-jan #ag-diario'); await p.fill('#ag-diario','4'); await p.click('dialog.ag-jan [data-act="ag-salvar"]'); await H.dorme(800);
   ok('Mudar o diário de bordo num pedido muda nos outros da mesma carga', (await banco(p,'p900011')).diario==='4');
   await p.evaluate(()=>__T.go('agendamentos')); await H.dorme(300);
+  ok('As linhas não mostram mais paletes por pedido', !(await p.$('.ag-ln .ag-pa')));
+  await p.click('.ag-cd[data-v="'+mais2+'"]'); await H.dorme(250);
+  const te=await p.evaluate(()=>{ const l=[...document.querySelectorAll('.ag-tl>li')].find(x=>x.innerText.includes('ZZ0001')); return l?l.innerText:''; });
+  ok('Por empresa no item: Empresa 1 tem saldo, Empresa 9 precisa transferir 500', /Empresa 1 \(Empresa\)[^]*500 sacos · saldo 2\.000[^]*tem/.test(te)&&/Empresa 9 \(Outra\)[^]*500 sacos · saldo 0[^]*transferir 500/.test(te), te.replace(/\n/g,' | '));
+  const [dl]=await Promise.all([p.waitForEvent('download',{timeout:20000}),p.click('[data-act="ag-pdfdia"]')]); const arq='/tmp/agend/dia.pdf'; await dl.saveAs(arq);
+  let txtPdf=''; if(process.env.JSPDF_REAL){ const pj=require('./node_modules/pdfjs-dist/legacy/build/pdf.js'); const dpdf=await pj.getDocument({data:new Uint8Array(fs.readFileSync(arq))}).promise; for(let k=1;k<=dpdf.numPages;k++){ const tc=await (await dpdf.getPage(k)).getTextContent(); txtPdf+=tc.items.map(i=>i.str).join(' ')+'\n'; } }
+  ok('PDF do dia: baixa o arquivo com o total, por empresa, a transferência e os pedidos', dl.suggestedFilename()==='carregamentos-'+mais2+'.pdf'&&(!process.env.JSPDF_REAL||(/Carregamentos/.test(txtPdf)&&/10,41/.test(txtPdf)&&/Transferir entre empresas/.test(txtPdf)&&/Empresa 9 \(Outra\)/.test(txtPdf)&&/500 SC/.test(txtPdf)&&/900010/.test(txtPdf)&&/Por empresa/.test(txtPdf))), dl.suggestedFilename()+' '+txtPdf.replace(/\s+/g,' ').slice(0,300));
+  await p.click('.ag-cd[data-v="'+ymd(new Date(h.getTime()+864e5))+'"]'); await H.dorme(250);
+  const tam=await p.evaluate(()=>document.querySelector('.ag-tot2').innerText);
+  ok('Amanhã: paletes dos itens com palete e balde na unidade; total do dia "13,00 paletes + 10 baldes" e o valor', /12,50/.test(tam)&&/10 baldes/.test(tam)&&/Total do dia\s*13,00 paletes/.test(tam)&&/\+ 10 baldes/.test(tam)&&/Valor/.test(tam), tam.replace(/\n/g,' | '));
+  await p.fill('#ag-tq','primer'); await H.dorme(150);
+  const vis2=await p.evaluate(()=>[...document.querySelectorAll('.ag-tl>li')].filter(l=>l.style.display!=='none').map(l=>l.innerText.split('\n')[0]));
+  ok('Busca nos itens do dia (primer → só o ZZ0003), sem redesenhar', vis2.length===1&&vis2[0]==='ZZ0003', JSON.stringify(vis2));
+  await p.fill('#ag-tq',''); await p.dispatchEvent('#ag-tq','input');
 
   /* carregou, cancelar e reabrir */
   await p.evaluate(()=>{ window.__agend.aba='agendado'; __T.go('agendamentos'); }); await H.dorme(400);

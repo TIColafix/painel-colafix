@@ -15,12 +15,15 @@
    (soma(): quantidade de cada código no grupo ÷ palete do item); "Montar carga": marcar pedidos (A.sel) e dar carga, ORDEM NO
    DIÁRIO DE BORDO (campo `diario`, o nº do caminhão no diário da portaria), transportadora e data de uma vez (janCarga/salvarCarga).
    24/11 (4ª): visual leve (sem caixas, botões discretos, aviso só quando falta estoque, por item recolhido); PDF com vários pedidos
-   no filtro do Focco ("146474,146475,…") = um agendamento com `pedidos[]` (id p<n1>_<n2>…), mostrado como "146474 +6". */
+   no filtro do Focco ("146474,146475,…") = um agendamento com `pedidos[]` (id p<n1>_<n2>…), mostrado como "146474 +6".
+   24/11 (7ª): bloco do lado com CALENDÁRIO do mês (A.cal/A.mes) e, embaixo, os itens do dia escolhido: em paletes os que têm
+   palete, na unidade (fardos, caixas, baldes) os que não têm; TOTAL DO DIA (paletes + unidades), VALOR (do pendente) e, com mais
+   de uma, por EMPRESA (empresa do cabeçalho do PDF, `empresa:{cod,nome}`, mostrada em cada pedido). */
 (function(){ const P=window.Painel; if(!P) return;
   if(P.icone) P.icone('agendar','<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="m9 15 2 2 4-4"/>');
   if(P.icone) P.icone('caminhao2','<path d="M2.5 6.5h11v9h-11z"/><path d="M13.5 9.5h4l3 3v3h-7z"/><circle cx="6.5" cy="17" r="1.8"/><circle cx="16.5" cy="17" r="1.8"/>');
   const COL='agendamentos', PDFJS='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
-  const A={abertos:[],fechados:[],cfg:{transps:[],pp:{}},lido:{a:false,f:false},aba:'aguardando',dia:'',sel:new Set(),pi:{},q:'',lendo:'',jan:null,ed:null};
+  const A={abertos:[],fechados:[],cfg:{transps:[],pp:{}},lido:{a:false,f:false},aba:'aguardando',dia:'',cal:'',mes:'',sel:new Set(),pi:{},q:'',lendo:'',jan:null,ed:null};
   window.__agend=A;
   const esc=P.esc, U=()=>P.ui, hoje=()=>P.hojeStr();
   const eu=()=>(P.S.nomes||{})[P.S.uid]||P.nomeDe(P.S.uid)||'';
@@ -71,6 +74,7 @@
       if(/Mapa de Itens/i.test(txt)) R.mapa=true;
       if(m0){ const k=norm(m0[1]).trim(), v=m0[2].trim();
         if(k==='pedido'&&!/^tod/i.test(v)){ const ps=v.split(/[\s,;|]+/).filter(x=>/^[0-9A-Za-z-]+$/.test(x)); R.pedidos=[...new Set(ps)]; R.pedido=R.pedidos.join(', '); }
+        if(k==='empresa'){ const me=v.match(/^(\d+)\s*-\s*(.+)$/); if(me) R.empresa={cod:me[1],nome:me[2].trim()}; }
         if(k==='cliente'&&!/^tod/i.test(v)) R.cliente=v.replace(/^\d+\s*-\s*/,'').trim();
         continue; }
       const md=txt.match(/Data:\s*(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}:\d{2}))?/); if(md&&!R.relData){ R.relData=md[3]+'-'+md[2]+'-'+md[1]+(md[4]?' '+md[4]:''); continue; }
@@ -121,7 +125,7 @@
     if(ok.length===1&&ult&&!ruins.length) editar(ult._id);
     else if(ok.length) P.toast(ok.length+' pedido'+(ok.length>1?'s':'')+' importado'+(ok.length>1?'s':'')+': '+ok.join(', ')+(ruins.length?' · '+ruins.length+' com problema':'')); }
   async function salvarLido(R,arquivo){ const ps=R.pedidos&&R.pedidos.length?R.pedidos:[R.pedido], id=docId(ps.join('_')), x=deId(id);
-    const o={pedido:R.pedido,pedidos:ps,...(ps.length>1&&!x?{ehCarga:true}:{}),itens:R.itens,total:R.total,relData:R.relData,arquivo};
+    const o={...(R.empresa?{empresa:R.empresa}:{}),pedido:R.pedido,pedidos:ps,...(ps.length>1&&!x?{ehCarga:true}:{}),itens:R.itens,total:R.total,relData:R.relData,arquivo};
     if(!x){ Object.assign(o,{cliente:R.cliente||'',carga:'',transp:'',obs:'',data:'',status:'aguardando',aberto:true}); return grava(id,o,'Importado do PDF do Focco'); }
     if(R.cliente&&!x.cliente) o.cliente=R.cliente;
     return grava(id,o,'Itens atualizados pelo PDF do Focco'+(R.relData?' ('+br(R.relData.slice(0,10))+')':'')); }
@@ -145,13 +149,16 @@
      {un:{SC:1000}, it:[{cod,desc,un,q,pp,pal}], pal, semPal:[códigos], n, val} */
   function soma(xs){ const r={un:{},it:[],pal:0,semPal:[],n:xs.length,val:0}, m=new Map();
     xs.forEach(x=>{ r.val+=+x.total||0; (x.itens||[]).forEach(i=>{ const q=qtdDe(i); if(!(q>0)) return; const c=String(i.cod).toUpperCase();
-      const u=i.un||'un'; r.un[u]=(r.un[u]||0)+q; const o=m.get(c)||{cod:i.cod,desc:i.desc,un:u,q:0,pp:0}; o.q+=q; if(!o.pp) o.pp=ppDe(i); m.set(c,o); }); });
+      const u=i.un||'un'; r.un[u]=(r.un[u]||0)+q; const o=m.get(c)||{cod:i.cod,desc:i.desc,un:u,q:0,pp:0}; o.q+=q; o.v=(o.v||0)+(+i.qtd>0?(+i.valor||0)*q/(+i.qtd):(+i.valor||0)); if(!o.pp) o.pp=ppDe(i); m.set(c,o); }); });
     r.it=[...m.values()].map(o=>Object.assign(o,{pal:o.pp>0?o.q/o.pp:null})).sort((a,b)=>(b.pal||0)-(a.pal||0)||b.q-a.q);
-    r.it.forEach(o=>{ if(o.pal!=null) r.pal+=o.pal; else r.semPal.push(o.cod); }); return r; }
+    r.vp=0; r.it.forEach(o=>{ r.vp+=o.v||0; if(o.pal!=null) r.pal+=o.pal; else r.semPal.push(o.cod); }); return r; }
   const unTxt=r=>Object.keys(r.un).sort((a,b)=>r.un[b]-r.un[a]).map(u=>fN(r.un[u])+' '+u).join(' · ')||'0';
   const palTxt=r=>!(r.pal>0)&&r.semPal.length?'palete ?':fP(r.pal)+' palete'+(Math.floor(r.pal*100+1e-6)===100?'':'s');
   const semPalTxt=r=>r.semPal.length?r.semPal.length+' ite'+(r.semPal.length>1?'ns':'m')+' sem palete cadastrado':'';
   const cargaTxt=x=>x.carga?'Carga '+x.carga:x.semCarga?'Sem carga':'';
+  /* empresa do pedido (cabeçalho do PDF do Focco: "Empresa: 1 - COLFIX INDUSTRIA E COMERCIO LTDA") */
+  const empCurto=e=>{ const w=String(e&&e.nome||'').trim().split(/\s+/)[0]||''; return w?w[0].toUpperCase()+w.slice(1).toLowerCase():''; };
+  const empTxt=x=>x.empresa&&x.empresa.cod?'Empresa '+x.empresa.cod+(empCurto(x.empresa)?' ('+empCurto(x.empresa)+')':''):'';
   const diarioTxt=x=>x.diario?'Diário nº '+x.diario:'';
   /* tabela "paletes por item" de um grupo (dia, carga ou pedidos marcados) */
   function porItem(r,o){ o=o||{}; if(!r.it.length) return '';
@@ -170,7 +177,7 @@
   /* resumo à direita: paletes, quantidade, estoque */
   function totpHtml(x){ const r=soma([x]), ss=semSaldo(x), n=(x.itens||[]).length;
     return `<div class="ag-rl">Total a carregar</div><div class="ag-pbig">${esc(palTxt(r))}</div><div class="ag-run">${esc(unTxt(r))}</div>
-      ${r.semPal.length?`<div class="ag-rw">${esc(semPalTxt(r))} — fora da conta. Digite o "por palete" na tabela.</div>`:''}
+      ${fora(r).length?`<div class="ag-rw">Sem palete (ficam na unidade): ${esc(foraTxt(r))}</div>`:''}
       <div class="ag-rs"><span>${n} ite${n>1?'ns':'m'} · ${esc(fR(x.total))}</span>${ss.length?`<b class="ag-f">${ss.length} sem estoque suficiente</b>`:'<b class="ag-okt">todos com estoque</b>'}</div>`; }
   function itensJan(x){ const its=(x.itens||[]).map(i=>Object.assign({},i)); if(!A.jan) return its;
     A.jan.el.querySelectorAll('.ag-pp').forEach(inp=>{ const i=its[+inp.dataset.k]; if(!i) return; const v=Math.round(+String(inp.value).replace(',','.')||0);
@@ -198,7 +205,7 @@
     const fechado=x.status==='carregado'||x.status==='cancelado';
     const rod=`${!novo?(fechado?u.bt('Reabrir','ag-reabrir',{sec:1,dv:x._id}):u.bt('Cancelar pedido','ag-cancelar',{sec:1,dv:x._id}))+u.bt('Apagar','ag-apagar',{sec:1,dv:x._id,cls:'ag-apg'}):''}<span style="flex:1"></span>
       ${!novo&&x.status==='agendado'?u.bt('Carregou','ag-carregou',{sec:1,dv:x._id}):''}${u.bt('Salvar','ag-salvar',{dv:x._id||''})}`;
-    const sub=novo?(A.ed.arquivo||''):[STN[x.status]||'',x.data?'para '+br(x.data)+' ('+semana(x.data)+')':'',cargaTxt(x),x.transp||''].filter(Boolean).join(' · ');
+    const sub=novo?[empTxt(x),A.ed.arquivo||''].filter(Boolean).join(' · '):[empTxt(x),STN[x.status]||'',x.data?'para '+br(x.data)+' ('+semana(x.data)+')':'',cargaTxt(x),x.transp||''].filter(Boolean).join(' · ');
     A.jan=u.janela({tit:novo?'Pedido novo':(pedList(x).length>1?pedList(x).length+' pedidos: '+pedTodos(x):'Pedido '+x.pedido)+(x.cliente?' · '+x.cliente:''),sub,corpo,rodape:rod,larga:true,foco:novo,aoFechar:()=>{ A.jan=null; A.ed=null; }});
     A.jan.el.classList.add('ag-jan'); }
   /* o dia escolhido: o que já está nele + este pedido */
@@ -223,7 +230,7 @@
     const o={...(ecBt?{ehCarga:ecBt.classList.contains('on')}:{}),cliente:val('#ag-cli'),carga:sc?'':val('#ag-carga'),semCarga:sc,diario:val('#ag-diario'),transp:val('#ag-transp'),obs:val('#ag-obs'),data:val('#ag-data')};
     const its=base?itensJan(base):null;
     let x; if(novo){ const ped=val('#ag-ped').replace(/\s+/g,''); if(!ped){ P.toast('Digite o número do pedido.'); return; } id=docId(ped); x=deId(id);
-      Object.assign(o,{itens:its||A.ed.R.itens,total:A.ed.R.total,relData:A.ed.R.relData,arquivo:A.ed.arquivo}); if(!x) o.pedido=ped; }
+      Object.assign(o,{...(A.ed.R.empresa?{empresa:A.ed.R.empresa}:{}),itens:its||A.ed.R.itens,total:A.ed.R.total,relData:A.ed.R.relData,arquivo:A.ed.arquivo}); if(!x) o.pedido=ped; }
     else { x=deId(id); if(its) o.itens=its; }
     if(o.carga) o.semCarga=false;
     const st=x&&(x.status==='carregado'||x.status==='cancelado')?x.status:(o.data?'agendado':'aguardando');
@@ -248,16 +255,23 @@
 
   /* ---------- tela (layout 24/11, 3ª: semana em paletes no topo, alertas ao lado, lista em colunas, cargas dentro do dia) ---------- */
   function filtra(xs){ const ps=norm(A.q).split(/\s+/).filter(Boolean); if(!ps.length) return xs;
-    return xs.filter(x=>{ const t=norm([x.pedido,x.cliente,x.carga,x.diario,x.transp,x.obs,(x.itens||[]).map(i=>i.cod+' '+i.desc).join(' ')].join(' ')); return ps.every(p=>t.includes(p)); }); }
+    return xs.filter(x=>{ const t=norm([x.pedido,x.cliente,x.carga,x.diario,x.transp,x.obs,empTxt(x),x.empresa&&x.empresa.nome,(x.itens||[]).map(i=>i.cod+' '+i.desc).join(' ')].join(' ')); return ps.every(p=>t.includes(p)); }); }
   function linha(x,o){ o=o||{}; const ss=semSaldo(x), h=hoje(), atras=x.status==='agendado'&&x.data&&x.data<h, r=soma([x]), n=(x.itens||[]).length;
-    const sub=[pedList(x).length>1?`<span class="ag-pls">${ehCarga(x)?'carga com '+pedList(x).length+' pedidos: ':'pedidos '}${esc(pedTodos(x))}</span>`:'',o.st?`<span class="ag-stx ${STT[x.status]}">${esc(STN[x.status])}${x.data?' '+esc(brC(x.data)):''}</span>`:'',!o.semCarga&&cargaTxt(x)?esc(cargaTxt(x)):'',!o.semCarga&&x.diario?esc(diarioTxt(x)):'',!o.semCarga&&x.transp?esc(x.transp):'',n+' ite'+(n>1?'ns':'m'),esc(fR(x.total)),ss.length?`<span class="ag-wn${ss.length===n?' c':''}">falta estoque em ${ss.length} ite${ss.length>1?'ns':'m'}</span>`:''].filter(Boolean).join(' · ');
-    return `<div class="ag-ln${atras?' atr':''}${A.sel.has(x._id)?' sel':''}" data-act="ag-abrir" data-v="${esc(x._id)}" data-b="${esc(norm([x.pedido,x.cliente,x.carga,x.transp,x.obs,cargaTxt(x),diarioTxt(x)].join(' ')))}">
+    const sub=[empTxt(x)?`<span class="ag-emp" title="${esc(x.empresa.nome||'')}">${esc(empTxt(x))}</span>`:'',pedList(x).length>1?`<span class="ag-pls">${ehCarga(x)?'carga com '+pedList(x).length+' pedidos: ':'pedidos '}${esc(pedTodos(x))}</span>`:'',o.st?`<span class="ag-stx ${STT[x.status]}">${esc(STN[x.status])}${x.data?' '+esc(brC(x.data)):''}</span>`:'',!o.semCarga&&cargaTxt(x)?esc(cargaTxt(x)):'',!o.semCarga&&x.diario?esc(diarioTxt(x)):'',!o.semCarga&&x.transp?esc(x.transp):'',n+' ite'+(n>1?'ns':'m'),esc(fR(x.total)),ss.length?`<span class="ag-wn${ss.length===n?' c':''}">falta estoque em ${ss.length} ite${ss.length>1?'ns':'m'}</span>`:''].filter(Boolean).join(' · ');
+    return `<div class="ag-ln${atras?' atr':''}${A.sel.has(x._id)?' sel':''}" data-act="ag-abrir" data-v="${esc(x._id)}" data-b="${esc(norm([x.pedido,x.cliente,x.carga,x.transp,x.obs,cargaTxt(x),diarioTxt(x),empTxt(x),x.empresa&&x.empresa.nome].join(' ')))}">
       <div class="ag-pd">${o.ck&&pode()?`<input type="checkbox" class="ag-ck" data-act="ag-sel" data-v="${esc(x._id)}" aria-label="Marcar o pedido ${esc(x.pedido)}"${A.sel.has(x._id)?' checked':''}>`:''}<b title="${esc(pedTodos(x))}">${esc(pedCurto(x))}</b></div>
       <div class="ag-mid"><div class="ag-cl">${x.cliente?esc(x.cliente):'<i>sem cliente</i>'}</div><div class="ag-sub">${sub}</div>${x.obs?`<div class="ag-obs">${esc(x.obs)}</div>`:''}</div>
       <div class="ag-qt">${esc(unTxt(r))}</div>
-      <div class="ag-pa"><b>${esc(!(r.pal>0)&&r.semPal.length?'?':fP(r.pal))}</b> <small>pal.${r.semPal.length&&r.pal>0?' +?':''}</small></div>
       <div class="ag-ac">${o.bt?`<button type="button" class="ag-bt${o.bt[2]?' sec':''}" data-act="${o.bt[1]}" data-v="${esc(x._id)}">${esc(o.bt[0])}</button>`:''}</div></div>`; }
-  const totLin=r=>`${esc(unTxt(r))} · <b class="ag-tp">${esc(palTxt(r))}</b>${r.semPal.length&&r.pal>0?` <span class="ag-sp" title="${esc(semPalTxt(r))}">+ ${esc(semPalTxt(r))}</span>`:''}`;
+  const UNN={SC:['saco','sacos'],FD:['fardo','fardos'],CX:['caixa','caixas'],BD:['balde','baldes'],UN:['unidade','unidades'],PC:['peça','peças'],GL:['galão','galões'],LT:['litro','litros'],KG:['kg','kg'],PT:['pote','potes'],RL:['rolo','rolos']};
+  const unN=(u,q)=>{ const n=UNN[String(u||'').toUpperCase()]; return n?(Math.abs(q-1)<1e-9?n[0]:n[1]):String(u||'').toLowerCase(); };
+  const qtdUn=(q,u)=>fN(q)+' '+unN(u,q);
+  /* o que não vai em palete (sem palete cadastrado), somado por unidade: "10 fardos · 40 caixas" */
+  function fora(r){ const m={}; r.it.filter(i=>i.pal==null).forEach(i=>{ m[i.un]=(m[i.un]||0)+i.q; }); return Object.keys(m).map(u=>[u,m[u]]); }
+  const foraTxt=r=>fora(r).map(([u,q])=>qtdUn(q,u)).join(' · ');
+  /* total do dia: "10,41 paletes · 10 fardos" */
+  const totDia=r=>[r.pal>0?fP(r.pal)+' palete'+(Math.floor(r.pal*100+1e-6)===100?'':'s'):'',foraTxt(r)].filter(Boolean).join(' · ')||'—';
+  const totLin=r=>`<b class="ag-tp">${esc(totDia(r))}</b>`;
   /* dia: título leve com o total; paletes por item recolhido; um grupo por carga */
   function grupoDia(d,xs){ const h=hoje(), r=soma(xs);
     const nome=d<h?'Já passou':d===h?'Hoje':d===addD(h,1)?'Amanhã':semana(d)[0].toUpperCase()+semana(d).slice(1);
@@ -267,19 +281,32 @@
       const dr=[...new Set(ys.map(y=>y.diario).filter(Boolean))].join(' / ');
       return `<div class="ag-cgb${k==='sem'?' sem':''}"><div class="ag-cgh"><span class="ag-cgt"><b>${k==='sem'?'Sem carga':k[0]==='r'?'Carga com '+pedList(ys[0]).length+' pedidos':'Carga '+esc(k.slice(2))}</b>${k[0]==='r'?' <span class="ag-sn">sem número ainda</span>':''}${dr?` <span class="ag-dnum">diário nº ${esc(dr)}</span>`:''}${tr?' · '+esc(tr):''}${ys.length>1?' · '+ys.length+' pedidos':''}</span><span class="ag-cgs">${ks.length>1?totLin(rc):''}${pode()?`<button type="button" class="lnk ag-cge" data-act="ag-cgedit" data-v="${esc(ys.map(y=>y._id).join(','))}">${k==='sem'?'Montar carga':k[0]==='r'?'Dar o número':'Editar'}</button>`:''}</span></div>
         ${ys.map(x=>linha(x,{bt:['Carregou','ag-carregou'],semCarga:true,ck:true})).join('')}</div>`; }).join('');
-    return `<section class="ag-dia${d<h?' atr':d===h?' hj':''}"><header class="ag-dh"><h3>${esc(nome)} <span>${esc(br(d))}</span></h3><div class="ag-dt2">${xs.length} pedido${xs.length>1?'s':''} · ${totLin(r)}</div></header>
+    return `<section class="ag-dia${d<h?' atr':d===h?' hj':''}"><header class="ag-dh"><h3>${esc(nome)} <span>${esc(br(d))}</span></h3><div class="ag-dt2">${xs.length} pedido${xs.length>1?'s':''} · ${r.pal>0?esc(unTxt(r))+' · ':''}${totLin(r)} · ${esc(fR(r.vp))}</div></header>
       ${d<h?'<p class="ag-atx">Marque "Carregou" ou mude a data.</p>':''}
-      <details class="ag-pid"${A.pi[d]?' open':''} data-d="${d}"><summary>Paletes por item (${r.it.length})</summary>${porItem(r)}</details>${blocos}</section>`; }
+      ${blocos}</section>`; }
+  /* quadro geral "Paletes por item": todos os agendados de hoje em diante (e os atrasados), item a item, por dia e no total */
+  /* ---------- bloco do lado (24/11, 7ª: "um calendário, com embaixo a quantidade de itens: em paletes os que são em paletes e em
+     fardos os que são em fardos; aperto no de amanhã e vejo 960 AC3 = 10 paletes" + "e quanto vai dar o dia") ---------- */
+  function diaPadrao(agd){ const h=hoje(), ds=[...new Set(agd.map(x=>x.data).filter(Boolean))].sort(); return ds.includes(h)?h:(ds.find(d=>d>h)||h); }
+  function ladoHtml(agd){ const h=hoje(); if(!A.cal) A.cal=diaPadrao(agd); if(!A.mes) A.mes=A.cal.slice(0,7);
+    const g={}; agd.forEach(x=>{ if(x.data) (g[x.data]=g[x.data]||[]).push(x); });
+    const [Y,M]=A.mes.split('-').map(Number), ini=new Date(Y,M-1,1,12), nd=new Date(Y,M,0).getDate(), pad=ini.getDay();
+    const nm0=ini.toLocaleDateString('pt-BR',{month:'long'}), nomeMes=nm0[0].toUpperCase()+nm0.slice(1)+' '+Y;
+    const cel=[]; for(let k=0;k<pad;k++) cel.push('<span class="ag-cd vz" aria-hidden="true"></span>');
+    for(let dd=1;dd<=nd;dd++){ const d=A.mes+'-'+String(dd).padStart(2,'0'), xs=g[d]||[], r=xs.length?soma(xs):null;
+      const v=r?(r.pal>0?fP(r.pal):fora(r).length?fN(fora(r)[0][1])+' '+String(fora(r)[0][0]).toLowerCase():'•'):'';
+      cel.push(`<button type="button" class="ag-cd${d===h?' hj':''}${d===A.cal?' on':''}${xs.length?' tem':''}${xs.length&&d<h?' atr':''}" data-act="ag-cal" data-v="${d}" aria-pressed="${d===A.cal}" aria-label="${esc(br(d))}${xs.length?': '+esc(totDia(r)):''}"><b>${dd}</b>${v?`<small>${esc(v)}</small>`:''}</button>`); }
+    const d=A.cal, xs=g[d]||[], r=soma(xs), nc=new Set(xs.map(x=>x.carga?'c'+x.carga:ehCarga(x)?'r'+x._id:'s'+x._id)).size;
+    const its=r.it.map(i=>`<li><div class="ag-ti"><b>${esc(i.cod)}</b><span>${esc(i.desc||'')}</span><span class="ag-tvl">${esc(fR(i.v))}</span></div><div class="ag-tv">${i.pal!=null?`<b>${fP(i.pal)} <small>pal.</small></b><span>${esc(qtdUn(i.q,i.un))}</span>`:`<b>${esc(qtdUn(i.q,i.un))}</b><span>${i.un==='SC'?'sem palete cadastrado':'&nbsp;'}</span>`}</div></li>`).join('');
+    const tit=d<h?'Já passou':d===h?'Hoje':d===addD(h,1)?'Amanhã':semana(d)[0].toUpperCase()+semana(d).slice(1);
+    return `<aside class="ag-side" aria-label="Calendário de carregamentos">
+      <div class="ag-cal"><div class="ag-ch"><button type="button" class="ag-mv" data-act="ag-mes" data-v="-1" aria-label="Mês anterior">‹</button><b>${esc(nomeMes)}</b><button type="button" class="ag-mv" data-act="ag-mes" data-v="1" aria-label="Próximo mês">›</button></div>
+        <div class="ag-cg7">${['D','S','T','Q','Q','S','S'].map(x=>`<span class="ag-cw">${x}</span>`).join('')}${cel.join('')}</div></div>
+      <div class="ag-tot2"><div class="ag-th"><h3>${esc(tit)} <span>${esc(br(d))}</span></h3><p>${xs.length?`${xs.length} pedido${xs.length>1?'s':''}${nc?' · '+nc+' carga'+(nc>1?'s':''):''}`:'Nada agendado neste dia.'}</p></div>
+        ${xs.length?`<ul class="ag-tl">${its}</ul>
+        <div class="ag-tf"><span>Total do dia</span><b>${esc(r.pal>0?fP(r.pal)+' paletes':foraTxt(r))}</b>${r.pal>0&&fora(r).length?`<em>+ ${esc(foraTxt(r))}</em>`:''}${r.pal>0?`<small>${esc(unTxt(r))}</small>`:''}${(()=>{ const es=[...new Set(xs.map(x=>empTxt(x)||'Sem empresa'))]; if(es.length<2) return ''; return `<div class="ag-tfe">${es.map(e=>{ const re=soma(xs.filter(x=>(empTxt(x)||'Sem empresa')===e)); return `<div><span>${esc(e)}</span><b>${esc(totDia(re))}</b></div>`; }).join('')}</div>`; })()}<div class="ag-tfv"><span>Valor</span><b>${esc(fR(r.vp))}</b></div></div>
+        ${A.aba==='agendado'&&A.dia===d?'':`<button type="button" class="lnk ag-vd" data-act="ag-dia" data-v="${d}">Ver os pedidos deste dia</button>`}`:''}</div></aside>`; }
   const ic=(n,t)=>{ try{ return U().ic(n,t); }catch(e){ return ''; } };
-  /* semana em paletes: hoje + 6 dias; tocar num dia mostra só ele (o único destaque da tela) */
-  function faixaDias(agd){ const h=hoje(), ds=[...Array(7)].map((_,k)=>addD(h,k)), g={}; agd.forEach(x=>(g[x.data]=g[x.data]||[]).push(x));
-    const rs=ds.map(d=>soma(g[d]||[])), mx=Math.max(1,...rs.map(r=>r.pal));
-    return `<div class="ag-fx" role="group" aria-label="Paletes agendados por dia">${ds.map((d,k)=>{ const r=rs[k], n=(g[d]||[]).length, on=A.dia===d;
-      return `<button type="button" class="ag-fxd${d===h?' hj':''}${n?'':' vz'}${on?' on':''}" data-act="ag-dia" data-v="${d}" aria-pressed="${on}">
-        <small>${esc(d===h?'Hoje':d===addD(h,1)?'Amanhã':semana(d))} ${esc(brC(d))}</small>
-        <b>${n?esc(!(r.pal>0)&&r.semPal.length?'?':fP(r.pal)):'–'}</b>
-        <i class="ag-bar1"><i style="width:${n?Math.max(4,Math.round(r.pal/mx*100)):0}%"></i></i>
-        <em>${n?esc(n+' pedido'+(n>1?'s':'')+' · '+unTxt(r)):'livre'}</em></button>`; }).join('')}</div>`; }
   function vTela(){ const u=U(); if(!u) return '<section class="card"><div class="empty">Carregando…</div></section>';
     const h=hoje(), ag=A.abertos.filter(x=>x.status!=='agendado'), agd=A.abertos.filter(x=>x.status==='agendado');
     const atr=agd.filter(x=>x.data<h);
@@ -288,7 +315,6 @@
         ${ag.length||atr.length?`<div class="ag-alt">${ag.length?`<button type="button" class="ag-al1 warn" data-act="ag-aba" data-v="aguardando">${ag.length} esperando data</button>`:''}${atr.length?`<button type="button" class="ag-al1 crit" data-act="ag-aba" data-v="agendado">${atr.length} com a data passada</button>`:''}</div>`:''}</div>
       <div class="ag-acts">${pode()?`<label class="btn ag-imp">${ic('agendar',16)}Importar PDF<input type="file" id="ag-file" accept=".pdf,application/pdf" multiple hidden></label>`:''}</div></div>
       ${A.lendo?`<div class="ag-lendo" id="ag-drop"><span class="ag-spin"></span>${esc(A.lendo)}</div>`:`<div class="ag-drop" id="ag-drop" aria-hidden="true"><div><b>Solte o PDF do Focco aqui</b><span>Pode ser mais de um</span></div></div>`}`;
-    const topo=`<section class="ag-sem" aria-label="Próximos 7 dias"><h2 class="ag-st">Próximos 7 dias <span>paletes agendados</span></h2>${faixaDias(agd)}</section>`;
     const barra=`<div class="ag-bar">${u.chips([['aguardando','Esperando data',ag.length,A.aba==='aguardando'],['agendado','Agendados',agd.length,A.aba==='agendado'],['carregado','Carregados',car.length,A.aba==='carregado'],['cancelado','Cancelados',can.length,A.aba==='cancelado']],'ag-aba')}
       <input type="search" id="ag-q" class="txt ag-q" aria-label="Buscar agendamento" autocomplete="off" placeholder="Buscar pedido, cliente, carga, item…" value="${esc(A.q)}"></div>`;
     let corpo='';
@@ -304,10 +330,10 @@
       if(xs.length) corpo+=`<p class="ag-dica">Mostrando os últimos ${A.fechados.length>=80?'80 ':''}pedidos fechados.</p>`; }
     [...A.sel].forEach(id=>{ const x=deId(id); if(!x||!x.aberto) A.sel.delete(id); });
     const ms=[...A.sel].map(deId).filter(Boolean), rm=soma(ms);
-    const marc=ms.length&&(A.aba==='aguardando'||A.aba==='agendado')?`<div class="ag-mk" role="region" aria-label="Pedidos marcados"><span><b>${ms.length} pedido${ms.length>1?'s':''} marcado${ms.length>1?'s':''}</b> · ${esc(ms.map(pedCurto).join(', '))}</span><span class="ag-mkt">${esc(unTxt(rm))} · <b>${esc(palTxt(rm))}</b></span>
+    const marc=ms.length&&(A.aba==='aguardando'||A.aba==='agendado')?`<div class="ag-mk" role="region" aria-label="Pedidos marcados"><span><b>${ms.length} pedido${ms.length>1?'s':''} marcado${ms.length>1?'s':''}</b> · ${esc(ms.map(pedCurto).join(', '))}</span><span class="ag-mkt">${esc(unTxt(rm))} · <b>${esc(totDia(rm))}</b></span>
       <span class="ag-mkb"><button type="button" class="lnk" data-act="ag-selnada">Desmarcar</button><button type="button" class="btn" data-act="ag-montar">Montar carga</button></span></div>`:'';
     const dicaM=pode()&&(A.aba==='aguardando'||A.aba==='agendado')&&!ms.length&&A.abertos.length>1?`<p class="ag-dm">Marque os pedidos do mesmo caminhão para montar a carga.</p>`:'';
-    return head+topo+u.cartao({cls:'ag-lista',corpo:barra+dicaM+`<div id="ag-corpo">${corpo}</div>`+marc}); }
+    return head+`<div class="ag-lay"><div class="ag-main">${u.cartao({cls:'ag-lista',corpo:barra+dicaM+`<div id="ag-corpo">${corpo}</div>`+marc})}</div>${ladoHtml(agd)}</div>`; }
 
   /* ---------- montar carga: vários pedidos no mesmo caminhão (carga do sistema + ordem no diário de bordo) ---------- */
   function janCarga(ids){ const u=U(); if(A.jan) A.jan.fechar(); const xs=ids.map(deId).filter(Boolean); if(!xs.length) return; const h=hoje();
@@ -356,7 +382,9 @@
     if(act==='ag-montar'){ janCarga([...A.sel]); return; }
     if(act==='ag-cgedit'){ janCarga(v.split(',').filter(Boolean)); return; }
     if(act==='ag-cgsalvar'){ salvarCarga(); return; }
-    if(act==='ag-dia'){ A.dia=v&&A.dia!==v?v:''; A.aba='agendado'; P.rerender(); return; }
+    if(act==='ag-cal'){ A.cal=v; P.rerender(); return; }
+    if(act==='ag-mes'){ const [y,m]=(A.mes||hoje().slice(0,7)).split('-').map(Number), x=new Date(y,m-1+(+v),1,12); A.mes=x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0'); P.rerender(); return; }
+    if(act==='ag-dia'){ A.dia=v&&A.dia!==v?v:''; if(v){ A.cal=v; A.mes=v.slice(0,7); } A.aba='agendado'; P.rerender(); return; }
     if(act==='ag-abrir'){ editar(v); return; } /* closest() pega o botão antes da linha: Carregou/Reabrir não abrem a janela */
     if(act==='ag-dt'){ const i=A.jan&&A.jan.el.querySelector('#ag-data'); if(i){ i.value=v; janAtualiza(); } return; }
     if(act==='ag-salvar'){ salvar(v); return; }
@@ -410,11 +438,42 @@
   .ag-fxd.hj small{color:var(--teal-strong);font-weight:600}
   .ag-fxd.on{background:color-mix(in srgb,var(--teal) 11%,transparent)}
   .ag-bar1{display:block;height:3px;border-radius:2px;background:color-mix(in srgb,var(--muted) 14%,transparent);overflow:hidden}.ag-bar1>i{display:block;height:100%;border-radius:2px;background:var(--teal)}
+  /* lista + bloco do lado */
+  .ag-lay{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start;margin-top:18px}
+  .ag-main{min-width:0}
+  .ag-side{position:sticky;top:76px;display:flex;flex-direction:column;gap:14px}
+  .ag-cal,.ag-tot2{background:var(--surface);border-radius:16px;padding:14px}
+  .ag-ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}.ag-ch b{font-size:14px;font-weight:600}
+  .ag-mv{all:unset;cursor:pointer;width:30px;height:30px;display:grid;place-items:center;border-radius:8px;font-size:18px;color:var(--muted)}.ag-mv:hover{background:color-mix(in srgb,var(--teal) 8%,transparent)}.ag-mv:focus-visible{outline:2px solid var(--teal)}
+  .ag-cg7{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+  .ag-cw{font-size:11px;color:var(--muted);text-align:center;padding:2px 0 4px}
+  .ag-cd{all:unset;box-sizing:border-box;cursor:pointer;min-height:44px;border-radius:9px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:5px 1px 3px;gap:1px}
+  .ag-cd.vz{cursor:default}.ag-cd b{font-size:13px;font-weight:500;color:var(--muted)}
+  .ag-cd small{font-size:10.5px;font-weight:600;color:var(--teal-strong);font-variant-numeric:tabular-nums;white-space:nowrap;letter-spacing:-.02em}
+  .ag-cd.tem b{color:inherit}.ag-cd.tem{background:color-mix(in srgb,var(--teal) 7%,transparent)}
+  .ag-cd.atr small,.ag-cd.atr b{color:var(--crit)}.ag-cd.atr{background:color-mix(in srgb,var(--crit) 8%,transparent)}
+  .ag-cd.hj b{color:var(--teal-strong);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+  .ag-cd:not(.vz):hover{background:color-mix(in srgb,var(--teal) 12%,transparent)}.ag-cd:focus-visible{outline:2px solid var(--teal);outline-offset:-1px}
+  .ag-cd.on,.ag-cd.on:hover{background:var(--teal-strong)}.ag-cd.on b,.ag-cd.on small{color:#fff}
+  .ag-th h3{margin:0;font-size:16px;font-weight:600}.ag-th h3 span{font-weight:400;font-size:13px;color:var(--muted);margin-left:4px}.ag-th p{margin:2px 0 0;font-size:13px;color:var(--muted)}
+  .ag-tl{list-style:none;margin:12px 0 0;padding:0}
+  .ag-tl li{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
+  .ag-ti{min-width:0;display:flex;flex-direction:column}.ag-ti b{font-size:13px;font-weight:600}.ag-ti span{font-size:12px;color:var(--muted);line-height:1.3}
+  .ag-tv{text-align:right;white-space:nowrap;display:flex;flex-direction:column}.ag-tv b{font-size:16px;font-weight:600;color:var(--teal-strong);font-variant-numeric:tabular-nums}.ag-tv b small{font-size:11px;font-weight:500;color:var(--muted)}
+  .ag-tv span{font-size:12px;color:var(--muted)}
+  .ag-tf{display:flex;flex-direction:column;gap:1px;margin-top:6px;padding:12px 14px;border-radius:12px;background:color-mix(in srgb,var(--teal) 9%,transparent)}
+  .ag-tf span{font-size:12.5px;color:var(--muted)}.ag-tf b{font-size:24px;font-weight:600;color:var(--teal-strong);font-variant-numeric:tabular-nums;line-height:1.2}
+  .ag-tf em{font-style:normal;font-size:15px;font-weight:600;color:var(--teal-strong)}.ag-tf small{font-size:12px;color:var(--muted);margin-top:2px}
+  .ag-vd{margin-top:10px;font-size:13px}.ag-emp{color:var(--text,inherit);font-weight:600}
+  .ag-tfe{margin-top:8px;display:flex;flex-direction:column;gap:3px}.ag-tfe div{display:flex;justify-content:space-between;gap:10px;font-size:13px}.ag-tfe span{color:var(--muted)}.ag-tfe b{font-size:13.5px;font-weight:600;color:var(--teal-strong);line-height:1.4}.ag-tvl{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .ag-tfv{display:flex;justify-content:space-between;align-items:baseline;margin-top:8px;padding-top:8px;border-top:1px solid color-mix(in srgb,var(--teal) 25%,transparent)}.ag-tfv span{font-size:12.5px;color:var(--muted)}.ag-tfv b{font-size:17px;font-weight:600;color:inherit;font-variant-numeric:tabular-nums}
+  @media (max-width:1180px){.ag-lay{grid-template-columns:minmax(0,1fr) 300px}}
+  @media (max-width:980px){.ag-lay{grid-template-columns:1fr}.ag-side{position:static;order:-1}}
   /* lista */
   .ag-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px}.ag-q{flex:1;min-width:200px;max-width:320px;margin-left:auto;height:38px}
   .ag-dm{margin:4px 2px 4px;font-size:12px;color:var(--muted)}
   .ag-fil{margin:8px 0;font-size:13px;color:var(--muted)}.ag-fil b{color:var(--teal-strong);font-weight:600}
-  .ag-ln{display:grid;grid-template-columns:118px minmax(0,1fr) 150px 92px 104px;gap:14px;align-items:center;padding:11px 10px;border-radius:10px;cursor:pointer}
+  .ag-ln{display:grid;grid-template-columns:118px minmax(0,1fr) 120px 104px;gap:14px;align-items:center;padding:11px 10px;border-radius:10px;cursor:pointer}
   .ag-ln+.ag-ln{box-shadow:0 -1px 0 color-mix(in srgb,var(--line) 70%,transparent)}
   .ag-ln:hover{background:color-mix(in srgb,var(--teal) 4%,transparent)}.ag-ln.sel{background:color-mix(in srgb,var(--teal) 8%,transparent)}
   .ag-ln.atr .ag-pd b{color:var(--crit)}
@@ -438,8 +497,17 @@
   .ag-dt2{font-size:13px;color:var(--muted)}.ag-tp{color:var(--teal-strong);font-weight:600}
   .ag-atx{margin:6px 10px 0;font-size:12px;color:var(--crit)}
   .ag-sp{font-size:12px;color:var(--warn)}
-  .ag-pid{margin:6px 10px 0}.ag-pid summary{cursor:pointer;font-size:12.5px;color:var(--teal-strong);font-weight:500;width:max-content}
-  .ag-pid[open]{padding-bottom:6px}
+  .ag-pid{margin:8px 10px 2px}.ag-pih{font-size:12.5px;color:var(--muted);font-weight:500}
+  .ag-qi{margin:0 0 20px}
+  .ag-qit{width:100%;border-collapse:collapse;font-size:13px;background:var(--surface);border-radius:14px;overflow:hidden}
+  .ag-qit th{font-size:12px;font-weight:500;color:var(--muted);text-align:left;padding:10px 12px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  .ag-qit th small{display:block;font-weight:400}.ag-qit th.atr{color:var(--crit)}
+  .ag-qit td{padding:8px 12px;border-bottom:1px solid color-mix(in srgb,var(--line) 55%,transparent);vertical-align:top}
+  .ag-qit td:first-child,.ag-qit th:first-child{min-width:200px;width:42%}.ag-qit th.dir,.ag-qit td.dir{min-width:84px}.ag-qit td:first-child b{font-weight:600;margin-right:6px}.ag-qit td:first-child span{color:var(--muted)}
+  .ag-qit .dir{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .ag-qit td.dir b{display:block;font-weight:600;color:var(--teal-strong)}.ag-qit td.dir small{display:block;font-size:11px;color:var(--muted)}
+  .ag-qtt{background:color-mix(in srgb,var(--teal) 6%,transparent)}.ag-qit td.ag-qtt b{font-size:15px}
+  .ag-qit tfoot td{border-bottom:0;font-weight:600}.ag-qit tfoot td.dir b{color:var(--teal-strong)}
   .ag-cgb{margin-top:10px}
   .ag-cgh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;padding:4px 10px;font-size:12.5px;color:var(--muted)}
   .ag-cgt b{color:var(--text,inherit);font-weight:600}.ag-cgb.sem .ag-cgt b{font-weight:500;color:var(--muted)}
@@ -484,10 +552,10 @@
   .ag-cpl{display:flex;flex-direction:column}.ag-cpl>div{display:grid;grid-template-columns:90px minmax(0,1fr) auto 100px;gap:12px;padding:8px 2px;border-top:1px solid color-mix(in srgb,var(--line) 60%,transparent);font-size:13px;align-items:center}
   .ag-cpl>div:first-child{border-top:0}.ag-cpl>div>b{font-weight:600}.ag-cpl>div>b:last-child{text-align:right}.ag-q1{color:var(--teal-strong)}
   .ag-hist summary{cursor:pointer;color:var(--muted);font-size:13px}.ag-apg{color:var(--crit)}
-  @media (max-width:1100px){.ag-ln{grid-template-columns:104px minmax(0,1fr) 120px 80px 96px;gap:10px}}
+  @media (max-width:1100px){.ag-ln{grid-template-columns:104px minmax(0,1fr) 110px 96px;gap:10px}}
   @media (max-width:900px){.ag-jg{grid-template-columns:1fr}.ag-res{position:static;padding-left:0;border-left:0;border-top:1px solid var(--line);padding-top:14px}}
-  @media (max-width:760px){.ag-ln{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"pd mid pa" ". mid ac";row-gap:6px}
-    .ag-pd{grid-area:pd}.ag-mid{grid-area:mid}.ag-qt{display:none}.ag-pa{grid-area:pa}.ag-ac{grid-area:ac}
+  @media (max-width:760px){.ag-ln{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"pd mid ac" ". qt qt";row-gap:4px}
+    .ag-pd{grid-area:pd}.ag-mid{grid-area:mid}.ag-qt{grid-area:qt;text-align:left}.ag-ac{grid-area:ac}
     .ag-cl{white-space:normal;overflow-wrap:anywhere}.ag-q{max-width:none;margin-left:0}.ag-fx{grid-template-columns:repeat(7,92px)}
     .ag-pit th:nth-child(3),.ag-pit td:nth-child(3){display:none}.ag-pit td span{display:block;font-size:12px}
     .ag-cpl>div{grid-template-columns:70px minmax(0,1fr) 90px}.ag-cpl>div>span:nth-of-type(2){display:none}}

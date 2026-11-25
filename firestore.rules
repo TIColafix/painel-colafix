@@ -21,7 +21,7 @@ service cloud.firestore {
       return logado() && provedor() != 'anonymous' && exists(caminhoAcs())
         && acs().get('ativo', true) != false && acs().get('apagado', false) != true;
     }
-    function soVer() { return acs().get('perfil', '') in ['ver', 'tv', 'cal', 'silosver', 'consulta', 'tvtodas', 'rh', 'producao', 'auditor', 'tvman']; } // consultas e TVs não gravam (revisão de acessos)
+    function soVer() { return acs().get('perfil', '') in ['ver', 'tv', 'cal', 'silosver', 'consulta', 'tvtodas', 'rh', 'producao', 'auditor', 'tvman', 'diretor']; } // consultas, TVs e diretores (25/11/2026) não gravam
     function le() { return dono() || liberado(); }
     function grava() { return dono() || (liberado() && !soVer()); }
     // Ajuste por pessoa (Equipe e cargos → Ajustar acesso): coleções em que ela não pode gravar (ex.: módulo "só ver").
@@ -221,7 +221,7 @@ service cloud.firestore {
     function apiBot() { return logado() && exists(/databases/$(database)/documents/apibots/$(request.auth.uid)); }
     match /api/resumo {
       allow read: if dono() || liberado() || apiBot();
-      allow write: if (dono() || liberado()) && !apiBot()
+      allow write: if (dono() || (liberado() && !soVer())) && !apiBot()
         && request.resource.data.keys().hasOnly(['versao','producao','manutencao','silos','estoque','pessoas','em_producao','em_manutencao','em_silos','em_estoque','em_pessoas']);
     }
     match /apibots/{uid} {
@@ -248,7 +248,8 @@ service cloud.firestore {
     }
     // Quadro de pessoas do gestor (27/10: quem fica e quem sai, por linha/setor): só a dona e quem tem a Visão do gestor.
     match /gxquadro/{id} {
-      allow read, write: if dono() || (liberado() && (acs().get('mods', []).hasAny(['gestor']) || acs().get('extras', []).hasAny(['gestor'])));
+      allow read: if dono() || (liberado() && (acs().get('mods', []).hasAny(['gestor']) || acs().get('extras', []).hasAny(['gestor'])));
+      allow write: if dono() || (liberado() && !soVer() && (acs().get('mods', []).hasAny(['gestor']) || acs().get('extras', []).hasAny(['gestor'])));
     }
     match /config/feriados {
       allow write: if rhOk();

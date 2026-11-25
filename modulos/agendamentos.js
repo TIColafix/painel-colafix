@@ -402,11 +402,12 @@
   /* ---------- tela: lista em colunas, um cartão por carga dentro do dia ---------- */
   /* busca por material (25/11, ajuste: "a pesquisa pelo material tem que funcionar pra eu saber o quanto já tenho comprometido"):
      soma o item em todos os pedidos em aberto (com os filtros de empresa/diário/faturado), por dia, contra o estoque */
-  function comp(){ const ps=norm(A.q).split(/\s+/).filter(Boolean); if(!ps.length||norm(A.q).replace(/\s/g,'').length<2) return '';
-    const m={}; fE(A.abertos).forEach(x=>(x.itens||[]).forEach(i=>{ const q=qtdDe(i); if(!(q>0)) return; const t=norm(i.cod+' '+(i.desc||'')); if(!ps.every(p=>t.includes(p))) return;
+  function compDados(q,xs){ const ps=norm(q).split(/\s+/).filter(Boolean); if(!ps.length||norm(q).replace(/\s/g,'').length<2) return [];
+    const m={}; xs.forEach(x=>(x.itens||[]).forEach(i=>{ const q=qtdDe(i); if(!(q>0)) return; const t=norm(i.cod+' '+(i.desc||'')); if(!ps.every(p=>t.includes(p))) return;
       const c=String(i.cod).toUpperCase(), o=m[c]||(m[c]={cod:c,desc:i.desc||'',un:i.un||'',pp:ppDe(i),ag:0,es:0,fat:0,dias:{},ids:new Set()});
       o.ids.add(x._id); if(x.status==='agendado'){ o.ag+=q; if(x.data) o.dias[x.data]=(o.dias[x.data]||0)+q; if(x.fat) o.fat+=q; } else o.es+=q; }));
-    const its=Object.values(m).sort((a,b)=>(b.ag+b.es)-(a.ag+a.es)); if(!its.length) return '';
+    return Object.values(m).sort((a,b)=>(b.ag+b.es)-(a.ag+a.es)); }
+  function comp(){ const its=compDados(A.q,fE(A.abertos)); if(!its.length) return '';
     const h=hoje(), vv=(q,o)=>o.pp>0?`<b>${esc(fP(q/o.pp))} pal.</b><small>${esc(qtdUn(q,o.un))}</small>`:`<b>${esc(qtdUn(q,o.un))}</b>`;
     const lin=o=>{ const sd=saldoTotal(o.cod), so=sd.q-o.ag, so2=so-o.es, ds=Object.keys(o.dias).sort();
       return `<tr><td><b>${esc(o.cod)}</b><span>${esc(o.desc)}</span><button type="button" class="lnk" data-act="ag-copiarids" data-v="${esc([...o.ids].join(','))}">Copiar pedidos (${o.ids.size})</button></td>
@@ -1220,6 +1221,24 @@
   @media (max-width:760px){.ag-head .ag-acts{width:100%;flex-wrap:wrap}.ag-head .ag-acts>*{flex:1 1 auto;justify-content:center}.ag-br1 .ag-q{max-width:none;margin-left:0}.ag-fs{max-width:none;flex:1 1 140px}.ag-dh{top:56px}.ag-cpb{flex:1 1 100%}}
   </style>`);
 
+  /* ---------- resumo para o Início do diretor (js/95, 25/11): só leitura, nada grava ---------- */
+  const infoDe=x=>({id:x._id,ped:pedList(x).join(', '),cliente:x.cliente||'',data:x.data||'',st:STN[x.status]||x.status||'',val:+x.total||0,carga:x.carga||'',diario:x.diario||'',transp:x.transp||'',fat:x.fat||null,emp:empTxt(x),reag:reagTxt(x),pal:soma([x]).pal});
+  function resumoDir(){ const h=hoje(), sd=A.soDiario; let an=null; A.soDiario=false; try{ an=analise(); }catch(e){} finally{ A.soDiario=sd; }
+    const ag=A.abertos.filter(x=>x.status==='agendado'&&x.data), es=A.abertos.filter(x=>x.status==='aguardando'), atr=ag.filter(x=>x.data<h), fat=ag.filter(x=>x.fat);
+    const ds=[...new Set(ag.map(x=>x.data))].filter(d=>d>=h).sort().slice(0,6);
+    const car=A.fechados.filter(x=>x.status==='carregado'&&(x.carregadoDia||P.hojeStr(new Date(x.carregadoEm||x.fechadoEm||0)))===h);
+    return { lido:!!A.lido.a, hoje:h,
+      dias:ds.map(d=>{ const xs=ag.filter(x=>x.data===d), r=soma(xs); return {d,n:xs.length,ped:xs.reduce((t,x)=>t+pedList(x).length,0),pal:r.pal,val:r.val,kg:r.kg||0,semMat:xs.filter(x=>{ try{ return faltasDe(x).length>0; }catch(e){ return false; } }).length,fat:xs.filter(x=>x.fat).length}; }),
+      atrasados:{n:atr.length,val:soma(atr).val,lista:atr.map(infoDe)},
+      faturado:{n:fat.length,val:soma(fat).val,pal:soma(fat).pal,lista:fat.map(infoDe)},
+      esperando:{n:es.length,val:soma(es).val,podem:an?an.pode.length:0,lista:es.map(infoDe)},
+      carregadosHoje:{n:car.length,val:soma(car).val},
+      semMaterial:an?an.cargas.map(c=>Object.assign(infoDe(c.x),{itens:c.f.map(o=>({cod:o.i.cod,desc:o.i.desc||'',un:o.i.un||'',falta:o.r.falta}))})):[],
+      produzir:an?an.prodL.slice(0,10).map(p=>({cod:p.cod,desc:p.desc||'',un:p.un||'',falta:p.falta,dia:p.dia,pal:p.pp>0?p.falta/p.pp:null})):[] }; }
+  function pedidoDir(n){ n=String(n||'').replace(/\D/g,''); if(!n) return []; return A.abertos.concat(A.fechados).filter(x=>pedList(x).some(p=>String(p).replace(/\D/g,'')===n)).map(x=>Object.assign(infoDe(x),{itens:(x.itens||[]).filter(i=>qtdDe(i)>0).map(i=>({cod:i.cod,desc:i.desc||'',q:qtdDe(i),un:i.un||''})),falta:(()=>{ try{ return x.aberto?faltasDe(x).map(i=>i.cod):[]; }catch(e){ return []; } })()})); }
+  function clienteDir(q){ const ps=norm(q).split(/\s+/).filter(w=>w.length>1); if(!ps.length) return []; return A.abertos.filter(x=>{ const t=norm(x.cliente); return ps.every(p=>t.includes(p)); }).map(infoDe); }
+  function materialDir(q){ return compDados(q,A.abertos).slice(0,6).map(o=>{ const sd=saldoTotal(o.cod); return {cod:o.cod,desc:o.desc,un:o.un,pp:o.pp,ag:o.ag,es:o.es,fat:o.fat,dias:o.dias,ped:o.ids.size,estoque:sd.fonte?sd.q:null,sobra:sd.fonte?sd.q-o.ag:null}; }); }
+  P.agendResumo={ resumo:resumoDir, pedido:pedidoDir, cliente:clienteDir, material:materialDir, lido:()=>!!A.lido.a };
   P.registrarModulo({ id:'agend', nome:'Agendamentos', ic:'agendar',
     telas:{ agendamentos:{ nome:'Agendamentos', mob:'Agendar', render:vTela }, agcal:{ nome:'Calendário', mob:'Calendário', render:vCal } },
     iniciar:carregar });

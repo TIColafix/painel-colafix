@@ -232,6 +232,20 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   await p.click('#ag-d-'+mais2+' .ag-cc [data-act="ag-etapa"][data-v^="sep|"]'); await H.dorme(500); await p.click('#ag-d-'+mais2+' .ag-cc [data-act="ag-etapa"][data-v^="chegou|"]'); await H.dorme(500);
   const c10b=await banco(p,'p900010'), c11b=await banco(p,'p900011');
   ok('Situação da carga: "Separado" e "Caminhão chegou" marcam a hora em todos os pedidos da carga', !!c10b.sep&&!!c11b.sep&&!!c10b.chegou&&!!c11b.chegou&&/✓ Separado \d\d:\d\d/.test(await p.evaluate(d=>document.querySelector('#ag-d-'+d+' .ag-cc').innerText,mais2)));
+  /* faturado mas não carregado (25/11, ajuste) */
+  await p.click('#ag-d-'+mais2+' .ag-cc [data-act="ag-etapa"][data-v^="fat|"]'); await H.dorme(700);
+  const f10=await banco(p,'p900010'), f11=await banco(p,'p900011'), fcc=await p.evaluate(d=>document.querySelector('#ag-d-'+d+' .ag-cc').innerText,mais2);
+  ok('"Faturado" marca a hora nos pedidos da carga, que continuam agendados e mostram "falta carregar"', !!f10.fat&&!!f11.fat&&f10.status==='agendado'&&f10.aberto===true&&/✓ Faturado \d\d:\d\d/.test(fcc)&&/faturado \d\d:\d\d · falta carregar/.test(fcc), fcc.replace(/\n/g,' | ').slice(0,300));
+  await p.click('[data-act="ag-sofat"]'); await H.dorme(500);
+  const fvis=await p.evaluate(()=>[...document.querySelectorAll('.ag-ln .ag-pd b')].map(b=>b.innerText).join(','));
+  ok('Filtro "Faturado, falta carregar" mostra só os faturados', fvis==='900010,900011', fvis);
+  await p.click('[data-act="ag-sofat"]'); await H.dorme(400);
+  /* busca por material: quanto já está comprometido */
+  await p.fill('#ag-q','zz0001'); await p.dispatchEvent('#ag-q','input'); await H.dorme(500);
+  const cp=await p.evaluate(()=>{ const c=document.querySelector('#ag-comp .ag-comp'); const vis=[...document.querySelectorAll('#ag-corpo .ag-ln')].filter(l=>l.style.display!=='none'); return {t:c?c.innerText:'',n:vis.length,todos:vis.every(l=>/zz0001/.test(l.dataset.b))}; });
+  ok('Buscar o material mostra o comprometido (agendado, por dia, faturado, estoque, sobra) e só os pedidos com ele', /Comprometido em agendamentos/.test(cp.t)&&/ZZ0001/.test(cp.t)&&/Agendado/.test(cp.t)&&/Sobra/.test(cp.t)&&/Copiar pedidos \(\d+\)/.test(cp.t)&&cp.n>0&&cp.todos, JSON.stringify(cp).slice(0,300));
+  await p.fill('#ag-q',''); await p.dispatchEvent('#ag-q','input'); await H.dorme(400);
+  ok('Sem busca, o quadro do comprometido some', await p.evaluate(()=>!document.querySelector('#ag-comp .ag-comp')));
   /* ordem de carregamento: segunda carga no mesmo dia e troca a ordem */
   await p.evaluate(async d=>{ await window.Painel.db().collection('agendamentos').doc('p900050').set({pedido:'900050',pedidos:['900050'],carga:'2222',data:d,status:'agendado',aberto:true,itens:[{cod:'ZZ0002',desc:'REJUNTE',un:'CX',qtd:5,pend:5,saldo:50,valor:10}],total:10}); },mais2); await H.dorme(1200);
   await p.evaluate(()=>__T.go('agendamentos')); await H.dorme(300);
@@ -245,7 +259,7 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   await cal(); const [dlw]=await Promise.all([p.waitForEvent('download',{timeout:20000}),p.click('[data-act="ag-pdfsem"]')]);
   ok('PDF da semana', /^carregamentos-semana-\d{4}-\d\d-\d\d\.pdf$/.test(dlw.suggestedFilename()), dlw.suggestedFilename());
   const [dlc]=await Promise.all([p.waitForEvent('download',{timeout:20000}),p.click('[data-act="ag-csv"]')]); const csvp='/tmp/agend/a.csv'; await dlc.saveAs(csvp); const csv=fs.readFileSync(csvp,'utf8');
-  ok('Planilha (CSV com ;) com um item por linha, carga, veículo e paletes', /^\ufeffData;Situação;Ordem;Carga/.test(csv)&&/Reagendado de/.test(csv)&&/1111;/.test(csv)&&/Toco/.test(csv)&&/ZZ0001;ARGAMASSA TESTE AC3 20 KG;500;SC;5,21/.test(csv), csv.split('\n').slice(0,3).join(' // ').slice(0,300));
+  ok('Planilha (CSV com ;) com um item por linha, carga, veículo e paletes', /^\ufeffData;Situação;Faturado;Ordem;Carga/.test(csv)&&/;Agendado;\d\d\/\d\d\/\d{4},? \d\d:\d\d;/.test(csv)&&/Reagendado de/.test(csv)&&/1111;/.test(csv)&&/Toco/.test(csv)&&/ZZ0001;ARGAMASSA TESTE AC3 20 KG;500;SC;5,21/.test(csv), csv.split('\n').slice(0,3).join(' // ').slice(0,300));
   await lst('agendado');
   /* entrega parcial */
   await p.click('[data-act="ag-aba"][data-v="aguardando"]'); await H.dorme(300); await p.click('.ag-ln[data-v="p900009"] .ag-mid'); await p.waitForSelector('dialog.ag-jan'); await p.click('[data-act="ag-dividir"]'); await p.waitForSelector('dialog.ag-jan .ag-dvq');

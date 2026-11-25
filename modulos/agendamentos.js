@@ -27,7 +27,9 @@
    (feriados do painel, sábado opcional), Ajustes do módulo (config/agendamentos), situação separado/chegou/carregou com hora, motivo do
    atraso, ordem de carregamento, horário, placa, telefone da transportadora, arrastar para o calendário, entrega parcial (id -r2),
    colar texto, pedido repetido, diferença ao reimportar, PDF de separação, PDF da semana, planilha CSV, aba Indicadores (query por
-   carregadoEm), tela Expedição (TV), só ver por módulo (soVerMods), carga em cartão, calendário com intensidade, abas no celular, atalhos. */
+   carregadoEm), só ver por módulo (soVerMods), carga em cartão, calendário com intensidade, abas no celular, atalhos.
+   25/11 (ajustes da Iasmyn): "Reagendar" + reag[] ("reagendado · era 24/11", Indicadores, planilha); a TV saiu e o bloco do lado virou a
+   aba CALENDÁRIO (agcal: calendário grande + painel do dia com carregado × pendente por item e por carga). A lista ocupa a largura toda. */
 (function(){ const P=window.Painel; if(!P) return;
   if(P.icone) P.icone('agendar','<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="m9 15 2 2 4-4"/>');
   if(P.icone) P.icone('caminhao2','<path d="M2.5 6.5h11v9h-11z"/><path d="M13.5 9.5h4l3 3v3h-7z"/><circle cx="6.5" cy="17" r="1.8"/><circle cx="16.5" cy="17" r="1.8"/>');
@@ -245,7 +247,7 @@
         <div class="ag-dtl"><input id="ag-data" class="txt" type="date" value="${esc(c.data||'')}" aria-label="Data do carregamento">
           <div class="ag-atl" role="group" aria-label="Atalhos de data">${atalhos().map(d=>`<button type="button" class="ag-atb${c.data===d?' on':''}" data-act="ag-dt" data-v="${d}"><b>${esc(atl(d))}</b><small>${esc(brC(d))}</small></button>`).join('')}<button type="button" class="ag-atb sd${!c.data?' on':''}" data-act="ag-dt" data-v=""><b>Sem data</b><small>esperar</small></button></div>
           <input id="ag-hora" class="txt ag-hr" type="text" list="ag-hl" value="${esc(c.hora||'')}" placeholder="Horário" aria-label="Horário (manhã, tarde ou hora)"><datalist id="ag-hl"><option value="Manhã"><option value="Tarde"><option value="07:30"><option value="13:30"></datalist></div>
-        ${o.atrasado?`<label class="ag-mot"><span>A data já passou: por que vai mudar?</span><select id="ag-motivo"><option value="">Escolha o motivo</option>${MOTIVOS.map(m=>`<option>${esc(m)}</option>`).join('')}</select></label>`:''}</div>`; }
+        ${o.atrasado?`<label class="ag-mot"><span>A data já passou: por que vai mudar?</span><select id="ag-motivo"><option value="">Escolha o motivo</option>${MOTIVOS.map(m=>`<option>${esc(m)}</option>`).join('')}</select></label>`:o.agendado?`<label class="ag-mot op"><span>Se mudar a data (reagendar), o motivo</span><select id="ag-motivo"><option value="">Sem motivo</option>${MOTIVOS.map(m=>`<option>${esc(m)}</option>`).join('')}</select></label>`:''}</div>`; }
   function lerCarga(){ const scBt=A.jan&&A.jan.el.querySelector('[data-act="ag-semcarga"]'), sc=!!(scBt&&scBt.classList.contains('on'));
     return {carga:sc?'':val('#ag-carga'),semCarga:sc&&!val('#ag-carga'),diario:val('#ag-diario'),transp:val('#ag-transp'),placa:val('#ag-placa').toUpperCase(),veiculo:val('#ag-veic'),hora:val('#ag-hora'),data:val('#ag-data')}; }
   function janela(x){ const u=U(); if(A.jan) A.jan.fechar(); const novo=!!(A.ed&&A.ed.novo), h=hoje(); A.ed.x=x;
@@ -255,7 +257,7 @@
         ${novo?u.campo({r:'Número do pedido',id:'ag-ped',v:'',obr:1,col:12,im:'numeric',dica:'O PDF não trouxe o número.'}):''}
         ${u.campo({r:'Cliente',id:'ag-cli',v:x.cliente||'',col:6,ph:'Nome do cliente'})}
         ${empCampo(x.empresa,false)}
-        ${camposCarga(x,{ehc,atrasado})}
+        ${camposCarga(x,{ehc,atrasado,agendado:!novo&&x.status==='agendado'})}
         ${u.campo({r:'Observação',id:'ag-obs',tipo:'area',v:x.obs||'',col:12,ph:'Ex.: cliente pediu para antes, entrega parcial, falta produzir o AC3…'})}
       </div>`;
     const temH=!novo&&(x.hist||[]).length;
@@ -265,7 +267,7 @@
       ${temH?`<section class="ag-sec" data-tab="hist"><details class="ag-hist"><summary>Histórico (${x.hist.length})</summary>${u.tempo(x.hist.slice().reverse().map(e=>({t:e.t,q:new Date(e.em).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})+(e.por?' · '+e.por:'')})))}</details></section>`:''}`;
     const fechado=x.status==='carregado'||x.status==='cancelado';
     const rod=`${!novo?(fechado?u.bt('Reabrir','ag-reabrir',{sec:1,dv:x._id}):u.bt('Cancelar pedido','ag-cancelar',{sec:1,dv:x._id}))+u.bt('Apagar','ag-apagar',{sec:1,dv:x._id,cls:'ag-apg'})+(!fechado&&(x.itens||[]).some(i=>qtdDe(i)>1)?u.bt('Dividir','ag-dividir',{sec:1,dv:x._id,cls:'ag-dvb'}):''):''}<span style="flex:1"></span>
-      ${!novo&&x.status==='agendado'?u.bt('Carregou','ag-carregou',{sec:1,dv:x._id}):''}${pode()?u.bt('Salvar','ag-salvar',{dv:x._id||''}):''}`;
+      ${!novo&&x.status==='agendado'&&pode()?u.bt('Reagendar','ag-reag',{sec:1,dv:x._id}):''}${!novo&&x.status==='agendado'?u.bt('Carregou','ag-carregou',{sec:1,dv:x._id}):''}${pode()?u.bt('Salvar','ag-salvar',{dv:x._id||''}):''}`;
     const sub=novo?[empTxt(x),A.ed.arquivo||''].filter(Boolean).join(' · '):[empTxt(x),STN[x.status]||'',x.data?'para '+br(x.data)+' ('+semana(x.data)+')':'',cargaTxt(x),x.transp||'',x.parcial&&x.parcial.de?'parte de uma entrega parcial':''].filter(Boolean).join(' · ');
     A.jan=u.janela({tit:novo?'Pedido novo':(pedList(x).length>1?pedList(x).length+' pedidos: '+pedTodos(x):'Pedido '+x.pedido)+(x.cliente?' · '+x.cliente:''),sub,corpo,rodape:rod,larga:true,foco:novo,aoFechar:()=>{ A.jan=null; A.ed=null; }});
     A.jan.el.classList.add('ag-jan'); }
@@ -302,12 +304,13 @@
     if(o.carga) o.semCarga=false; if(emp!==undefined) o.empresa=emp;
     /* data que já passou mudando: pede o motivo (vai para os indicadores) */
     const atrasado=x&&x.status==='agendado'&&x.data&&x.data<hoje()&&(x.data||'')!==o.data;
-    if(atrasado){ const m=val('#ag-motivo'); if(!m){ P.toast('Escolha o motivo do atraso.'); const s=A.jan.el.querySelector('#ag-motivo'); if(s) s.focus(); return; } o.atrasos=(x.atrasos||[]).concat([{de:x.data,para:o.data,motivo:m,em:new Date().toISOString()}]).slice(-20); }
+    if(atrasado&&o.data){ const m=val('#ag-motivo'); if(!m){ P.toast('Escolha o motivo do atraso.'); const s=A.jan.el.querySelector('#ag-motivo'); if(s) s.focus(); return; } }
+    const rg=x?reagDe(x,o.data,val('#ag-motivo')):null; if(rg) Object.assign(o,rg);
     const st=x&&(x.status==='carregado'||x.status==='cancelado')?x.status:(o.data?'agendado':'aguardando');
     o.status=st; o.aberto=st==='aguardando'||st==='agendado';
     const mud=[]; if(!x) mud.push('Criado à mão (PDF sem número)');
-    else { if((x.data||'')!==o.data) mud.push(o.data?(x.data?'Data mudou de '+br(x.data)+' para '+br(o.data):'Agendado para '+br(o.data)):'Data tirada (voltou a esperar data)');
-      if(atrasado) mud.push('Motivo do atraso: '+o.atrasos[o.atrasos.length-1].motivo);
+    else { if((x.data||'')!==o.data) mud.push(o.data?(x.data?(rg?'Reagendado de ':'Data mudou de ')+br(x.data)+' para '+br(o.data):'Agendado para '+br(o.data)):'Data tirada (voltou a esperar data)');
+      if(rg&&rg.reag[rg.reag.length-1].motivo) mud.push('Motivo: '+rg.reag[rg.reag.length-1].motivo);
       if(emp!==undefined&&empTxt({empresa:emp})!==empTxt(x)) mud.push(emp?'Empresa: '+empTxt({empresa:emp})+' (à mão)':'Empresa tirada');
       [['cliente','Cliente'],['carga','Carga']].concat(CAMPOS_CARGA,[['obs','Observação']]).forEach(([k,r])=>{ if((x[k]||'')!==(o[k]||'')) mud.push(r+(o[k]?': '+String(k==='veiculo'?(veicDe(o[k])||{}).nome||o[k]:o[k]).slice(0,60):' apagado')); });
       if(!!x.semCarga!==sc&&sc) mud.push('Sem carga por enquanto'); }
@@ -350,12 +353,27 @@
   /* mover para outro dia (arrastar no calendário ou "passar para o próximo dia útil"), pedindo o motivo se a data já passou */
   function janMotivo(tit,cb){ const u=U(); if(A.jan) A.jan.fechar(); A.ed={motivo:true,cb};
     A.jan=u.janela({tit,corpo:`<label class="pc-campo"><span>Motivo</span><select id="ag-motivo"><option value="">Escolha o motivo</option>${MOTIVOS.map(m=>`<option>${esc(m)}</option>`).join('')}</select></label>`,rodape:`<span style="flex:1"></span>${u.bt('Confirmar','ag-motok')}`,aoFechar:()=>{ A.jan=null; A.ed=null; }}); A.jan.el.classList.add('ag-jan'); }
-  async function moverPara(ids,d,como){ const xs=ids.map(deId).filter(x=>x&&x.aberto); if(!xs.length||!d) return; const h=hoje();
+  /* reagendamento (25/11, ajuste "incluir possibilidade de reagendado"): toda mudança de data de um pedido JÁ agendado fica em
+     reag[{de,para,motivo,em}] — aparece como "reagendado · era 24/11" e conta nos Indicadores. Data que já passou exige o motivo
+     (também vai para atrasos[], como antes). */
+  function reagDe(x,para,motivo){ if(!(x&&x.status==='agendado'&&x.data&&para&&para!==x.data)) return null; const em=new Date().toISOString(), m=motivo&&motivo!=='-'?motivo:'';
+    const o={reag:(x.reag||[]).concat([{de:x.data,para,motivo:m,em}]).slice(-20)}; if(x.data<hoje()&&m) o.atrasos=(x.atrasos||[]).concat([{de:x.data,para,motivo:m,em}]).slice(-20); return o; }
+  async function moverPara(ids,d,como,motivoDado){ const xs=ids.map(deId).filter(x=>x&&x.aberto); if(!xs.length||!d) return; const h=hoje();
     const atr=xs.filter(x=>x.status==='agendado'&&x.data&&x.data<h&&x.data!==d);
-    const vai=async motivo=>{ for(const x of xs){ if(x.data===d&&x.status==='agendado') continue; const o={data:d,status:'agendado',aberto:true}; if(motivo&&x.data&&x.data<h) o.atrasos=(x.atrasos||[]).concat([{de:x.data,para:d,motivo,em:new Date().toISOString()}]).slice(-20);
-        await grava(x._id,o,(x.data?'Data mudou de '+br(x.data)+' para '+br(d):'Agendado para '+br(d))+' ('+como+')'+(motivo&&x.data&&x.data<h?' · Motivo do atraso: '+motivo:'')); }
-      P.toast(xs.length+' pedido'+(xs.length>1?'s':'')+' para '+br(d)+' ('+semana(d)+').'); A.cal=d; A.mes=d.slice(0,7); P.rerender(); };
-    if(atr.length) janMotivo('A data já passou: por que vai para '+brC(d)+'?',m=>vai(m)); else await vai(''); }
+    const vai=async motivo=>{ for(const x of xs){ if(x.data===d&&x.status==='agendado') continue; const o=Object.assign({data:d,status:'agendado',aberto:true},reagDe(x,d,motivo)||{});
+        await grava(x._id,o,(x.data?(x.status==='agendado'?'Reagendado de ':'Data mudou de ')+br(x.data)+' para '+br(d):'Agendado para '+br(d))+' ('+como+')'+(motivo&&motivo!=='-'?' · Motivo: '+motivo:'')); }
+      P.toast(xs.length+' pedido'+(xs.length>1?'s':'')+' reagendado'+(xs.length>1?'s':'')+' para '+br(d)+' ('+semana(d)+').'); A.cal=d; A.mes=d.slice(0,7); P.rerender(); };
+    if(atr.length&&!(motivoDado&&motivoDado!=='-')) janMotivo('A data já passou: por que vai para '+brC(d)+'?',m=>vai(m)); else await vai(motivoDado||''); }
+  /* janela Reagendar: nova data (atalhos dos dias úteis) + motivo (obrigatório se a data já passou) */
+  function janReagendar(ids){ const u=U(); if(A.jan) A.jan.fechar(); const xs=ids.map(deId).filter(Boolean); if(!xs.length) return; const h=hoje(), atr=xs.some(x=>x.data&&x.data<h);
+    A.ed={reag:ids}; const d0=xs[0].data||'';
+    const corpo=`<p class="ag-dica">${xs.length>1?xs.length+' pedidos · ':''}${esc(xs.map(pedCurto).join(', '))}${d0?' · hoje está para <b>'+esc(br(d0))+'</b>':''}</p>
+      <div class="ag-dtl"><input id="ag-data" class="txt" type="date" value="" aria-label="Nova data">
+        <div class="ag-atl" role="group" aria-label="Atalhos de data">${atalhos().filter(d=>d!==d0).map(d=>`<button type="button" class="ag-atb" data-act="ag-dt" data-v="${d}"><b>${esc(atl(d))}</b><small>${esc(brC(d))}</small></button>`).join('')}</div></div>
+      <label class="pc-campo ag-mt"><span>Motivo${atr?' (a data já passou)':' (opcional)'}</span><select id="ag-motivo"><option value="">${atr?'Escolha o motivo':'Sem motivo'}</option>${MOTIVOS.map(m=>`<option>${esc(m)}</option>`).join('')}</select></label>`;
+    A.jan=u.janela({tit:'Reagendar',corpo,rodape:`<span style="flex:1"></span>${u.bt('Reagendar','ag-reagok')}`,aoFechar:()=>{ A.jan=null; A.ed=null; }}); A.jan.el.classList.add('ag-jan'); }
+  const reagTxt=x=>{ const r=x.reag||[]; if(!r.length) return ''; return 'reagendado'+(r.length>1?' '+r.length+'x':'')+' · era '+brC(r[0].de); };
+  const reagTit=x=>(x.reag||[]).map(e=>brC(e.de)+' → '+brC(e.para)+(e.motivo?' ('+e.motivo+')':'')).join(' · ');
 
   /* ---------- tela: lista em colunas, um cartão por carga dentro do dia ---------- */
   function filtra(xs){ const ps=norm(A.q).split(/\s+/).filter(Boolean); if(!ps.length) return xs;
@@ -363,8 +381,8 @@
   /* o mesmo número de pedido em outro agendamento aberto */
   function dupDe(x){ const ps=pedList(x); return A.abertos.filter(y=>y._id!==x._id&&!(x.parcial&&(x.parcial.de===y._id||x.parcial.resto===y._id))&&!(y.parcial&&(y.parcial.de===x._id||y.parcial.resto===x._id))&&pedList(y).some(p=>ps.includes(p))); }
   function linha(x,o){ o=o||{}; const ss=faltasDe(x), h=hoje(), atras=x.status==='agendado'&&x.data&&x.data<h, r=soma([x]), n=(x.itens||[]).length, dup=x.aberto?dupDe(x):[];
-    const sub=[empTxt(x)?`<span class="ag-emp" title="${esc(x.empresa.nome||'')}">${esc(empTxt(x))}</span>`:`<span class="ag-semp" title="Importado antes de o painel ler a empresa: importe o PDF de novo">sem empresa</span>`,pedList(x).length>1?`<span class="ag-pls">${ehCarga(x)?'carga com '+pedList(x).length+' pedidos: ':'pedidos '}${esc(pedTodos(x))}</span>`:'',x.parcial&&(x.parcial.de||x.parcial.resto)?'<span class="ag-stx info">entrega parcial</span>':'',dup.length?`<span class="ag-wn" title="Também em: ${esc(dup.map(pedCurto).join(', '))}">pedido repetido</span>`:'',o.st?`<span class="ag-stx ${STT[x.status]}">${esc(STN[x.status])}${x.data?' '+esc(brC(x.data)):''}${x.carregadoEm&&String(x.carregadoEm).length>10?' às '+esc(new Date(x.carregadoEm).toTimeString().slice(0,5)):''}</span>`:'',!o.semCarga&&cargaTxt(x)?esc(cargaTxt(x)):'',!o.semCarga&&x.diario?esc(diarioTxt(x)):'',!o.semCarga&&x.transp?esc(x.transp):'',n+' ite'+(n>1?'ns':'m'),esc(fR(x.total)),ss.length?`<span class="ag-wn${ss.length===n?' c':''}">falta estoque em ${ss.length} ite${ss.length>1?'ns':'m'}</span>`:''].filter(Boolean).join(' · ');
-    return `<div class="ag-ln${atras?' atr':''}${A.sel.has(x._id)?' sel':''}"${x.aberto&&pode()?' draggable="true"':''} data-act="ag-abrir" data-v="${esc(x._id)}" data-b="${esc(norm([x.pedido,x.cliente,x.carga,x.transp,x.placa,x.obs,cargaTxt(x),diarioTxt(x),empTxt(x),x.empresa&&x.empresa.nome].join(' ')))}">
+    const sub=[empTxt(x)?`<span class="ag-emp" title="${esc(x.empresa.nome||'')}">${esc(empTxt(x))}</span>`:`<span class="ag-semp" title="Importado antes de o painel ler a empresa: importe o PDF de novo">sem empresa</span>`,pedList(x).length>1?`<span class="ag-pls">${ehCarga(x)?'carga com '+pedList(x).length+' pedidos: ':'pedidos '}${esc(pedTodos(x))}</span>`:'',x.parcial&&(x.parcial.de||x.parcial.resto)?'<span class="ag-stx info">entrega parcial</span>':'',reagTxt(x)?`<span class="ag-rg" title="${esc(reagTit(x))}">${esc(reagTxt(x))}</span>`:'',dup.length?`<span class="ag-wn" title="Também em: ${esc(dup.map(pedCurto).join(', '))}">pedido repetido</span>`:'',o.st?`<span class="ag-stx ${STT[x.status]}">${esc(STN[x.status])}${x.data?' '+esc(brC(x.data)):''}${x.carregadoEm&&String(x.carregadoEm).length>10?' às '+esc(new Date(x.carregadoEm).toTimeString().slice(0,5)):''}</span>`:'',!o.semCarga&&cargaTxt(x)?esc(cargaTxt(x)):'',!o.semCarga&&x.diario?esc(diarioTxt(x)):'',!o.semCarga&&x.transp?esc(x.transp):'',n+' ite'+(n>1?'ns':'m'),esc(fR(x.total)),ss.length?`<span class="ag-wn${ss.length===n?' c':''}">falta estoque em ${ss.length} ite${ss.length>1?'ns':'m'}</span>`:''].filter(Boolean).join(' · ');
+    return `<div class="ag-ln${atras?' atr':''}${A.sel.has(x._id)?' sel':''}"data-act="ag-abrir" data-v="${esc(x._id)}" data-b="${esc(norm([x.pedido,x.cliente,x.carga,x.transp,x.placa,x.obs,cargaTxt(x),diarioTxt(x),empTxt(x),x.empresa&&x.empresa.nome].join(' ')))}">
       <div class="ag-pd">${o.ck&&pode()?`<input type="checkbox" class="ag-ck" data-act="ag-sel" data-v="${esc(x._id)}" aria-label="Marcar o pedido ${esc(x.pedido)}"${A.sel.has(x._id)?' checked':''}>`:''}<b title="${esc(pedTodos(x))}">${esc(pedCurto(x))}</b></div>
       <div class="ag-mid"><div class="ag-cl">${x.cliente?esc(x.cliente):'<i>sem cliente</i>'}</div><div class="ag-sub">${sub}</div>${x.obs?`<div class="ag-obs">${esc(x.obs)}</div>`:''}</div>
       <div class="ag-qt">${esc(unTxt(r))}</div>
@@ -387,7 +405,7 @@
     const pl=[...new Set(ys.map(y=>y.placa).filter(Boolean))].join(' / '), hr=[...new Set(ys.map(y=>y.hora).filter(Boolean))].join(' / '), tel=tr&&(A.cfg.tels||{})[tr];
     const sep=ys.every(y=>y.sep), che=ys.every(y=>y.chegou), atr=d<h, nome=k[0]==='r'?'Carga com '+pedList(ys[0]).length+' pedidos':'Carga '+k.slice(2);
     const pct=cap.v?Math.min(100,Math.round(r.pal/cap.v.pal*100)):0;
-    return `<article class="ag-cc${atr?' atr':''}${cap.palOver||cap.kgOver?' over':''}"${pode()?' draggable="true"':''} data-ids="${esc(ids)}">
+    return `<article class="ag-cc${atr?' atr':''}${cap.palOver||cap.kgOver?' over':''}" data-ids="${esc(ids)}">
       <header class="ag-cch">
         <div class="ag-cco">${pode()?`<button type="button" class="ag-ob" data-act="ag-ord" data-v="${esc(ids)}|-1" aria-label="Carregar antes"${pos===0?' disabled':''}>▲</button>`:''}<b class="ag-ord" title="Ordem de carregamento">${pos+1}º</b>${pode()?`<button type="button" class="ag-ob" data-act="ag-ord" data-v="${esc(ids)}|1" aria-label="Carregar depois"${pos>=n-1?' disabled':''}>▼</button>`:''}</div>
         <div class="ag-cct"><div><b>${esc(nome)}</b>${k[0]==='r'?' <span class="ag-sn">sem número ainda</span>':''}${dr?` <span class="ag-dnum">diário nº ${esc(dr)}</span>`:''}</div>
@@ -395,13 +413,13 @@
         <div class="ag-ccs"><b class="ag-tp">${esc(totDia(r))}</b><small>${r.kg?esc(fKg(r.kg)):''}${cap.v?' de '+fN(cap.v.pal)+' pal. / '+esc(fKg(cap.v.kg)):''}</small>${cap.v?`<i class="ag-cap"><i style="width:${pct}%"></i></i>`:''}${cap.palOver||cap.kgOver?`<span class="ag-wn">${esc(capTxt(cap))}</span>`:''}</div>
       </header>
       <div class="ag-cce">${pode()?`<button type="button" class="ag-et${sep?' on':''}" data-act="ag-etapa" data-v="sep|${esc(ids)}">${sep?'✓ Separado '+hm(ys[0].sep):'Separado'}</button><button type="button" class="ag-et${che?' on':''}" data-act="ag-etapa" data-v="chegou|${esc(ids)}">${che?'✓ Chegou '+hm(ys[0].chegou):'Caminhão chegou'}</button><button type="button" class="ag-et fim" data-act="ag-cgcarregou" data-v="${esc(ids)}">Carregou</button>`:`<span class="ag-stx">${sep?'Separado '+hm(ys[0].sep):'Não separado'}${che?' · chegou '+hm(ys[0].chegou):''}</span>`}
-        <span class="ag-cesp"></span>${atr&&pode()?`<button type="button" class="lnk" data-act="ag-adiar" data-v="${esc(ids)}">Passar para ${esc(brC(diaUtil(h)?h:proxUtil(h,0)))}</button>`:''}<button type="button" class="lnk" data-act="ag-pdfsep" data-v="${esc(ids)}">PDF de separação</button>${pode()?`<button type="button" class="lnk" data-act="ag-cgedit" data-v="${esc(ids)}">${k[0]==='r'?'Dar o número':'Editar carga'}</button>`:''}</div>
+        <span class="ag-cesp"></span>${pode()?`<button type="button" class="lnk" data-act="ag-reag" data-v="${esc(ids)}">Reagendar</button>`:''}${atr&&pode()?`<button type="button" class="lnk" data-act="ag-adiar" data-v="${esc(ids)}">Passar para ${esc(brC(diaUtil(h)?h:proxUtil(h,0)))}</button>`:''}<button type="button" class="lnk" data-act="ag-pdfsep" data-v="${esc(ids)}">PDF de separação</button>${pode()?`<button type="button" class="lnk" data-act="ag-cgedit" data-v="${esc(ids)}">${k[0]==='r'?'Dar o número':'Editar carga'}</button>`:''}</div>
       ${ys.map(x=>linha(x,{semCarga:true,ck:true})).join('')}</article>`; }
   /* dia: título com paletes (só), avisos de limite e de falta; cartões das cargas */
   function grupoDia(d,xs){ const h=hoje(), r=soma(xs), lim=limiteDia(), fal=diaFaltas(d), gs=gruposDia(xs), cargas=gs.filter(g=>g.k!=='sem'), sem=gs.find(g=>g.k==='sem');
     const nome=d<h?'Já passou':d===h?'Hoje':d===addD(h,1)?'Amanhã':semana(d)[0].toUpperCase()+semana(d).slice(1);
     return `<section class="ag-dia${d<h?' atr':d===h?' hj':''}" id="ag-d-${d}"><header class="ag-dh"><h3>${esc(nome)} <span>${esc(br(d))}</span></h3>
-        <div class="ag-dt2">${xs.length} pedido${xs.length>1?'s':''} · ${totLin(r)}${lim?` <span class="${r.pal>lim?'ag-wn':'ag-lm'}">de ${fN(lim)}</span>`:''}</div></header>
+        <div class="ag-dt2">${(()=>{ const ok=fE(A.fechados).filter(y=>y.status==='carregado'&&y.data===d); return ok.length?`<span class="ag-okt">${ok.length} já carregado${ok.length>1?'s':''}</span> · pendente `:''; })()}${xs.length} pedido${xs.length>1?'s':''} · ${totLin(r)}${lim?` <span class="${r.pal>lim?'ag-wn':'ag-lm'}">de ${fN(lim)}</span>`:''}</div></header>
       ${d<h?`<p class="ag-atx">Marque "Carregou" ou mude a data.${pode()?` <button type="button" class="lnk" data-act="ag-adiar" data-v="${esc(xs.map(x=>x._id).join(','))}">Passar tudo para ${esc(brC(diaUtil(h)?h:proxUtil(h,0)))}</button>`:''}</p>`:''}
       ${fal.length?`<p class="ag-fdia">Falta material: ${fal.map(o=>`<b>${esc(o.cod)}</b> ${esc(fN(o.falta))}`).join(' · ')}</p>`:''}
       ${cargas.map((g,i)=>cartaoCarga(g.k,g.ys,i,cargas.length,d)).join('')}
@@ -488,33 +506,71 @@
     if(!pode()){ P.toast('Seu acesso é só para ver.'); return; }
     await salvarCfg(o); A.cfg.tels=tels; A.cfg.veics=vs; A._pl=null; A.jan.fechar(); P.toast('Ajustes salvos.'); P.rerender(); }
 
-  /* ---------- bloco do lado: calendário (intensidade de paletes, limite, falta, feriado) + itens do dia + barra de ações ---------- */
+  /* ---------- aba CALENDÁRIO (25/11, ajuste: "a TV da expedição não está sendo útil, pode tirar; o calendário lateral com os itens e
+     total pode ficar no lugar com layout mais organizado; preciso saber quando tá pendente de carregar conforme vou marcando carregado") ----------
+     Tela `agcal`: calendário grande do mês (paletes PENDENTES por dia + barra do que já foi carregado) e o painel do dia: carregado × pendente,
+     itens (total / carregado / pendente), cargas do dia com a situação e "Carregou", empresas e transferências, ações.
+     Os carregados do mês vêm de uma leitura por data (where data no mês), juntados com os abertos/fechados que já estão na tela. */
   function diaPadrao(agd){ const h=hoje(), ds=[...new Set(agd.map(x=>x.data).filter(Boolean))].sort(); return ds.includes(h)?h:(ds.find(d=>d>h)||h); }
-  function ladoHtml(agd){ const h=hoje(); if(!A.cal) A.cal=diaPadrao(agd); if(!A.mes) A.mes=A.cal.slice(0,7);
-    const g={}; agd.forEach(x=>{ if(x.data) (g[x.data]=g[x.data]||[]).push(x); });
+  function lerMes(mes){ A.mesDocs=A.mesDocs||{}; if(A.mesDocs[mes]||(A.mesLendo||{})[mes]) return; (A.mesLendo=A.mesLendo||{})[mes]=true;
+    P.db().collection(COL).where('data','>=',mes+'-01').where('data','<=',mes+'-31').limit(1500).get()
+      .then(q=>{ A.mesDocs[mes]=q.docs.map(d=>normaliza(Object.assign({_id:d.id},d.data()))); }).catch(e=>{ console.warn('[agend] mês',e); A.mesDocs[mes]=[]; })
+      .then(()=>{ A.mesLendo[mes]=false; P.rerender(); }); }
+  /* pedidos do mês (agendados + carregados), com o que está na tela por cima (mais novo) */
+  function doMes(mes){ const m=new Map(); (A.mesDocs&&A.mesDocs[mes]||[]).forEach(x=>m.set(x._id,x)); A.fechados.concat(A.abertos).forEach(x=>{ if(String(x.data||'').slice(0,7)===mes) m.set(x._id,x); else if(m.has(x._id)) m.delete(x._id); });
+    return fE([...m.values()]).filter(x=>x.status==='agendado'||x.status==='carregado'); }
+  /* carregado × pendente de um grupo, item a item */
+  function cxp(xs){ const tot=soma(xs), car=soma(xs.filter(x=>x.status==='carregado')), pen=soma(xs.filter(x=>x.status==='agendado'));
+    const it=tot.it.map(i=>{ const c=car.it.find(o=>o.cod===i.cod), p=pen.it.find(o=>o.cod===i.cod); return Object.assign({},i,{cq:c?c.q:0,pq:p?p.q:0,cpal:c&&c.pal!=null?c.pal:null,ppal:p&&p.pal!=null?p.pal:null}); });
+    return {tot,car,pen,it,ncar:xs.filter(x=>x.status==='carregado').length,n:xs.length}; }
+  const vq=(pal,q,un)=>pal!=null?fP(pal)+' pal.':qtdUn(q,un);
+  function vCal(){ const u=U(); if(!u) return '<section class="card"><div class="empty">Carregando…</div></section>';
+    const h=hoje(), agd=fE(A.abertos).filter(x=>x.status==='agendado'); if(!A.cal) A.cal=diaPadrao(agd); if(!A.mes) A.mes=A.cal.slice(0,7); lerMes(A.mes);
+    const xsM=doMes(A.mes), g={}; xsM.forEach(x=>{ if(x.data) (g[x.data]=g[x.data]||[]).push(x); });
     const [Y,M]=A.mes.split('-').map(Number), ini=new Date(Y,M-1,1,12), nd=new Date(Y,M,0).getDate(), pad=ini.getDay(), lim=limiteDia();
     const nm0=ini.toLocaleDateString('pt-BR',{month:'long'}), nomeMes=nm0[0].toUpperCase()+nm0.slice(1)+' '+Y;
-    const somas={}; let mx=lim||1; for(let dd=1;dd<=nd;dd++){ const d=A.mes+'-'+String(dd).padStart(2,'0'); if(g[d]){ somas[d]=soma(g[d]); if(!lim) mx=Math.max(mx,somas[d].pal); } }
-    const cel=[]; for(let k=0;k<pad;k++) cel.push('<span class="ag-cd vz" aria-hidden="true"></span>');
-    for(let dd=1;dd<=nd;dd++){ const d=A.mes+'-'+String(dd).padStart(2,'0'), xs=g[d]||[], r=somas[d]||null, fer=feriado(d), util=diaUtil(d);
-      const v=r?(r.pal>0?fP(r.pal):fora(r).length?fN(fora(r)[0][1])+' '+String(fora(r)[0][0]).toLowerCase():'•'):'';
-      const over=r&&lim&&r.pal>lim, fal=xs.length&&diaFaltas(d).length, al=r?Math.round(10+30*Math.min(1,r.pal/mx)):0;
-      cel.push(`<button type="button" class="ag-cd${d===h?' hj':''}${d===A.cal?' on':''}${xs.length?' tem':''}${xs.length&&d<h?' atr':''}${over?' over':''}${fal?' fal':''}${!util?' nu':''}"${xs.length&&!over&&!(d<h)?` style="--ag-al:${al}%"`:''} data-act="ag-cal" data-v="${d}" aria-pressed="${d===A.cal}" title="${esc([fer?'Feriado: '+(fer.nome||''):'',!util&&!fer?'Sem expedição':'',over?'Passa do limite de '+fN(lim)+' paletes':'',fal?'Falta material':''].filter(Boolean).join(' · '))}" aria-label="${esc(br(d))}${xs.length?': '+esc(totDia(r)):''}"><b>${dd}</b>${v?`<small>${esc(v)}</small>`:fer?'<small class="fer">fer.</small>':''}</button>`); }
-    const d=A.cal, xs=g[d]||[], r=soma(xs), nc=new Set(xs.map(x=>x.carga?'c'+x.carga:ehCarga(x)?'r'+x._id:'s'+x._id)).size, D=plano().porDia[d]||{}, fer=feriado(d);
-    const empL=i=>{ const ls=i.trf; if(!ls.length) return '';
-      return `<div class="ag-te">${ls.map(t=>`<div><span>${esc(t.emp)}</span><span>${esc(qtdUn(t.q,i.un))}${t.saldo!=null?' · saldo '+esc(fN(t.saldo)):''}</span>${t.falta>0?`<b>transferir ${esc(fN(t.falta))}</b>`:'<i>tem</i>'}</div>`).join('')}</div>`; };
-    const falL=i=>{ const o=D[String(i.cod).toUpperCase()]; if(!o) return ''; if(o.falta>0) return `<div class="ag-tfl c">Falta ${esc(fN(o.falta))} (com os pedidos antes${o.prodAte?' e a produção de '+esc(fN(o.prodAte)):''})</div>`; if(o.faltaSemProd>0) return `<div class="ag-tfl">Coberto pela produção: ${esc(prodTxt(prodDe(i.cod).filter(p=>p.data<d)))}</div>`; return ''; };
-    const its=r.it.map(i=>`<li data-b="${esc(norm(i.cod+' '+(i.desc||'')))}"><div class="ag-li"><div class="ag-ti"><b>${esc(i.cod)}</b><span>${esc(i.desc||'')}</span><span class="ag-tvl">${esc(fR(i.v))}</span></div><div class="ag-tv">${i.pal!=null?`<b>${fP(i.pal)} <small>pal.</small></b><span>${esc(qtdUn(i.q,i.un))}</span>`:`<b>${esc(qtdUn(i.q,i.un))}</b><span>${i.un==='SC'?'sem palete cadastrado':'&nbsp;'}</span>`}</div></div>${falL(i)}${empL(i)}</li>`).join('');
+    const cs={}; let mx=lim||1; Object.keys(g).forEach(d=>{ cs[d]=cxp(g[d]); if(!lim) mx=Math.max(mx,cs[d].tot.pal); });
+    const eo=empOpcoes(); if(A.emp&&!eo.includes(A.emp)) A.emp='';
+    const cel=['D','S','T','Q','Q','S','S'].map(x=>`<span class="ag-cw">${x}</span>`); for(let k=0;k<pad;k++) cel.push('<span class="ag-cd vz" aria-hidden="true"></span>');
+    for(let dd=1;dd<=nd;dd++){ const d=A.mes+'-'+String(dd).padStart(2,'0'), c=cs[d], fer=feriado(d), util=diaUtil(d);
+      const pend=c?c.pen:null, feito=c&&c.n&&c.ncar===c.n, pct=c&&c.tot.pal>0?Math.round(c.car.pal/c.tot.pal*100):(c&&c.n?Math.round(c.ncar/c.n*100):0);
+      const over=c&&lim&&c.tot.pal>lim, fal=c&&c.pen.n&&diaFaltas(d).length, al=c?Math.round(8+26*Math.min(1,c.tot.pal/mx)):0;
+      const v=!c?'':feito?'✓':(pend.pal>0?fP(pend.pal):fora(pend).length?fN(fora(pend)[0][1])+' '+String(fora(pend)[0][0]).toLowerCase():'•');
+      cel.push(`<button type="button" class="ag-cd${d===h?' hj':''}${d===A.cal?' on':''}${c?' tem':''}${c&&d<h&&!feito?' atr':''}${feito?' ok':''}${over?' over':''}${fal?' fal':''}${!util?' nu':''}"${c&&!over&&!feito&&!(d<h)?` style="--ag-al:${al}%"`:''} data-act="ag-cal" data-v="${d}" aria-pressed="${d===A.cal}" title="${esc([fer?'Feriado: '+(fer.nome||''):'',!util&&!fer?'Sem expedição':'',c?c.ncar+' de '+c.n+' pedidos carregados':'',over?'Passa do limite de '+fN(lim)+' paletes':'',fal?'Falta material':''].filter(Boolean).join(' · '))}" aria-label="${esc(br(d))}${c?': pendente '+esc(totDia(pend)):''}">
+        <b>${dd}</b>${v?`<small>${esc(v)}</small>`:fer?'<small class="fer">feriado</small>':''}${c&&!feito&&c.ncar?`<i class="ag-cbar"><i style="width:${pct}%"></i></i>`:''}</button>`); }
+    /* painel do dia */
+    const d=A.cal, xs=g[d]||[], c=cxp(xs), D=plano().porDia[d]||{}, fer=feriado(d), r=c.tot;
     const tit=d<h?'Já passou':d===h?'Hoje':d===addD(h,1)?'Amanhã':semana(d)[0].toUpperCase()+semana(d).slice(1);
-    const acoes=`<div class="ag-tb" role="group" aria-label="Ações do dia">${xs.length?`<button type="button" class="ag-bt" data-act="ag-pdfdia" data-v="${d}">PDF do dia</button>`:''}<button type="button" class="ag-bt sec" data-act="ag-pdfsem" data-v="${d}">PDF da semana</button><button type="button" class="ag-bt sec" data-act="ag-csv" data-v="${d}">Planilha</button>${xs.length&&!(A.aba==='agendado'&&A.dia===d)?`<button type="button" class="lnk ag-vd" data-act="ag-dia" data-v="${d}">Ver só este dia</button>`:''}</div>`;
-    return `<aside class="ag-side" aria-label="Calendário de carregamentos">
-      <div class="ag-cal"><div class="ag-ch"><button type="button" class="ag-mv" data-act="ag-mes" data-v="-1" aria-label="Mês anterior">‹</button><b>${esc(nomeMes)}</b><button type="button" class="ag-mv" data-act="ag-mes" data-v="1" aria-label="Próximo mês">›</button></div>
-        <div class="ag-cg7">${['D','S','T','Q','Q','S','S'].map(x=>`<span class="ag-cw">${x}</span>`).join('')}${cel.join('')}</div>
-        <div class="ag-leg"><span><i class="l1"></i>mais paletes</span>${lim?`<span><i class="l2"></i>passa de ${fN(lim)}</span>`:''}<span><i class="l3"></i>falta material</span></div></div>
-      <div class="ag-tot2"><div class="ag-th"><h3>${esc(tit)} <span>${esc(br(d))}</span></h3><p>${fer?'Feriado: '+esc(fer.nome||'')+' · ':!diaUtil(d)?'Sem expedição · ':''}${xs.length?`${xs.length} pedido${xs.length>1?'s':''}${nc?' · '+nc+' carga'+(nc>1?'s':''):''}`:'Nada agendado neste dia.'}</p></div>
-        ${xs.length?`${r.it.length>=3?`<input type="search" id="ag-tq" class="txt ag-tq" placeholder="Buscar item do dia…" aria-label="Buscar item do dia" autocomplete="off" value="${esc(A.tq||'')}">`:''}<ul class="ag-tl">${its}</ul><p class="ag-tqv" hidden>Nenhum item com essa busca.</p>
-        <div class="ag-tf"><span>Total do dia</span><b>${esc(r.pal>0?fP(r.pal)+' paletes':foraTxt(r))}</b>${r.pal>0&&fora(r).length?`<em>+ ${esc(foraTxt(r))}</em>`:''}${r.pal>0?`<small>${esc(unTxt(r))}${r.kg?' · '+esc(fKg(r.kg)):''}</small>`:''}${lim?`<small class="${r.pal>lim?'ag-wn':''}">Limite do dia: ${fN(lim)} paletes${r.pal>lim?' (passou '+fP(r.pal-lim)+')':''}</small>`:''}${(()=>{ const es=[...new Set(xs.map(x=>empTxt(x)||'Sem empresa'))]; if(es.length<2) return ''; return `<div class="ag-tfe">${es.map(e=>{ const re=soma(xs.filter(x=>(empTxt(x)||'Sem empresa')===e)); return `<div><span>${esc(e)}</span><b>${esc(totDia(re))}</b></div>`; }).join('')}</div>`; })()}<div class="ag-tfv"><span>Valor</span><b>${esc(fR(r.vp))}</b></div></div>`:''}
-        ${acoes}</div></aside>`; }
+    const pctP=r.pal>0?Math.min(100,Math.round(c.car.pal/r.pal*100)):(c.n?Math.round(c.ncar/c.n*100):0);
+    const nota=i=>{ const o=D[String(i.cod).toUpperCase()]; if(!o||!(i.pq>0)) return ''; if(o.falta>0) return `<small class="ag-tfl c">falta ${esc(fN(o.falta))}</small>`; if(o.faltaSemProd>0) return '<small class="ag-tfl">com a produção</small>'; return ''; };
+    const itens=c.it.map(i=>`<tr data-b="${esc(norm(i.cod+' '+(i.desc||'')))}"${i.pq>0?'':' class="feito"'}><td><b>${esc(i.cod)}</b><span>${esc(i.desc||'')}</span>${nota(i)}</td><td class="dir">${esc(vq(i.pal,i.q,i.un))}${i.pal!=null?`<small>${esc(qtdUn(i.q,i.un))}</small>`:''}</td><td class="dir ag-cq">${i.cq>0?esc(vq(i.cpal,i.cq,i.un)):'—'}</td><td class="dir ag-pq">${i.pq>0?`<b>${esc(vq(i.ppal,i.pq,i.un))}</b>${i.ppal!=null?`<small>${esc(qtdUn(i.pq,i.un))}</small>`:''}`:'<span class="ag-okt">✓</span>'}</td></tr>`).join('');
+    const empr=[...new Set(xs.map(empK))], trf=[]; soma(xs.filter(x=>x.status==='agendado')).it.forEach(i=>i.trf.filter(t=>t.falta>0).forEach(t=>trf.push({i,t})));
+    const gs=gruposDia(xs.filter(x=>x.status==='agendado')), carrs=xs.filter(x=>x.status==='carregado');
+    const cargaL=(k,ys,i)=>{ const x0=ys[0], rr=soma(ys), sep=ys.every(y=>y.sep), che=ys.every(y=>y.chegou), ids=ys.map(y=>y._id).join(',');
+      const nome=k==='sem'?'Pedido '+pedCurto(x0):k[0]==='r'?'Carga com '+pedList(x0).length+' pedidos':'Carga '+k.slice(2);
+      return `<div class="ag-dc"><b class="ag-dco">${i+1}º</b><div class="ag-dcn"><b>${esc(nome)}</b><small>${esc([[...new Set(ys.map(y=>y.transp).filter(Boolean))].join(' / '),x0.placa||'',(veicDe(x0.veiculo)||{}).nome||'',x0.hora||'',ys.length>1&&k!=='sem'?ys.length+' pedidos':''].filter(Boolean).join(' · ')||(x0.cliente||''))}</small></div>
+        <span class="ag-dcp">${esc(totDia(rr))}</span><span class="ag-stx ${che?'info':sep?'ok':'warn'}">${che?'Chegou '+hm(x0.chegou):sep?'Separado '+hm(x0.sep):'Pendente'}</span>${pode()?`<button type="button" class="ag-bt" data-act="ag-cgcarregou" data-v="${esc(ids)}">Carregou</button>`:''}</div>`; };
+    const lista=[]; gs.forEach(gq=>{ if(gq.k==='sem') gq.ys.forEach(y=>lista.push({k:'sem',ys:[y]})); else lista.push(gq); });
+    const painel=`<section class="ag-dp" aria-label="Dia ${esc(br(d))}">
+      <header class="ag-dph"><div><h2>${esc(tit)} <span>${esc(br(d))}</span></h2><p>${fer?'Feriado: '+esc(fer.nome||'')+' · ':!diaUtil(d)?'Sem expedição · ':''}${c.n?`${c.n} pedido${c.n>1?'s':''} · ${c.ncar} carregado${c.ncar===1?'':'s'}`:'Nada agendado neste dia.'}</p></div>
+        ${c.n?`<div class="ag-dpa"><button type="button" class="ag-bt" data-act="ag-pdfdia" data-v="${d}">PDF do dia</button><button type="button" class="ag-bt sec" data-act="ag-verdia" data-v="${d}">Ver na lista</button></div>`:''}</header>
+      ${c.n?`<div class="ag-prog"><div class="ag-pgl"><div><span>Pendente</span><b>${esc(c.pen.n?totDia(c.pen):'Tudo carregado')}</b></div><div class="dir"><span>Carregado</span><b class="ag-okt">${esc(c.ncar?totDia(c.car):'—')}</b></div></div>
+        <i class="ag-pgb" role="progressbar" aria-valuenow="${pctP}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pctP}%"></i></i>
+        <div class="ag-pgk"><span>Total do dia <b>${esc(totDia(r))}</b></span>${r.kg?`<span>Peso <b>${esc(fKg(r.kg))}</b></span>`:''}<span>Valor <b>${esc(fR(r.vp))}</b></span>${lim?`<span class="${r.pal>lim?'ag-wn':''}">Limite <b>${fN(lim)}</b></span>`:''}</div></div>
+      <h3 class="ag-h3">Cargas do dia</h3><div class="ag-dcs">${lista.map((gq,i)=>cargaL(gq.k,gq.ys,i)).join('')||'<p class="ag-dica">Todas as cargas do dia já foram carregadas.</p>'}${carrs.length?`<p class="ag-dcok">Já carregados: ${carrs.map(x=>esc(pedCurto(x))+(x.carregadoEm&&String(x.carregadoEm).length>10?' ('+hm(x.carregadoEm)+')':'')).join(', ')}</p>`:''}</div>
+      <div class="ag-h3r"><h3 class="ag-h3">Itens do dia</h3>${c.it.length>=3?`<input type="search" id="ag-tq" class="txt ag-tq" placeholder="Buscar item…" aria-label="Buscar item do dia" autocomplete="off" value="${esc(A.tq||'')}">`:''}</div>
+      <div class="pc-rola"><table class="ag-pit ag-dit"><thead><tr><th>Item</th><th class="dir">Total</th><th class="dir">Carregado</th><th class="dir">Pendente</th></tr></thead><tbody class="ag-tl">${itens}</tbody>
+        <tfoot><tr><td>Total</td><td class="dir">${esc(totDia(r))}</td><td class="dir">${esc(c.ncar?totDia(c.car):'—')}</td><td class="dir"><b>${esc(c.pen.n?totDia(c.pen):'✓')}</b></td></tr></tfoot></table></div><p class="ag-tqv" hidden>Nenhum item com essa busca.</p>
+      ${empr.length>1||trf.length?`<details class="ag-dpe"${A.dpe?' open':''}><summary>Por empresa${trf.length?' e transferências ('+trf.length+')':''}</summary>
+        ${empr.length>1?`<table class="ag-pit"><tbody>${empr.map(e=>{ const ce=cxp(xs.filter(x=>empK(x)===e)); return `<tr><td>${esc(e)}</td><td class="dir">pendente <b>${esc(ce.pen.n?totDia(ce.pen):'✓')}</b></td><td class="dir">total ${esc(totDia(ce.tot))}</td></tr>`; }).join('')}</tbody></table>`:''}
+        ${trf.length?`<table class="ag-pit"><thead><tr><th>Transferir</th><th>Para</th><th class="dir">Pedido</th><th class="dir">Saldo</th><th class="dir">Transferir</th></tr></thead><tbody>${trf.map(o=>`<tr><td><b>${esc(o.i.cod)}</b></td><td>${esc(o.t.emp)}</td><td class="dir">${esc(fN(o.t.q))}</td><td class="dir">${esc(fN(o.t.saldo||0))}</td><td class="dir ag-f">${esc(fN(o.t.falta))}</td></tr>`).join('')}</tbody></table>`:''}</details>`:''}`:''}
+    </section>`;
+    const head=`<div class="head ag-head"><div><div class="eyebrow">AGENDAMENTOS</div><h1>Calendário de carregamentos</h1><div class="sub">Toque num dia para ver os itens, o que já foi carregado e o que ainda está pendente.</div></div>
+      <div class="ag-acts">${eo.length>1||A.emp?`<select id="ag-emp" class="txt ag-esel${A.emp?' on':''}" aria-label="Filtrar por empresa"><option value="">Todas as empresas</option>${eo.map(e=>`<option value="${esc(e)}"${A.emp===e?' selected':''}>${esc(e)}</option>`).join('')}</select>`:''}<button type="button" class="btn sec" data-act="ag-pdfsem" data-v="${d}">PDF da semana</button><button type="button" class="btn sec" data-act="ag-csv">Planilha</button></div></div>`;
+    if(A.tq) setTimeout(tqFiltra,0);
+    return head+`<div class="ag-cl2"><section class="ag-cal ag-calg" aria-label="Calendário"><div class="ag-ch"><button type="button" class="ag-mv" data-act="ag-mes" data-v="-1" aria-label="Mês anterior">‹</button><b>${esc(nomeMes)}</b><button type="button" class="ag-mv" data-act="ag-mes" data-v="1" aria-label="Próximo mês">›</button></div>
+      <div class="ag-cg7">${cel.join('')}</div>
+      <div class="ag-leg"><span><i class="l1"></i>paletes pendentes</span><span><i class="l4"></i>carregado</span>${lim?`<span><i class="l2"></i>passa de ${fN(lim)}</span>`:''}<span><i class="l3"></i>falta material</span><span>← → mudam o dia</span></div></section>${painel}</div>`; }
 
   /* ---------- PDF do dia (24/11: "precisamos da quantidade de cada empresa para poder transferir e um PDF") ---------- */
   async function pdfDia(d){ const PP=window.Painel&&window.Painel.pdf; if(!PP||!PP.novo){ P.toast('O gerador de PDF ainda não carregou. Tente de novo.'); return; }
@@ -574,9 +630,9 @@
   /* planilha (CSV com ; para o Excel em português): um item por linha, dos pedidos abertos (respeita o filtro de empresa) */
   function planilha(){ const xs=fE(A.abertos).slice().sort((a,b)=>ordK(a).localeCompare(ordK(b))); if(!xs.length){ P.toast('Nada para exportar.'); return; }
     const q=v=>{ const t=String(v==null?'':v); return /[;"\n]/.test(t)?'"'+t.replace(/"/g,'""')+'"':t; }, n=v=>String(Math.round((+v||0)*100)/100).replace('.',',');
-    const L=[['Data','Situação','Ordem','Carga','Diário','Transportadora','Placa','Veículo','Horário','Pedido(s)','Empresa','Cliente','Item','Descrição','Pendente','Un','Paletes','Peso kg','Valor'].join(';')];
+    const L=[['Data','Situação','Ordem','Carga','Diário','Transportadora','Placa','Veículo','Horário','Pedido(s)','Reagendado de','Empresa','Cliente','Item','Descrição','Pendente','Un','Paletes','Peso kg','Valor'].join(';')];
     xs.forEach(x=>(x.itens||[]).filter(i=>qtdDe(i)>0).forEach(i=>{ const pp=ppDe(i), q2=qtdDe(i);
-      L.push([x.data?br(x.data):'',STN[x.status]||x.status,x.ordemDia||'',x.carga||(ehCarga(x)?'(sem número)':''),x.diario||'',x.transp||'',x.placa||'',(veicDe(x.veiculo)||{}).nome||'',x.hora||'',pedTodos(x),empTxt(x),x.cliente||'',i.cod,i.desc||'',n(q2),i.un||'',pp>0?n(q2/pp):'',n(q2*kgUn(i.desc)),n(+i.qtd>0?(+i.valor||0)*q2/(+i.qtd):(+i.valor||0))].map(q).join(';')); }));
+      L.push([x.data?br(x.data):'',STN[x.status]||x.status,x.ordemDia||'',x.carga||(ehCarga(x)?'(sem número)':''),x.diario||'',x.transp||'',x.placa||'',(veicDe(x.veiculo)||{}).nome||'',x.hora||'',pedTodos(x),(x.reag&&x.reag.length?br(x.reag[0].de):''),empTxt(x),x.cliente||'',i.cod,i.desc||'',n(q2),i.un||'',pp>0?n(q2/pp):'',n(q2*kgUn(i.desc)),n(+i.qtd>0?(+i.valor||0)*q2/(+i.qtd):(+i.valor||0))].map(q).join(';')); }));
     const blob=new Blob(['﻿'+L.join('\r\n')],{type:'text/csv;charset=utf-8'}), a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='agendamentos-'+hoje()+(A.emp?'-'+norm(A.emp).replace(/[^a-z0-9]+/g,'-').replace(/-+$/,''):'')+'.csv'; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
     P.toast('Planilha baixada ('+(L.length-1)+' linhas). Abre no Excel.'); }
 
@@ -590,30 +646,19 @@
     const [Y,M]=I.mes.split('-').map(Number), nm=new Date(Y,M-1,1,12).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
     const xs=fE(I.xs||[]), dia=x=>x.carregadoDia||String(x.carregadoEm||'').slice(0,10), noPrazo=xs.filter(x=>!x.data||dia(x)<=x.data), atr=xs.filter(x=>x.data&&dia(x)>x.data);
     const dias=atr.map(x=>Math.round((new Date(dia(x)+'T12:00:00')-new Date(x.data+'T12:00:00'))/864e5)), r=soma(xs);
-    const mot={}; fE(todos().concat(I.xs||[])).forEach(x=>(x.atrasos||[]).forEach(a=>{ if(String(a.em||'').slice(0,7)===I.mes) mot[a.motivo]=(mot[a.motivo]||0)+1; }));
+    const mot={}, vistos=new Set(); let nReag=0; const mp=new Map(); fE(((A.mesDocs&&A.mesDocs[I.mes])||[]).concat(I.xs||[],todos())).forEach(x=>mp.set(x._id,x)); /* o que está na tela (mais novo) por último */
+    [...mp.values()].forEach(x=>{ (x.reag||[]).concat(x.atrasos||[]).forEach(a=>{ if(String(a.em||'').slice(0,7)!==I.mes) return; const k=x._id+a.em; if(vistos.has(k)) return; vistos.add(k); if((x.reag||[]).includes(a)) nReag++; if(a.motivo) mot[a.motivo]=(mot[a.motivo]||0)+1; }); });
     const grp=f=>{ const m={}; xs.forEach(x=>{ const k=f(x)||'—'; (m[k]=m[k]||[]).push(x); }); return Object.entries(m).map(([k,ys])=>({k,n:ys.length,r:soma(ys)})).sort((a,b)=>b.r.pal-a.r.pal||b.n-a.n); };
     const pdia={}; xs.forEach(x=>{ const d=dia(x); pdia[d]=(pdia[d]||0)+soma([x]).pal; }); const mxd=Math.max(1,...Object.values(pdia));
     const nd=new Date(Y,M,0).getDate(), barras=[...Array(nd)].map((_,k)=>{ const d=I.mes+'-'+String(k+1).padStart(2,'0'), v=pdia[d]||0; return `<span class="ag-ib" title="${esc(br(d))}: ${esc(fP(v))} paletes"><i style="height:${v?Math.max(4,Math.round(v/mxd*100)):0}%"></i><small>${k+1}</small></span>`; }).join('');
     const tab=(tit,ls)=>ls.length?`<div class="ag-it2"><h3 class="ag-h3">${esc(tit)}</h3><table class="ag-pit"><tbody>${ls.map(o=>`<tr><td>${esc(o.k)}</td><td class="dir">${o.n} pedido${o.n>1?'s':''}</td><td class="dir"><b>${esc(totDia(o.r))}</b></td></tr>`).join('')}</tbody></table></div>`:'';
     return `<div class="ag-ind"><div class="ag-ich"><button type="button" class="ag-mv" data-act="ag-imes" data-v="-1" aria-label="Mês anterior">‹</button><b>${esc(nm[0].toUpperCase()+nm.slice(1))}</b><button type="button" class="ag-mv" data-act="ag-imes" data-v="1" aria-label="Próximo mês">›</button></div>
       ${I.erro?`<p class="ag-f">Não foi possível ler o mês (${esc(I.erro)}).</p>`:''}
-      ${u.nums([{r:'Carregados',v:xs.length,s:totDia(r)},{r:'No dia combinado',v:xs.length?Math.round(noPrazo.length/xs.length*100)+'%':'—',tom:xs.length&&noPrazo.length/xs.length<0.9?'warn':'ok',s:noPrazo.length+' pedido'+(noPrazo.length===1?'':'s')},{r:'Atrasados',v:atr.length,tom:atr.length?'crit':'',s:atr.length?'em média '+fN(dias.reduce((a,b)=>a+b,0)/atr.length,1)+' dia(s)':''},{r:'Valor carregado',v:fR(r.vp)}])}
+      ${u.nums([{r:'Carregados',v:xs.length,s:totDia(r)},{r:'No dia combinado',v:xs.length?Math.round(noPrazo.length/xs.length*100)+'%':'—',tom:xs.length&&noPrazo.length/xs.length<0.9?'warn':'ok',s:noPrazo.length+' pedido'+(noPrazo.length===1?'':'s')},{r:'Atrasados',v:atr.length,tom:atr.length?'crit':'',s:atr.length?'em média '+fN(dias.reduce((a,b)=>a+b,0)/atr.length,1)+' dia(s)':''},{r:'Reagendamentos',v:nReag,tom:nReag?'warn':'',s:'mudanças de data no mês'},{r:'Valor carregado',v:fR(r.vp)}])}
       <div class="ag-ibs" aria-label="Paletes carregados por dia">${barras}</div>
-      <div class="ag-ig">${Object.keys(mot).length?`<div class="ag-it2"><h3 class="ag-h3">Motivos dos atrasos</h3><table class="ag-pit"><tbody>${Object.entries(mot).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<tr><td>${esc(k)}</td><td class="dir"><b>${n}</b></td></tr>`).join('')}</tbody></table></div>`:''}
+      <div class="ag-ig">${Object.keys(mot).length?`<div class="ag-it2"><h3 class="ag-h3">Motivos dos atrasos e reagendamentos</h3><table class="ag-pit"><tbody>${Object.entries(mot).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<tr><td>${esc(k)}</td><td class="dir"><b>${n}</b></td></tr>`).join('')}</tbody></table></div>`:''}
         ${tab('Por empresa',grp(empK))}${tab('Por transportadora',grp(x=>x.transp))}</div>
       ${!xs.length?u.vazio({tit:'Nenhum pedido carregado neste mês',txt:'Os indicadores contam os pedidos marcados como "Carregou".'}):''}</div>`; }
-
-  /* ---------- TV da expedição: as cargas de hoje (e as atrasadas) em ordem, com a situação ---------- */
-  function vTV(){ const h=hoje(), ab=fE(A.abertos).filter(x=>x.status==='agendado'&&x.data&&x.data<=h), am=proxUtil(h,1), amx=fE(A.abertos).filter(x=>x.status==='agendado'&&x.data===am);
-    const lin=(k,ys,i)=>{ const cap=capCarga(ys), r=cap.r, x0=ys[0], sep=ys.every(y=>y.sep), che=ys.every(y=>y.chegou), atr=x0.data<h;
-      const st=che?['Caminhão chegou','info']:sep?['Separado','ok']:['A separar','warn'];
-      return `<div class="ag-xpl${atr?' atr':''}"><b class="ag-xpo">${i+1}º</b><div class="ag-xpc"><b>${esc(k==='sem'?'Pedido '+pedCurto(x0):k[0]==='r'?'Carga com '+pedList(x0).length+' pedidos':'Carga '+k.slice(2))}${x0.diario?' · diário '+esc(x0.diario):''}</b><span>${esc([[...new Set(ys.map(y=>y.transp).filter(Boolean))].join(' / '),x0.placa||'',cap.v?cap.v.nome:'',x0.hora||'',atr?'atrasado de '+brC(x0.data):''].filter(Boolean).join(' · '))}</span></div><div class="ag-xpp">${esc(totDia(r))}</div><div class="ag-xps ${st[1]}">${esc(st[0])}</div></div>`; };
-    const lista=xs=>{ const ds=[...new Set(xs.map(x=>x.data))].sort(), out=[]; ds.forEach(d=>gruposDia(xs.filter(x=>x.data===d)).forEach(g=>{ if(g.k==='sem') g.ys.forEach(y=>out.push({k:'sem',ys:[y]})); else out.push(g); })); return out; };
-    const hoj=lista(ab), r=soma(ab), agora=new Date();
-    return `<div class="ag-xp"><div class="ag-xph"><div><div class="eyebrow">EXPEDIÇÃO</div><h1>Carregamentos de hoje</h1><div class="sub">${esc(semana(h)[0].toUpperCase()+semana(h).slice(1))}, ${esc(br(h))} · ${hoj.length} carga${hoj.length===1?'':'s'} · ${esc(totDia(r))}</div></div>
-        <div class="ag-xpr"><b class="ag-xpk">${esc(agora.toTimeString().slice(0,5))}</b><button type="button" class="btn sec" data-act="tv">Modo TV</button></div></div>
-      ${hoj.length?hoj.map((g,i)=>lin(g.k,g.ys,i)).join(''):'<div class="empty ag-xpe">Nenhum carregamento para hoje.</div>'}
-      ${amx.length?`<h2 class="ag-xpa">${esc(atl(am))} · ${esc(brC(am))}: ${amx.length} pedido${amx.length>1?'s':''} · ${esc(totDia(soma(amx)))}</h2>`:''}</div>`; }
 
   const ic=(n,t)=>{ try{ return U().ic(n,t); }catch(e){ return ''; } };
   /* estado vazio que ensina o caminho */
@@ -640,7 +685,7 @@
       const ds=Object.keys(g).sort();
       corpo=(A.dia?`<div class="ag-fil">Mostrando só <b>${esc(atl(A.dia))} · ${esc(br(A.dia))}</b> <button type="button" class="lnk" data-act="ag-dia" data-v="">Ver todos os dias</button></div>`:'')
         +(ds.length?ds.map(d=>grupoDia(d,g[d])).join(''):u.vazio({tit:A.q?'Nada com essa busca':A.dia?'Nada agendado neste dia':'Nenhum pedido agendado'}))
-        +(ds.length&&pode()?'<p class="ag-dica">Arraste um pedido ou uma carga para um dia do calendário para mudar a data.</p>':''); }
+        +(ds.length?'<p class="ag-dica">Os itens, o total e o que falta carregar de cada dia estão na aba Calendário.</p>':''); }
     else { const xs=filtra(A.aba==='carregado'?car:can);
       corpo=xs.length?'<div class="ag-grp">'+xs.map(x=>linha(x,{st:true,bt:['Reabrir','ag-reabrir',1]})).join('')+'</div>':u.vazio({tit:A.q?'Nada com essa busca':'Nenhum pedido '+(A.aba==='carregado'?'carregado':'cancelado')+' ainda'});
       if(xs.length) corpo+=`<p class="ag-dica">Mostrando os últimos ${A.fechados.length>=80?'80 ':''}pedidos fechados. Os do mês inteiro estão em Indicadores.</p>`; }
@@ -651,7 +696,7 @@
     const dicaM=pode()&&(A.aba==='aguardando'||A.aba==='agendado')&&!ms.length&&A.abertos.length>1?`<p class="ag-dm">Marque os pedidos do mesmo caminhão para montar a carga.</p>`:'';
     if(A.tq) setTimeout(tqFiltra,0);
     if(A.rolar){ const d=A.rolar; A.rolar=''; setTimeout(()=>{ const s=document.getElementById('ag-d-'+d); if(s){ s.scrollIntoView({behavior:'smooth',block:'start'}); s.classList.add('ag-pisca'); setTimeout(()=>s.classList.remove('ag-pisca'),1600); } },60); }
-    return head+`<div class="ag-lay"><div class="ag-main">${u.cartao({cls:'ag-lista',corpo:barra+dicaM+`<div id="ag-corpo">${corpo}</div>`+marc})}</div>${A.aba==='indic'?'':ladoHtml(agd)}</div>`; }
+    return head+`<div class="ag-main ag-full">${u.cartao({cls:'ag-lista',corpo:barra+dicaM+`<div id="ag-corpo">${corpo}</div>`+marc})}</div>`; }
 
   /* ---------- montar carga: vários pedidos no mesmo caminhão ---------- */
   function janCarga(ids){ const u=U(); if(A.jan) A.jan.fechar(); const xs=ids.map(deId).filter(Boolean); if(!xs.length) return;
@@ -659,7 +704,7 @@
     const c0={carga:um('carga'),diario:um('diario'),transp:um('transp'),placa:um('placa'),veiculo:um('veiculo'),hora:um('hora'),data:um('data'),semCarga:xs.every(x=>x.semCarga&&!x.carga)};
     const r=soma(xs), cap=capCarga(xs), atrasado=xs.some(x=>x.status==='agendado'&&x.data&&x.data<hoje());
     A.ed={carga:ids};
-    const corpo=`<div class="ag-jg"><div class="pc-form ag-fm">${empCampo(null,true)}${camposCarga(c0,{carga:true,atrasado})}</div>
+    const corpo=`<div class="ag-jg"><div class="pc-form ag-fm">${empCampo(null,true)}${camposCarga(c0,{carga:true,atrasado,agendado:xs.some(x=>x.status==='agendado')})}</div>
       <aside class="ag-res"><div id="ag-totp"><div class="ag-rl">Total da carga</div><div class="ag-pbig">${esc(palTxt(r))}</div><div class="ag-run">${esc(unTxt(r))}${r.kg?' · '+esc(fKg(r.kg)):''}</div>${fora(r).length?`<div class="ag-rw">Sem palete (ficam na unidade): ${esc(foraTxt(r))}</div>`:''}<div class="ag-rs"><span>${xs.length} pedidos · ${esc(fR(r.val))}</span>${cap.palOver||cap.kgOver?`<b class="ag-f">${esc(capTxt(cap).replace(/^p/,'P'))}</b>`:''}</div></div></aside></div>
       <h3 class="ag-h3">Pedidos desta carga</h3><div class="ag-cpl">${xs.map(x=>{ const rx=soma([x]); return `<div><b title="${esc(pedTodos(x))}">${esc(pedCurto(x))}</b><span>${esc(x.cliente||'sem cliente')}</span><span>${esc(unTxt(rx))}</span><b class="ag-q1">${esc(palTxt(rx))}</b></div>`; }).join('')}</div>
       <h3 class="ag-h3">Paletes por item</h3>${porItem(r)}`;
@@ -672,7 +717,7 @@
     const st=c.data?'agendado':'aguardando', peds=ids.map(deId).filter(Boolean).map(x=>x.pedido).join(', ');
     try{ for(const id of ids){ const x=deId(id); if(!x) continue; const fech=x.status==='carregado'||x.status==='cancelado';
         const o=Object.assign({},c,fech?{}:{status:st,aberto:true}); const mud=[];
-        if(motivo&&x.status==='agendado'&&x.data&&x.data<h&&x.data!==c.data){ o.atrasos=(x.atrasos||[]).concat([{de:x.data,para:c.data,motivo,em:new Date().toISOString()}]).slice(-20); mud.push('Motivo do atraso: '+motivo); }
+        const rg=reagDe(x,c.data,motivo||val('#ag-motivo')); if(rg){ Object.assign(o,rg); mud.push('Reagendado de '+br(x.data)+(rg.reag[rg.reag.length-1].motivo?' · Motivo: '+rg.reag[rg.reag.length-1].motivo:'')); }
         if((x.carga||'')!==c.carga) mud.push(c.carga?'Carga '+c.carga:'Sem carga');
         if(emp!==undefined&&empTxt({empresa:emp})!==empTxt(x)) mud.push(emp?'Empresa: '+empTxt({empresa:emp})+' (à mão)':'Empresa tirada'); if((x.data||'')!==c.data) mud.push(c.data?'Agendado para '+br(c.data):'Data tirada');
         CAMPOS_CARGA.forEach(([k,r])=>{ if((x[k]||'')!==(c[k]||'')&&c[k]) mud.push(r+': '+(k==='veiculo'?(veicDe(c[k])||{}).nome||c[k]:c[k])); });
@@ -718,7 +763,10 @@
     if(act==='ag-cgedit'){ janCarga(v.split(',').filter(Boolean)); return; }
     if(act==='ag-cgsalvar'){ salvarCarga(); return; }
     if(act==='ag-pdfdia'){ pdfDia(v); return; }
-    if(act==='ag-cal'){ A.cal=v; A.mes=v.slice(0,7); A.tq=''; if(A.aba==='agendado'&&!A.dia) A.rolar=v; P.rerender(); return; }
+    if(act==='ag-cal'){ A.cal=v; A.mes=v.slice(0,7); A.tq=''; P.rerender(); return; }
+    if(act==='ag-verdia'){ A.dia=v; A.aba='agendado'; A.rolar=v; P.go('agendamentos'); return; }
+    if(act==='ag-reag'){ janReagendar(v.split(',').filter(Boolean)); return; }
+    if(act==='ag-reagok'){ const d=val('#ag-data'), m=val('#ag-motivo'), ids=(A.ed&&A.ed.reag)||[]; if(!d){ P.toast('Escolha a nova data.'); return; } const h=hoje(); if(!m&&ids.some(id=>{ const x=deId(id); return x&&x.data&&x.data<h; })){ P.toast('A data já passou: escolha o motivo.'); return; } A.jan.fechar(); moverPara(ids,d,'reagendou',m||'-'); return; }
     if(act==='ag-etapa'){ const [k,ids]=v.split('|'); etapa(ids.split(',').filter(Boolean),k); return; }
     if(act==='ag-cgcarregou'){ etapa(v.split(',').filter(Boolean),'carregou'); return; }
     if(act==='ag-ord'){ const [ids,dir]=v.split('|'); mudaOrdem(ids.split(',').filter(Boolean),+dir); return; }
@@ -749,7 +797,7 @@
     if(act==='ag-apagar'){ const x=deId(v); if(!x||!confirm('Apagar o pedido '+x.pedido+' dos agendamentos? Não dá para desfazer.')) return;
       P.db().collection(COL).doc(v).delete().then(()=>{ A.abertos=A.abertos.filter(y=>y._id!==v); A.fechados=A.fechados.filter(y=>y._id!==v); if(A.jan) A.jan.fechar(); P.toast('Pedido apagado.'); P.rerender(); }).catch(er=>P.erro(er)); return; }
   });
-  document.addEventListener('toggle',e=>{ const d=e.target; if(d&&d.classList&&d.classList.contains('ag-pid')) A.pi[d.dataset.d]=d.open; },true);
+  document.addEventListener('toggle',e=>{ const d=e.target; if(d&&d.classList&&d.classList.contains('ag-dpe')) A.dpe=d.open; },true);
   document.addEventListener('change',e=>{ if(e.target&&e.target.id==='ag-empsel'){ const n=A.jan&&A.jan.el.querySelector('#ag-empnova'); if(n){ n.hidden=e.target.value!=='__outra'; if(!n.hidden) n.focus(); } } });
   document.addEventListener('change',e=>{ if(e.target&&e.target.id==='ag-emp'){ A.emp=e.target.value; A.cal=''; P.render(); } });
   document.addEventListener('change',e=>{ if(e.target&&(e.target.id==='ag-file'||e.target.classList.contains('ag-file2'))){ const fs=e.target.files; importar(fs); e.target.value=''; } });
@@ -759,29 +807,23 @@
   document.addEventListener('input',e=>{ if(e.target&&(e.target.classList.contains('ag-pp')||e.target.id==='ag-data')&&e.target.closest('dialog.ag-jan')) janAtualiza(); });
   document.addEventListener('change',e=>{ if(e.target&&e.target.id==='ag-data'&&e.target.closest('dialog.ag-jan')) janAtualiza(); });
   /* busca dos itens do dia: filtra na tela, sem redesenhar */
-  const tqFiltra=()=>{ const ps=norm(A.tq).split(/\s+/).filter(Boolean); let n=0; document.querySelectorAll('.ag-tl>li').forEach(l=>{ const ok=ps.every(p=>(l.dataset.b||'').includes(p)); l.style.display=ok?'':'none'; if(ok) n++; }); const v=document.querySelector('.ag-tqv'); if(v) v.hidden=!!n; };
+  const tqFiltra=()=>{ const ps=norm(A.tq).split(/\s+/).filter(Boolean); let n=0; document.querySelectorAll('.ag-tl>li,.ag-tl>tr').forEach(l=>{ const ok=ps.every(p=>(l.dataset.b||'').includes(p)); l.style.display=ok?'':'none'; if(ok) n++; }); const v=document.querySelector('.ag-tqv'); if(v) v.hidden=!!n; };
   document.addEventListener('input',e=>{ if(e.target&&e.target.id==='ag-tq'){ A.tq=e.target.value; tqFiltra(); } });
   document.addEventListener('input',e=>{ if(!e.target||e.target.id!=='ag-q') return; A.q=e.target.value;
     const ps=norm(A.q).split(/\s+/).filter(Boolean); document.querySelectorAll('#ag-corpo .ag-ln').forEach(l=>{ const t=l.dataset.b||''; l.style.display=ps.every(p=>t.includes(p))?'':'none'; });
     document.querySelectorAll('#ag-corpo .ag-dia').forEach(d=>{ d.style.display=[...d.querySelectorAll('.ag-ln')].some(l=>l.style.display!=='none')?'':'none'; }); });
   /* arrastar o PDF para a tela */
   const naTela=()=>P.S.view==='agendamentos';
-  setInterval(()=>{ if(P.S.view==='expedicao') P.rerender(); },60000);
+  const naCal=()=>P.S.view==='agcal';
   let arrT=0; const arrOff=()=>{ document.body.classList.remove('ag-arr'); };
   document.addEventListener('dragover',e=>{ if(!naTela()||!pode()) return; if(!(e.dataTransfer&&[...(e.dataTransfer.types||[])].includes('Files'))) return; e.preventDefault(); document.body.classList.add('ag-arr'); clearTimeout(arrT); arrT=setTimeout(arrOff,400); });
   document.addEventListener('drop',e=>{ if(!naTela()||!pode()) return; const fl=e.dataTransfer&&[...(e.dataTransfer.types||[])].includes('Files');
-    if(A.drag){ const c=e.target.closest&&e.target.closest('.ag-cd[data-v]'); e.preventDefault(); const ids=A.drag; A.drag=null; document.body.classList.remove('ag-arrc'); document.querySelectorAll('.ag-cd.alvo').forEach(x=>x.classList.remove('alvo')); if(c) moverPara(ids,c.dataset.v,'arrastou no calendário'); return; }
     if(!fl) return; e.preventDefault(); arrOff(); importar(e.dataTransfer.files); });
-  /* pedido (linha) ou carga (cartão) arrastados: os dias do calendário viram alvo */
-  document.addEventListener('dragstart',e=>{ if(!naTela()||!pode()) return; const c=e.target.closest&&e.target.closest('.ag-cc[data-ids],.ag-ln[draggable]'); if(!c) return;
-    A.drag=(c.dataset.ids||c.dataset.v||'').split(',').filter(Boolean); try{ e.dataTransfer.setData('text/plain','agend:'+A.drag.join(',')); e.dataTransfer.effectAllowed='move'; }catch(er){} document.body.classList.add('ag-arrc'); });
-  document.addEventListener('dragend',()=>{ A.drag=null; document.body.classList.remove('ag-arrc'); document.querySelectorAll('.ag-cd.alvo').forEach(x=>x.classList.remove('alvo')); });
-  document.addEventListener('dragover',e=>{ if(!A.drag) return; const c=e.target.closest&&e.target.closest('.ag-cd[data-v]'); document.querySelectorAll('.ag-cd.alvo').forEach(x=>{ if(x!==c) x.classList.remove('alvo'); }); if(c){ e.preventDefault(); c.classList.add('alvo'); } });
   /* atalhos de teclado: / busca · n importa PDF · ← → muda o dia do calendário */
-  document.addEventListener('keydown',e=>{ if(!naTela()||e.ctrlKey||e.metaKey||e.altKey) return; const t=e.target, tag=(t&&t.tagName)||''; if(/INPUT|TEXTAREA|SELECT/.test(tag)||(t&&t.isContentEditable)||document.querySelector('dialog[open]')) return;
+  document.addEventListener('keydown',e=>{ if(!(naTela()||naCal())||e.ctrlKey||e.metaKey||e.altKey) return; const t=e.target, tag=(t&&t.tagName)||''; if(/INPUT|TEXTAREA|SELECT/.test(tag)||(t&&t.isContentEditable)||document.querySelector('dialog[open]')) return;
     if(e.key==='/'){ const q=document.getElementById('ag-q'); if(q){ e.preventDefault(); q.focus(); } }
     else if((e.key==='n'||e.key==='N')&&pode()){ const f=document.getElementById('ag-file'); if(f){ e.preventDefault(); f.click(); } }
-    else if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&A.cal&&A.aba!=='indic'){ e.preventDefault(); A.cal=addD(A.cal,e.key==='ArrowLeft'?-1:1); A.mes=A.cal.slice(0,7); A.tq=''; P.rerender(); } });
+    else if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&A.cal&&naCal()){ e.preventDefault(); A.cal=addD(A.cal,e.key==='ArrowLeft'?-1:1); A.mes=A.cal.slice(0,7); A.tq=''; P.rerender(); } });
 
   document.head.insertAdjacentHTML('beforeend',`<style>
   /* visual leve (24/11, 4ª: "muito grotesco, deixar mais leve"): sem caixas pesadas, poucas cores, o destaque é a semana em paletes */
@@ -958,8 +1000,7 @@
   .ag-cd.over{background:color-mix(in srgb,var(--warn) 26%,transparent)}.ag-cd.over small{color:var(--warn)}
   .ag-cd{position:relative}.ag-cd.fal::after{content:"";position:absolute;top:4px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--crit)}
   .ag-cd.nu:not(.tem) b{opacity:.45}.ag-cd small.fer{color:var(--muted);font-weight:500}
-  body.ag-arrc .ag-cd:not(.vz){outline:1px dashed color-mix(in srgb,var(--teal) 45%,transparent);outline-offset:-2px}.ag-cd.alvo{background:var(--teal)!important}.ag-cd.alvo b,.ag-cd.alvo small{color:#fff!important}
-  .ag-leg{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--muted)}.ag-leg span{display:inline-flex;align-items:center;gap:5px}.ag-leg i{width:10px;height:10px;border-radius:3px;display:inline-block}
+    .ag-leg{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--muted)}.ag-leg span{display:inline-flex;align-items:center;gap:5px}.ag-leg i{width:10px;height:10px;border-radius:3px;display:inline-block}
   .ag-leg .l1{background:color-mix(in srgb,var(--teal) 40%,transparent)}.ag-leg .l2{background:color-mix(in srgb,var(--warn) 30%,transparent)}.ag-leg .l3{background:var(--crit);border-radius:50%;width:7px;height:7px}
   .ag-tfl{font-size:12px;color:var(--warn);font-weight:500}.ag-tfl.c{color:var(--crit)}
   .ag-tb{flex-wrap:wrap;justify-content:flex-start}.ag-tb .ag-bt{padding:6px 10px;font-size:12.5px}
@@ -989,9 +1030,39 @@
     .ag-jan .ag-tabs{display:flex;gap:4px;margin:-4px 0 12px;position:sticky;top:0;z-index:2;background:var(--surface);padding:4px 0}.ag-jan .ag-tabs button{all:unset;cursor:pointer;flex:1;text-align:center;padding:8px;border-radius:8px;font-size:13.5px;color:var(--muted)}.ag-jan .ag-tabs button.on{background:color-mix(in srgb,var(--teal) 12%,transparent);color:var(--teal-strong);font-weight:600}
     .ag-jan .ag-sec{display:none}.ag-jan .ag-sec.on{display:block}
     .ag-xpl{grid-template-columns:40px minmax(0,1fr);gap:8px}.ag-xpp,.ag-xps{grid-column:2}.ag-xpp{text-align:left}}
+  /* 25/11 (ajuste): aba Calendário — calendário grande à esquerda, painel do dia (carregado × pendente) à direita */
+  .ag-full{margin-top:18px}
+  .ag-cl2{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(380px,1fr);gap:20px;align-items:start;margin-top:18px}
+  .ag-calg{padding:18px;border-radius:18px;position:sticky;top:76px}
+  .ag-calg .ag-ch b{font-size:16px}.ag-calg .ag-cg7{gap:4px}
+  .ag-calg .ag-cd{min-height:70px;padding:7px 3px 6px;border-radius:12px;gap:3px}.ag-calg .ag-cd b{font-size:14px}.ag-calg .ag-cd small{font-size:13px;font-weight:700}
+  .ag-cd.ok{background:color-mix(in srgb,var(--ok) 14%,transparent)}.ag-cd.ok small{color:var(--ok)}
+  .ag-cbar{display:block;width:70%;height:3px;border-radius:2px;background:color-mix(in srgb,var(--muted) 18%,transparent);overflow:hidden;margin-top:auto}.ag-cbar>i{display:block;height:100%;background:var(--ok)}
+  .ag-cd.on .ag-cbar{background:rgba(255,255,255,.3)}.ag-cd.on .ag-cbar>i{background:#fff}
+  .ag-leg .l4{background:color-mix(in srgb,var(--ok) 30%,transparent)}
+  .ag-dp{background:var(--surface);border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+  .ag-dph{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}.ag-dph h2{margin:0;font-size:20px;font-weight:600}.ag-dph h2 span{font-size:14px;font-weight:400;color:var(--muted);margin-left:4px}.ag-dph p{margin:2px 0 0;font-size:13px;color:var(--muted)}
+  .ag-dpa{display:flex;gap:6px;flex-wrap:wrap}
+  .ag-prog{padding:14px 16px;border-radius:14px;background:color-mix(in srgb,var(--teal) 7%,transparent)}
+  .ag-pgl{display:flex;justify-content:space-between;gap:12px}.ag-pgl span{display:block;font-size:12.5px;color:var(--muted)}.ag-pgl b{font-size:22px;font-weight:600;color:var(--teal-strong);font-variant-numeric:tabular-nums;line-height:1.25}.ag-pgl .dir{text-align:right}.ag-pgl .dir b{font-size:17px}
+  .ag-pgb{display:block;height:8px;border-radius:4px;background:color-mix(in srgb,var(--muted) 16%,transparent);overflow:hidden;margin:10px 0}.ag-pgb>i{display:block;height:100%;border-radius:4px;background:var(--ok)}
+  .ag-pgk{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}.ag-pgk b{color:var(--text,inherit);font-weight:600}
+  .ag-dcs{display:flex;flex-direction:column}
+  .ag-dc{display:grid;grid-template-columns:30px minmax(0,1fr) auto auto;grid-template-areas:"o n n n" "o p s b";column-gap:10px;row-gap:4px;align-items:center;padding:10px 2px;border-top:1px solid color-mix(in srgb,var(--line) 60%,transparent)}.ag-dc:first-child{border-top:0}.ag-dc>.ag-dco{grid-area:o;align-self:start;padding-top:2px}.ag-dc>.ag-dcn{grid-area:n}.ag-dc>.ag-dcp{grid-area:p}.ag-dc>.ag-stx{grid-area:s;justify-self:end}.ag-dc>.ag-bt{grid-area:b}
+  .ag-dco{color:var(--teal-strong)}.ag-dcn b{font-weight:600;font-size:14px}.ag-dcn small{display:block;font-size:12px;color:var(--muted)}.ag-dcp{font-weight:600;color:var(--teal-strong);font-size:13.5px;white-space:nowrap}
+  .ag-dcok{margin:8px 0 0;font-size:12.5px;color:var(--ok)}
+  .ag-h3r{display:flex;justify-content:space-between;align-items:center;gap:10px}.ag-h3r .ag-tq{margin:0;max-width:200px}
+  .ag-dit{table-layout:fixed;width:100%}.ag-dit th:first-child{width:40%}.ag-dit td{vertical-align:top}.ag-dit td:first-child b{font-weight:600;display:block}.ag-dit td:first-child span{color:var(--muted);display:block;font-size:12px;line-height:1.3}.ag-dit .dir{white-space:normal}.ag-dit td small{display:block;font-size:11px;color:var(--muted)}
+  .ag-dit tr.feito td{opacity:.55}.ag-dit .ag-cq{color:var(--ok)}.ag-dit .ag-pq b{color:var(--teal-strong);font-weight:700}
+  .ag-dpe summary{cursor:pointer;font-size:13px;color:var(--teal-strong);font-weight:500}.ag-dpe .ag-pit{margin-top:8px}
+  /* reagendado */
+  .ag-rg{color:#8a5a00;font-weight:600;background:color-mix(in srgb,var(--warn) 14%,transparent);padding:0 6px;border-radius:5px}
+  .ag-mot.op{color:var(--muted)}.ag-mt{margin-top:12px}
+  @media (max-width:1100px){.ag-cl2{grid-template-columns:1fr}.ag-calg{position:static}}
+  @media (max-width:760px){.ag-calg{padding:12px}.ag-calg .ag-cd{min-height:52px}.ag-calg .ag-cd small{font-size:11px}.ag-dc{grid-template-columns:26px minmax(0,1fr) auto;grid-template-areas:"o n n" "o p b" "o s b"}.ag-dc>.ag-stx{justify-self:start}.ag-dit th:first-child{width:36%}}
   </style>`);
 
   P.registrarModulo({ id:'agend', nome:'Agendamentos', ic:'agendar',
-    telas:{ agendamentos:{ nome:'Agendamentos', mob:'Agendar', render:vTela }, expedicao:{ nome:'Expedição (TV)', mob:'TV', render:vTV } },
+    telas:{ agendamentos:{ nome:'Agendamentos', mob:'Agendar', render:vTela }, agcal:{ nome:'Calendário', mob:'Calendário', render:vCal } },
     iniciar:carregar });
 })();

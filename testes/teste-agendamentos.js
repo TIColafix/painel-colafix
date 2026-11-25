@@ -46,11 +46,14 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   const jan=p=>p.evaluate(()=>{ const j=document.querySelector('dialog.ag-jan'); return j?j.innerText:''; });
 
   let B=await abre('iasmyn','senha123'); let p=B.page;
+  const cal=async d=>{ await p.evaluate(()=>__T.go('agcal')); await H.dorme(400); if(d){ await p.click('.ag-cd[data-v="'+d+'"]'); await H.dorme(300); } };
+  const lst=async aba=>{ await p.evaluate(a=>{ if(a) window.__agend.aba=a; window.__agend.dia=''; __T.go('agendamentos'); },aba||''); await H.dorme(400); };
+  const painelDia=async()=>p.evaluate(()=>{ document.querySelectorAll('details.ag-dpe').forEach(x=>x.open=true); const x=document.querySelector('.ag-dp'); return x?x.innerText:''; });
   const nav=await p.evaluate(()=>document.getElementById('navlist').innerText);
   await p.evaluate(()=>__T.go('agendamentos')); await H.dorme(600);
   let t=await tela(p);
   ok('Agendamentos aparece no menu da administradora e abre a tela', /Agendamentos/.test(nav)&&/Agendamentos de pedidos/.test(t)&&/Importar PDF/.test(t), t.replace(/\n/g,' | ').slice(0,160));
-  ok('Números do topo: 1 com a data já passada, 1 esperando data; "sem carga" digitado vira Sem carga', /1 com a data passada/.test(t)&&/1 esperando data/.test(t)&&await p.evaluate(()=>{ const x=window.__agend.abertos.find(y=>y._id==='p800003'); return x&&x.carga===''&&x.semCarga===true; })&&/Nada agendado neste dia|Total do dia/.test(t), t.replace(/\n/g,' | ').slice(0,260));
+  ok('Números do topo: 1 com a data já passada, 1 esperando data; "sem carga" digitado vira Sem carga', /1 com a data passada/.test(t)&&/1 esperando data/.test(t)&&await p.evaluate(()=>{ const x=window.__agend.abertos.find(y=>y._id==='p800003'); return x&&x.carga===''&&x.semCarga===true; })&&/Calendário/.test(t), t.replace(/\n/g,' | ').slice(0,260));
 
   /* importar um PDF */
   await p.setInputFiles('#ag-file','/tmp/agend/146001.pdf'); await p.waitForSelector('dialog.ag-jan',{timeout:15000}); await H.dorme(400);
@@ -125,14 +128,15 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   await p.evaluate(()=>{ window.__agend.aba='agendado'; __T.go('agendamentos'); }); await H.dorme(400);
   const dia=await p.evaluate(d=>{ const x=[...document.querySelectorAll('.ag-dia')].find(e=>e.innerText.includes(d)); return x?x.innerText:''; },mais2.slice(8,10)+'/'+mais2.slice(5,7)+'/'+mais2.slice(0,4));
   ok('Dia com 2 pedidos na mesma carga: 1.000 SC · 10,41 paletes (no dia e na carga)', /10,41 paletes/.test(dia)&&/Carga 7000/.test(dia)&&/Gabriel Teste · 2 pedidos/.test(dia), dia.replace(/\n/g,' | ').slice(0,300));
-  const fx=await p.evaluate(()=>{ const x=document.querySelector('.ag-cal'); return x?x.innerText:''; });
   const lv2=await p.evaluate(()=>document.querySelector('.ag-ln[data-v="p900011"] .ag-sub').innerText);
   ok('Cada pedido mostra a empresa', /Empresa 9 \(Outra\)/.test(lv2), lv2);
   await p.selectOption('#ag-emp','Empresa 9 (Outra)'); await H.dorme(300);
-  const fe=await p.evaluate(()=>({ids:[...document.querySelectorAll('#ag-corpo .ag-ln')].map(l=>l.dataset.v),chip:(document.querySelector('[data-act="ag-aba"][data-v="agendado"]')||{}).innerText,cal:(document.querySelector('.ag-cal')||{}).innerText||''}));
+  const fe=await p.evaluate(()=>({ids:[...document.querySelectorAll('#ag-corpo .ag-ln')].map(l=>l.dataset.v),chip:(document.querySelector('[data-act="ag-aba"][data-v="agendado"]')||{}).innerText}));
+  await cal(); fe.cal=await p.evaluate(()=>(document.querySelector('.ag-calg')||{}).innerText||''); await lst('agendado');
   ok('Filtro de empresa: só os pedidos da Empresa 9 na lista, nas abas e no calendário', fe.ids.join()==='p900011'&&/Agendados\s*1/.test(fe.chip)&&/5,20/.test(fe.cal)&&!/10,41/.test(fe.cal), JSON.stringify(fe).slice(0,300));
   await p.selectOption('#ag-emp',''); await H.dorme(300);
-  ok('Calendário do lado mostra os paletes do dia', /10,41/.test(fx), fx.replace(/\n/g,' ').slice(0,200));
+  await cal(); const fx=await p.evaluate(()=>(document.querySelector('.ag-calg')||{}).innerText||''); await lst('agendado');
+  ok('Aba Calendário mostra os paletes pendentes de cada dia', /10,41/.test(fx), fx.replace(/\n/g,' ').slice(0,200));
   /* sem carga por enquanto */
   await p.click('.ag-ln[data-v="p900010"] .ag-mid'); await p.waitForSelector('dialog.ag-jan'); await p.click('dialog.ag-jan [data-act="ag-semcarga"]');
   const dis=await p.evaluate(()=>document.getElementById('ag-carga').disabled); await p.click('dialog.ag-jan [data-act="ag-salvar"]'); await H.dorme(600);
@@ -149,9 +153,9 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   await p.click('[data-act="ag-montar"]'); await p.waitForSelector('dialog.ag-jan #ag-diario'); let jc=await jan(p);
   ok('Janela "Montar carga" lista os pedidos e os paletes por item', /Montar carga · 2 pedidos/.test(jc)&&/ZZ0001/.test(jc)&&/10,41/.test(jc)&&/900010/.test(jc)&&/900011/.test(jc), jc.replace(/\n/g,' | ').slice(0,300));
   await p.fill('#ag-carga','1111'); await p.fill('#ag-diario','3'); await p.click('[data-act="ag-cgsalvar"]'); await H.dorme(800);
-  const c1=await banco(p,'p900010'), c2=await banco(p,'p900011'); await p.click('.ag-cd[data-v="'+mais2+'"]'); await H.dorme(250); const tot3=await p.evaluate(()=>document.querySelector('.ag-tot2').innerText); const dia3=await p.evaluate(()=>document.getElementById('ag-corpo').innerText);
+  const c1=await banco(p,'p900010'), c2=await banco(p,'p900011'); const dia3=await p.evaluate(()=>document.getElementById('ag-corpo').innerText); await cal(mais2); const tot3=await painelDia(); await lst('agendado');
   ok('Salvar a carga grava carga e diário de bordo em todos os marcados', c1.carga==='1111'&&c2.carga==='1111'&&c1.diario==='3'&&c2.diario==='3'&&c1.data===mais2&&!c1.semCarga&&/Carga 1111/.test(dia3)&&/diário nº 3/i.test(dia3)&&!(await p.$('.ag-mk')), dia3.replace(/\n/g,' | ').slice(0,300));
-  ok('Tocar no dia do calendário: itens do dia somados (ZZ0001: 1.000 sacos = 10,41 paletes) e o total do dia', /ZZ0001/.test(tot3)&&/10,41/.test(tot3)&&/1\.000 sacos/.test(tot3)&&/Total do dia\s*10,41 paletes/.test(tot3)&&/Empresa 1 \(Empresa\)\s*5,20 paletes/.test(tot3)&&/Empresa 9 \(Outra\)\s*5,20 paletes/.test(tot3)&&/Valor\s*R\$ 12\.500,00/.test(tot3), tot3.replace(/\n/g,' | '));
+  ok('Calendário: tocar no dia mostra os itens somados (ZZ0001: 1.000 sacos = 10,41 paletes), pendente, total, empresas e valor', /ZZ0001/.test(tot3)&&/10,41 pal\./.test(tot3)&&/1\.000 sacos/.test(tot3)&&/Pendente\s*10,41 paletes/.test(tot3)&&/Total do dia 10,41 paletes/.test(tot3)&&/Empresa 1 \(Empresa\)\s*pendente 5,20 paletes/.test(tot3)&&/Empresa 9 \(Outra\)\s*pendente 5,20 paletes/.test(tot3)&&/Valor R\$ 12\.500,00/.test(tot3), tot3.replace(/\n/g,' | ').slice(0,500));
   await p.click('.ag-ln[data-v="p900010"] .ag-mid'); await p.waitForSelector('dialog.ag-jan #ag-diario'); await p.fill('#ag-diario','4'); await p.click('dialog.ag-jan [data-act="ag-salvar"]'); await H.dorme(800);
   ok('Mudar o diário de bordo num pedido muda nos outros da mesma carga', (await banco(p,'p900011')).diario==='4');
   await p.evaluate(()=>__T.go('agendamentos')); await H.dorme(300);
@@ -165,37 +169,35 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   e1=await banco(p,'p800003');
   ok('"Outra…": digita código e nome de uma empresa nova', e1.empresa&&e1.empresa.cod==='7'&&e1.empresa.nome==='NOVA EMPRESA LTDA', JSON.stringify(e1.empresa));
   await p.evaluate(()=>{ window.__agend.aba='agendado'; __T.go('agendamentos'); }); await H.dorme(300);
-  await p.click('.ag-cd[data-v="'+mais2+'"]'); await H.dorme(250);
-  const te=await p.evaluate(()=>{ const l=[...document.querySelectorAll('.ag-tl>li')].find(x=>x.innerText.includes('ZZ0001')); return l?l.innerText:''; });
-  ok('Por empresa no item: Empresa 1 tem saldo, Empresa 9 precisa transferir 500', /Empresa 1 \(Empresa\)[^]*500 sacos · saldo 2\.000[^]*tem/.test(te)&&/Empresa 9 \(Outra\)[^]*500 sacos · saldo 0[^]*transferir 500/.test(te), te.replace(/\n/g,' | '));
+  await cal(mais2); const te=await painelDia();
+  ok('Calendário: transferências entre empresas (ZZ0001: Empresa 9 pede 500, saldo 0, transferir 500)', /Por empresa e transferências \(1\)/.test(te)&&/ZZ0001\s*Empresa 9 \(Outra\)\s*500\s*0\s*500/.test(te), te.replace(/\n/g,' | ').slice(-300));
   const [dl]=await Promise.all([p.waitForEvent('download',{timeout:20000}),p.click('[data-act="ag-pdfdia"]')]); const arq='/tmp/agend/dia.pdf'; await dl.saveAs(arq);
   let txtPdf=''; if(process.env.JSPDF_REAL){ const pj=require('./node_modules/pdfjs-dist/legacy/build/pdf.js'); const dpdf=await pj.getDocument({data:new Uint8Array(fs.readFileSync(arq))}).promise; for(let k=1;k<=dpdf.numPages;k++){ const tc=await (await dpdf.getPage(k)).getTextContent(); txtPdf+=tc.items.map(i=>i.str).join(' ')+'\n'; } }
   ok('PDF do dia: baixa o arquivo com o total, por empresa, a transferência e os pedidos', dl.suggestedFilename()==='carregamentos-'+mais2+'.pdf'&&(!process.env.JSPDF_REAL||(/Carregamentos/.test(txtPdf)&&/10,41/.test(txtPdf)&&/Transferir entre empresas/.test(txtPdf)&&/Empresa 9 \(Outra\)/.test(txtPdf)&&/500 SC/.test(txtPdf)&&/900010/.test(txtPdf)&&/Por empresa/.test(txtPdf))), dl.suggestedFilename()+' '+txtPdf.replace(/\s+/g,' ').slice(0,300));
-  await p.click('.ag-cd[data-v="'+ymd(new Date(h.getTime()+864e5))+'"]'); await H.dorme(250);
-  const tam=await p.evaluate(()=>document.querySelector('.ag-tot2').innerText);
-  ok('Amanhã: paletes dos itens com palete e balde na unidade; total do dia "13,00 paletes + 10 baldes" e o valor', /12,50/.test(tam)&&/10 baldes/.test(tam)&&/Total do dia\s*13,00 paletes/.test(tam)&&/\+ 10 baldes/.test(tam)&&/Valor/.test(tam)&&/Empresa 1 \(Empresa\)\s*1\.200 sacos · saldo 1\.500/.test(tam), tam.replace(/\n/g,' | '));
+  await p.click('.ag-cd[data-v="'+ymd(new Date(h.getTime()+864e5))+'"]'); await H.dorme(300);
+  const tam=await painelDia();
+  ok('Amanhã: paletes dos itens com palete e balde na unidade; total do dia "13,00 paletes · 10 baldes", pendente e valor', /12,50 pal\./.test(tam)&&/10 baldes/.test(tam)&&/Total do dia 13,00 paletes · 10 baldes/.test(tam)&&/Pendente\s*13,00 paletes · 10 baldes/.test(tam)&&/Valor R\$/.test(tam)&&/Cargas do dia/.test(tam), tam.replace(/\n/g,' | ').slice(0,400));
   await p.fill('#ag-tq','primer'); await H.dorme(150);
-  const vis2=await p.evaluate(()=>[...document.querySelectorAll('.ag-tl>li')].filter(l=>l.style.display!=='none').map(l=>l.innerText.split('\n')[0]));
+  const vis2=await p.evaluate(()=>[...document.querySelectorAll('.ag-tl>tr')].filter(l=>l.style.display!=='none').map(l=>l.querySelector('td b').innerText));
   ok('Busca nos itens do dia (primer → só o ZZ0003), sem redesenhar', vis2.length===1&&vis2[0]==='ZZ0003', JSON.stringify(vis2));
-  await p.fill('#ag-tq',''); await p.dispatchEvent('#ag-tq','input');
+  await p.fill('#ag-tq',''); await p.dispatchEvent('#ag-tq','input'); await lst('agendado');
 
 
   /* ====== 25/11: planejamento, rotina, relatórios ====== */
   await p.evaluate(()=>{ window.__agend.aba='agendado'; __T.go('agendamentos'); }); await H.dorme(400);
   let dmais2=await p.evaluate(d=>{ const x=document.getElementById('ag-d-'+d); return x?x.innerText:''; },mais2);
   ok('Estoque somado entre os pedidos: saldo total 2.000, antes vão 1.200 (amanhã), então no dia +2 faltam 200 de ZZ0001', /Falta material: ZZ0001 200/.test(dmais2), dmais2.replace(/\n/g,' | ').slice(0,200));
-  await p.click('.ag-cd[data-v="'+mais2+'"]'); await H.dorme(250);
-  ok('Calendário marca o dia com falta de material', await p.evaluate(d=>document.querySelector('.ag-cd[data-v="'+d+'"]').classList.contains('fal'),mais2));
+  await cal(mais2); ok('Calendário marca o dia com falta de material e o item mostra "falta 200"', await p.evaluate(d=>document.querySelector('.ag-cd[data-v="'+d+'"]').classList.contains('fal'),mais2)&&/falta 200/.test(await painelDia())); await lst('agendado');
   /* produção programada cobre a falta */
   await p.evaluate(d=>window.Painel.db().collection('ordens').doc('oAG1').set({num:'9901',produto:'ZZ0001',linha:'Linha 2',data:d,total:300,status:'aberta',turno:'Dia todo'}),ymd(new Date(h.getTime()+864e5))); await H.dorme(1500);
   await p.evaluate(()=>__T.go('agendamentos')); await H.dorme(400);
-  dmais2=await p.evaluate(d=>{ const x=document.getElementById('ag-d-'+d); return x?x.innerText:''; },mais2); const lado2=await p.evaluate(()=>document.querySelector('.ag-tot2').innerText);
-  ok('Produção programada de 300 amanhã cobre a falta do dia +2', !/Falta material/.test(dmais2)&&/Coberto pela produção: 300 em/.test(lado2), lado2.replace(/\n/g,' | ').slice(0,300));
+  dmais2=await p.evaluate(d=>{ const x=document.getElementById('ag-d-'+d); return x?x.innerText:''; },mais2); await cal(mais2); const lado2=await painelDia(); await lst('agendado');
+  ok('Produção programada de 300 amanhã cobre a falta do dia +2', !/Falta material/.test(dmais2)&&/com a produção/.test(lado2)&&!/falta 200/.test(lado2), lado2.replace(/\n/g,' | ').slice(0,300));
   /* limite de paletes por dia (Ajustes) */
   await p.click('[data-act="ag-ajustes"]'); await p.waitForSelector('dialog.ag-jan #ag-lim'); await p.fill('#ag-lim','10'); await p.click('[data-act="ag-ajsalvar"]'); await H.dorme(600);
   const cfgL=await p.evaluate(()=>{ const b=JSON.parse(localStorage.getItem('__srv')||'{}'); return (b.docs||{})['config/agendamentos']||{}; });
-  const over=await p.evaluate(d=>document.querySelector('.ag-cd[data-v="'+d+'"]').classList.contains('over'),mais2);
-  ok('Limite de paletes por dia: salvo nos Ajustes e o dia com 10,41 fica laranja', cfgL.limiteDia===10&&over&&/de 10/.test(await p.evaluate(d=>document.getElementById('ag-d-'+d).innerText,mais2)));
+  const deDez=/de 10/.test(await p.evaluate(d=>document.getElementById('ag-d-'+d).innerText,mais2)); await cal(); const over=await p.evaluate(d=>document.querySelector('.ag-cd[data-v="'+d+'"]').classList.contains('over'),mais2); await lst('agendado');
+  ok('Limite de paletes por dia: salvo nos Ajustes e o dia com 10,41 fica laranja', cfgL.limiteDia===10&&over&&deDez);
   /* veículo: carga 1111 (10,41 pal., 20 t) num toco (10 pal., 6 t) não cabe */
   await p.click('#ag-d-'+mais2+' .ag-cc [data-act="ag-cgedit"]'); await p.waitForSelector('dialog.ag-jan #ag-veic'); await p.selectOption('#ag-veic','TOCO'); await p.fill('#ag-placa','abc1d23'); await p.fill('#ag-hora','Manhã'); await p.click('[data-act="ag-cgsalvar"]'); await H.dorme(800);
   const cc=await p.evaluate(d=>{ const c=document.querySelector('#ag-d-'+d+' .ag-cc'); return c?c.innerText:''; },mais2); const c10=await banco(p,'p900010');
@@ -214,10 +216,11 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   /* TV da expedição (hoje) e PDF de separação */
   const [dls]=await Promise.all([p.waitForEvent('download',{timeout:20000}),p.click('#ag-d-'+mais2+' .ag-cc [data-act="ag-pdfsep"]')]);
   ok('PDF de separação da carga', /^separacao-carga-/.test(dls.suggestedFilename()), dls.suggestedFilename());
-  const [dlw]=await Promise.all([p.waitForEvent('download',{timeout:20000}),p.click('[data-act="ag-pdfsem"]')]);
+  await cal(); const [dlw]=await Promise.all([p.waitForEvent('download',{timeout:20000}),p.click('[data-act="ag-pdfsem"]')]);
   ok('PDF da semana', /^carregamentos-semana-\d{4}-\d\d-\d\d\.pdf$/.test(dlw.suggestedFilename()), dlw.suggestedFilename());
   const [dlc]=await Promise.all([p.waitForEvent('download',{timeout:20000}),p.click('[data-act="ag-csv"]')]); const csvp='/tmp/agend/a.csv'; await dlc.saveAs(csvp); const csv=fs.readFileSync(csvp,'utf8');
-  ok('Planilha (CSV com ;) com um item por linha, carga, veículo e paletes', /^\ufeffData;Situação;Ordem;Carga/.test(csv)&&/1111;/.test(csv)&&/Toco/.test(csv)&&/ZZ0001;ARGAMASSA TESTE AC3 20 KG;500;SC;5,21/.test(csv), csv.split('\n').slice(0,3).join(' // ').slice(0,300));
+  ok('Planilha (CSV com ;) com um item por linha, carga, veículo e paletes', /^\ufeffData;Situação;Ordem;Carga/.test(csv)&&/Reagendado de/.test(csv)&&/1111;/.test(csv)&&/Toco/.test(csv)&&/ZZ0001;ARGAMASSA TESTE AC3 20 KG;500;SC;5,21/.test(csv), csv.split('\n').slice(0,3).join(' // ').slice(0,300));
+  await lst('agendado');
   /* entrega parcial */
   await p.click('[data-act="ag-aba"][data-v="aguardando"]'); await H.dorme(300); await p.click('.ag-ln[data-v="p900009"] .ag-mid'); await p.waitForSelector('dialog.ag-jan'); await p.click('[data-act="ag-dividir"]'); await p.waitForSelector('dialog.ag-jan .ag-dvq');
   await p.fill('.ag-dvq[data-k="0"]','5'); await p.click('[data-act="ag-dvsalvar"]'); await H.dorme(800);
@@ -239,29 +242,38 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   await p.click('.ag-ln[data-v="p800001"] .ag-mid'); await p.waitForSelector('dialog.ag-jan');
   const ats=await p.evaluate(()=>[...document.querySelectorAll('dialog.ag-jan .ag-atb[data-v]')].map(b=>b.dataset.v).filter(Boolean).map(d=>new Date(d+'T12:00:00').getDay()));
   ok('Atalhos de data só com dias de expedição (sem sábado e domingo)', ats.length===4&&ats.every(w=>w>=1&&w<=5), JSON.stringify(ats)); await p.keyboard.press('Escape'); await H.dorme(200);
-  /* arrastar um pedido para um dia do calendário */
+  /* reagendar (ajuste 25/11) */
   const alvo=proxU(mais2);
-  await p.dragAndDrop('.ag-ln[data-v="p900050"] .ag-mid','.ag-cd[data-v="'+alvo+'"]').catch(e=>console.log('drag',e.message)); await H.dorme(900);
-  ok('Arrastar o pedido para outro dia do calendário muda a data', (await banco(p,'p900050')).data===alvo, (await banco(p,'p900050')).data+' / '+alvo);
-  /* a lista acompanha o dia tocado */
-  await p.click('.ag-cd[data-v="'+mais2+'"]'); await H.dorme(400);
-  ok('Tocar no dia rola a lista até ele e destaca', await p.evaluate(d=>{ const s=document.getElementById('ag-d-'+d); return !!s&&s.classList.contains('ag-pisca'); },mais2));
+  await p.click('.ag-cc[data-ids="p900050"] [data-act="ag-reag"]'); await p.waitForSelector('dialog.ag-jan #ag-motivo');
+  await p.fill('dialog.ag-jan #ag-data',alvo); await p.selectOption('#ag-motivo','Cliente pediu para mudar'); await p.click('[data-act="ag-reagok"]'); await H.dorme(900);
+  const r50=await banco(p,'p900050'); await lst('agendado'); const lr=await p.evaluate(()=>{ const l=document.querySelector('.ag-ln[data-v="p900050"] .ag-sub'); return l?l.innerText:''; });
+  ok('Reagendar: nova data, motivo e "reagendado · era <data>" no pedido', r50.data===alvo&&r50.reag&&r50.reag[0].de===mais2&&r50.reag[0].para===alvo&&r50.reag[0].motivo==='Cliente pediu para mudar'&&new RegExp('reagendado · era '+mais2.slice(8,10)+'/'+mais2.slice(5,7)).test(lr)&&(r50.hist||[]).some(e=>/Reagendado de/.test(e.t)), JSON.stringify(r50.reag)+' '+lr);
+  await p.click('.ag-ln[data-v="p900050"] .ag-mid'); await p.waitForSelector('dialog.ag-jan #ag-data'); await p.fill('dialog.ag-jan #ag-data',mais2); await p.click('dialog.ag-jan [data-act="ag-salvar"]'); await H.dorme(800);
+  const r50b=await banco(p,'p900050');
+  ok('Mudar a data na janela de um pedido agendado também conta como reagendamento (2x)', r50b.data===mais2&&r50b.reag.length===2&&/reagendado 2x/.test(await p.evaluate(()=>document.querySelector('.ag-ln[data-v="p900050"] .ag-sub').innerText)), JSON.stringify(r50b.reag));
+  /* do calendário para a lista */
+  await cal(mais2); await p.click('[data-act="ag-verdia"]'); await H.dorme(500);
+  ok('"Ver na lista" do calendário abre a lista só com aquele dia, destacado', await p.evaluate(d=>{ const s=document.getElementById('ag-d-'+d); return !!s&&s.classList.contains('ag-pisca')&&window.__agend.dia===d&&__T.S().view==='agendamentos'; },mais2));
+  await lst('agendado');
   /* atalho de teclado */
   await p.evaluate(()=>document.activeElement&&document.activeElement.blur()); await p.keyboard.press('/'); await H.dorme(150);
   ok('Atalho "/" vai para a busca', await p.evaluate(()=>document.activeElement&&document.activeElement.id==='ag-q'));
-  /* TV da expedição */
-  await p.evaluate(()=>__T.go('expedicao')); await H.dorme(400); const tv=await tela(p);
-  ok('TV da expedição: carregamentos de hoje com a situação', /Carregamentos de hoje/.test(tv)&&/Modo TV/.test(tv)&&/A separar|Separado|Caminhão chegou|Nenhum carregamento/.test(tv), tv.replace(/\n/g,' | ').slice(0,250));
-  await p.evaluate(()=>__T.go('agendamentos')); await H.dorme(300);
+  /* a TV saiu; a aba Calendário entrou no lugar, com ← → */
+  const nav3=await p.evaluate(()=>document.getElementById('view').innerText.slice(0,400)+' '+document.body.innerText.includes('Expedição (TV)'));
+  await cal(mais2); await p.evaluate(()=>document.activeElement&&document.activeElement.blur()); await p.keyboard.press('ArrowRight'); await H.dorme(300);
+  ok('A tela da TV saiu e a aba Calendário muda de dia com → ', !/true$/.test(nav3)&&await p.evaluate(()=>window.__agend.cal)===ymd(new Date(new Date(mais2+'T12:00:00').getTime()+864e5)));
+  await lst('agendado');
 
   /* carregou, cancelar e reabrir */
   await p.evaluate(()=>{ window.__agend.aba='agendado'; __T.go('agendamentos'); }); await H.dorme(400);
   await p.click('.ag-cc[data-ids="p900001"] [data-act="ag-cgcarregou"]'); await H.dorme(600); doc=await banco(p,'p900001');
+  await cal(amanha); const cpx=await painelDia(); const okc=await p.evaluate(d=>document.querySelector('.ag-cd[data-v="'+d+'"]').classList.contains('ok'),amanha); await lst('agendado');
+  ok('Calendário: depois do "Carregou", o dia mostra tudo carregado (pendente zera)', /Pendente\s*Tudo carregado/.test(cpx)&&/Carregado\s*13,00 paletes · 10 baldes/.test(cpx)&&/1 carregado/.test(cpx)&&okc, cpx.replace(/\n/g,' | ').slice(0,300));
   ok('"Carregou" no cartão da carga fecha o pedido com a hora, sem abrir a janela', doc.status==='carregado'&&doc.aberto===false&&!!doc.fechadoEm&&doc.carregadoDia===ymd(new Date())&&/T/.test(doc.carregadoEm)&&(doc.hist||[]).some(e=>/Carregado às \d\d:\d\d/.test(e.t))&&!(await jan(p)));
   await p.click('[data-act="ag-aba"][data-v="carregado"]'); await H.dorme(300); t=await tela(p);
   ok('Aparece em Carregados (com os antigos)', /900001/.test(t)&&/800002/.test(t));
   await p.click('[data-act="ag-aba"][data-v="indic"]'); await H.dorme(1200); const ind=await tela(p);
-  ok('Indicadores do mês: carregados, no dia combinado e motivos dos atrasos', /Carregados\s*1/.test(ind)&&/No dia combinado/.test(ind)&&/Motivos dos atrasos/.test(ind)&&/Transportadora não veio/.test(ind), ind.replace(/\n/g,' | ').slice(0,300));
+  ok('Indicadores do mês: carregados, no dia combinado e motivos dos atrasos', /Carregados\s*1/.test(ind)&&/No dia combinado/.test(ind)&&/Motivos dos atrasos/.test(ind)&&/Transportadora não veio/.test(ind)&&/Cliente pediu para mudar/.test(ind)&&/Reagendamentos\s*3/.test(ind), ind.replace(/\n/g,' | ').slice(250,1100));
   await p.click('[data-act="ag-aba"][data-v="carregado"]'); await H.dorme(300);
   await p.click('.ag-ln[data-v="p900001"] [data-act="ag-reabrir"]'); await H.dorme(500); doc=await banco(p,'p900001');
   ok('Reabrir volta para Agendado com a mesma data', doc.status==='agendado'&&doc.aberto===true&&doc.data===amanha);

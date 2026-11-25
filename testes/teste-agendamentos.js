@@ -23,9 +23,11 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
 
 (async()=>{ const {d}=seedManut(); const h=new Date(), ymd=x=>new Date(x.getTime()-x.getTimezoneOffset()*6e4).toISOString().slice(0,10);
   const ontem=ymd(new Date(h.getTime()-864e5)), amanha=ymd(new Date(h.getTime()+864e5));
+  const proxU=d=>{ let x=new Date(d+'T12:00:00'); do{ x=new Date(x.getTime()+864e5); }while(x.getDay()===0||x.getDay()===6); return ymd(x); };
   d.docs['agendamentos/p800001']={pedido:'800001',cliente:'Cliente Atrasado',data:ontem,status:'agendado',aberto:true,itens:[],total:10};
   d.docs['agendamentos/p800003']={pedido:'800003',carga:'sem carga',data:'',status:'aguardando',aberto:true,itens:[],total:1};
   d.docs['agendamentos/p800002']={pedido:'800002',cliente:'Cliente Antigo',data:ontem,status:'carregado',aberto:false,fechadoEm:new Date(h.getTime()-864e5).toISOString(),itens:[],total:5};
+  d.users['fatura@painel-colafix.app']={uid:'uFAT',pass:'fat123',nome:'Faturamento Teste'}; d.docs['perfis/uFAT']={nome:'Faturamento Teste',usuario:'fatura'}; d.docs['acessos/uFAT']={perfil:'producao',mods:['inicio'],soVerMods:['agend'],locais:[],ativo:true};
   d.docs['itens/ZZ0001']={codigo:'ZZ0001',palete:96,desc:'Argamassa teste'}; /* Ajustes › Itens: 96 sacos por palete */
   fs.mkdirSync('/tmp/agend',{recursive:true});
   fs.writeFileSync('/tmp/agend/p500a.pdf',mapa('900010',[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','500,000','2.000,000','6.250,000']]));
@@ -118,11 +120,11 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   for(const [f,sc] of [['/tmp/agend/p500a.pdf',0],['/tmp/agend/p500b.pdf',1]]){ await p.setInputFiles('#ag-file',f); await p.waitForSelector('dialog.ag-jan',{timeout:15000}); await H.dorme(300);
     if(sc){ const lst=await p.evaluate(()=>[...document.querySelectorAll('#ag-tl option')].map(o=>o.value)); ok('A transportadora já usada aparece na lista ao digitar', lst.some(t=>/ABC1D23/.test(t)), JSON.stringify(lst)); }
     await p.fill('#ag-carga','7000'); await p.fill('#ag-transp','Gabriel Teste'); await p.click('dialog.ag-jan [data-act="ag-dt"]:nth-child(3)'); await H.dorme(150);
-    if(sc){ const dp=await p.evaluate(()=>document.getElementById('ag-diap').innerText); ok('Ao escolher o dia, mostra o que já tem nele e como fica com este pedido', /já tem 1 pedido \(5,20 paletes\)/i.test(dp)&&/1\.000 SC · 10,41 paletes/.test(dp), dp); }
+    if(sc){ const dp=await p.evaluate(()=>document.getElementById('ag-diap').innerText); ok('Ao escolher o dia, mostra o que já tem nele e como fica com este pedido', /já tem 1 pedido \(5,20 paletes\)/i.test(dp)&&/Com este pedido fica 10,41 paletes/.test(dp), dp); }
     await p.click('dialog.ag-jan [data-act="ag-salvar"]'); await H.dorme(600); }
   await p.evaluate(()=>{ window.__agend.aba='agendado'; __T.go('agendamentos'); }); await H.dorme(400);
   const dia=await p.evaluate(d=>{ const x=[...document.querySelectorAll('.ag-dia')].find(e=>e.innerText.includes(d)); return x?x.innerText:''; },mais2.slice(8,10)+'/'+mais2.slice(5,7)+'/'+mais2.slice(0,4));
-  ok('Dia com 2 pedidos na mesma carga: 1.000 SC · 10,41 paletes (no dia e na carga)', /10,41 paletes/.test(dia)&&/1\.000 SC/.test(dia)&&/Carga 7000 · Gabriel Teste · 2 pedidos/.test(dia), dia.replace(/\n/g,' | ').slice(0,300));
+  ok('Dia com 2 pedidos na mesma carga: 1.000 SC · 10,41 paletes (no dia e na carga)', /10,41 paletes/.test(dia)&&/Carga 7000/.test(dia)&&/Gabriel Teste · 2 pedidos/.test(dia), dia.replace(/\n/g,' | ').slice(0,300));
   const fx=await p.evaluate(()=>{ const x=document.querySelector('.ag-cal'); return x?x.innerText:''; });
   const lv2=await p.evaluate(()=>document.querySelector('.ag-ln[data-v="p900011"] .ag-sub').innerText);
   ok('Cada pedido mostra a empresa', /Empresa 9 \(Outra\)/.test(lv2), lv2);
@@ -135,7 +137,7 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   await p.click('.ag-ln[data-v="p900010"] .ag-mid'); await p.waitForSelector('dialog.ag-jan'); await p.click('dialog.ag-jan [data-act="ag-semcarga"]');
   const dis=await p.evaluate(()=>document.getElementById('ag-carga').disabled); await p.click('dialog.ag-jan [data-act="ag-salvar"]'); await H.dorme(600);
   doc=await banco(p,'p900010'); const dia2=await p.evaluate(()=>document.getElementById('ag-corpo').innerText);
-  ok('"Sem carga por enquanto" apaga a carga, trava o campo e o pedido vai para o bloco "Sem carga"', dis&&doc.semCarga===true&&doc.carga===''&&/Sem carga/.test(dia2)&&/Carga 7000 · Gabriel Teste/.test(dia2));
+  ok('"Sem carga por enquanto" apaga a carga, trava o campo e o pedido vai para o bloco "Sem carga"', dis&&doc.semCarga===true&&doc.carga===''&&/Sem carga/.test(dia2)&&/Carga 7000/.test(dia2)&&/Gabriel Teste/.test(dia2));
   await p.click('.ag-ln[data-v="p900010"] .ag-mid'); await p.waitForSelector('dialog.ag-jan'); await p.fill('#ag-carga','7001').catch(()=>{});
   const dis2=await p.evaluate(()=>document.getElementById('ag-carga').disabled); await p.click('dialog.ag-jan [data-act="ag-semcarga"]'); await p.fill('#ag-carga','7001'); await p.click('dialog.ag-jan [data-act="ag-salvar"]'); await H.dorme(600);
   doc=await banco(p,'p900010'); ok('Tirar o "Sem carga" e digitar a carga volta ao normal', dis2&&doc.carga==='7001'&&doc.semCarga===false);
@@ -177,12 +179,90 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   ok('Busca nos itens do dia (primer → só o ZZ0003), sem redesenhar', vis2.length===1&&vis2[0]==='ZZ0003', JSON.stringify(vis2));
   await p.fill('#ag-tq',''); await p.dispatchEvent('#ag-tq','input');
 
+
+  /* ====== 25/11: planejamento, rotina, relatórios ====== */
+  await p.evaluate(()=>{ window.__agend.aba='agendado'; __T.go('agendamentos'); }); await H.dorme(400);
+  let dmais2=await p.evaluate(d=>{ const x=document.getElementById('ag-d-'+d); return x?x.innerText:''; },mais2);
+  ok('Estoque somado entre os pedidos: saldo total 2.000, antes vão 1.200 (amanhã), então no dia +2 faltam 200 de ZZ0001', /Falta material: ZZ0001 200/.test(dmais2), dmais2.replace(/\n/g,' | ').slice(0,200));
+  await p.click('.ag-cd[data-v="'+mais2+'"]'); await H.dorme(250);
+  ok('Calendário marca o dia com falta de material', await p.evaluate(d=>document.querySelector('.ag-cd[data-v="'+d+'"]').classList.contains('fal'),mais2));
+  /* produção programada cobre a falta */
+  await p.evaluate(d=>window.Painel.db().collection('ordens').doc('oAG1').set({num:'9901',produto:'ZZ0001',linha:'Linha 2',data:d,total:300,status:'aberta',turno:'Dia todo'}),ymd(new Date(h.getTime()+864e5))); await H.dorme(1500);
+  await p.evaluate(()=>__T.go('agendamentos')); await H.dorme(400);
+  dmais2=await p.evaluate(d=>{ const x=document.getElementById('ag-d-'+d); return x?x.innerText:''; },mais2); const lado2=await p.evaluate(()=>document.querySelector('.ag-tot2').innerText);
+  ok('Produção programada de 300 amanhã cobre a falta do dia +2', !/Falta material/.test(dmais2)&&/Coberto pela produção: 300 em/.test(lado2), lado2.replace(/\n/g,' | ').slice(0,300));
+  /* limite de paletes por dia (Ajustes) */
+  await p.click('[data-act="ag-ajustes"]'); await p.waitForSelector('dialog.ag-jan #ag-lim'); await p.fill('#ag-lim','10'); await p.click('[data-act="ag-ajsalvar"]'); await H.dorme(600);
+  const cfgL=await p.evaluate(()=>{ const b=JSON.parse(localStorage.getItem('__srv')||'{}'); return (b.docs||{})['config/agendamentos']||{}; });
+  const over=await p.evaluate(d=>document.querySelector('.ag-cd[data-v="'+d+'"]').classList.contains('over'),mais2);
+  ok('Limite de paletes por dia: salvo nos Ajustes e o dia com 10,41 fica laranja', cfgL.limiteDia===10&&over&&/de 10/.test(await p.evaluate(d=>document.getElementById('ag-d-'+d).innerText,mais2)));
+  /* veículo: carga 1111 (10,41 pal., 20 t) num toco (10 pal., 6 t) não cabe */
+  await p.click('#ag-d-'+mais2+' .ag-cc [data-act="ag-cgedit"]'); await p.waitForSelector('dialog.ag-jan #ag-veic'); await p.selectOption('#ag-veic','TOCO'); await p.fill('#ag-placa','abc1d23'); await p.fill('#ag-hora','Manhã'); await p.click('[data-act="ag-cgsalvar"]'); await H.dorme(800);
+  const cc=await p.evaluate(d=>{ const c=document.querySelector('#ag-d-'+d+' .ag-cc'); return c?c.innerText:''; },mais2); const c10=await banco(p,'p900010');
+  ok('Veículo, placa e horário na carga; avisa que não cabe no toco e mostra o peso', c10.veiculo==='TOCO'&&c10.placa==='ABC1D23'&&c10.hora==='Manhã'&&/passa de 10 paletes e do peso \(6,0 t\) do toco/.test(cc)&&/20,0 t/.test(cc)&&/Toco/.test(cc)&&/ABC1D23/.test(cc), cc.replace(/\n/g,' | ').slice(0,300));
+  /* situação: separado / chegou */
+  await p.click('#ag-d-'+mais2+' .ag-cc [data-act="ag-etapa"][data-v^="sep|"]'); await H.dorme(500); await p.click('#ag-d-'+mais2+' .ag-cc [data-act="ag-etapa"][data-v^="chegou|"]'); await H.dorme(500);
+  const c10b=await banco(p,'p900010'), c11b=await banco(p,'p900011');
+  ok('Situação da carga: "Separado" e "Caminhão chegou" marcam a hora em todos os pedidos da carga', !!c10b.sep&&!!c11b.sep&&!!c10b.chegou&&!!c11b.chegou&&/✓ Separado \d\d:\d\d/.test(await p.evaluate(d=>document.querySelector('#ag-d-'+d+' .ag-cc').innerText,mais2)));
+  /* ordem de carregamento: segunda carga no mesmo dia e troca a ordem */
+  await p.evaluate(async d=>{ await window.Painel.db().collection('agendamentos').doc('p900050').set({pedido:'900050',pedidos:['900050'],carga:'2222',data:d,status:'agendado',aberto:true,itens:[{cod:'ZZ0002',desc:'REJUNTE',un:'CX',qtd:5,pend:5,saldo:50,valor:10}],total:10}); },mais2); await H.dorme(1200);
+  await p.evaluate(()=>__T.go('agendamentos')); await H.dorme(300);
+  let ordem=await p.evaluate(d=>[...document.querySelectorAll('#ag-d-'+d+' .ag-cc')].map(c=>c.querySelector('.ag-cct b').innerText),mais2);
+  await p.click('#ag-d-'+mais2+' .ag-cc:nth-of-type(1) [data-act="ag-ord"][data-v$="|1"]').catch(async()=>{ await p.click('#ag-d-'+mais2+' .ag-cc [data-act="ag-ord"][data-v$="|1"]'); }); await H.dorme(800);
+  const ordem2=await p.evaluate(d=>[...document.querySelectorAll('#ag-d-'+d+' .ag-cc')].map(c=>c.querySelector('.ag-cct b').innerText),mais2), o50=await banco(p,'p900050');
+  ok('Ordem de carregamento: ▼ troca as cargas e numera 1º, 2º', ordem.join()==='Carga 1111,Carga 2222'&&ordem2.join()==='Carga 2222,Carga 1111'&&o50.ordemDia===1, JSON.stringify([ordem,ordem2]));
+  /* TV da expedição (hoje) e PDF de separação */
+  const [dls]=await Promise.all([p.waitForEvent('download',{timeout:20000}),p.click('#ag-d-'+mais2+' .ag-cc [data-act="ag-pdfsep"]')]);
+  ok('PDF de separação da carga', /^separacao-carga-/.test(dls.suggestedFilename()), dls.suggestedFilename());
+  const [dlw]=await Promise.all([p.waitForEvent('download',{timeout:20000}),p.click('[data-act="ag-pdfsem"]')]);
+  ok('PDF da semana', /^carregamentos-semana-\d{4}-\d\d-\d\d\.pdf$/.test(dlw.suggestedFilename()), dlw.suggestedFilename());
+  const [dlc]=await Promise.all([p.waitForEvent('download',{timeout:20000}),p.click('[data-act="ag-csv"]')]); const csvp='/tmp/agend/a.csv'; await dlc.saveAs(csvp); const csv=fs.readFileSync(csvp,'utf8');
+  ok('Planilha (CSV com ;) com um item por linha, carga, veículo e paletes', /^\ufeffData;Situação;Ordem;Carga/.test(csv)&&/1111;/.test(csv)&&/Toco/.test(csv)&&/ZZ0001;ARGAMASSA TESTE AC3 20 KG;500;SC;5,21/.test(csv), csv.split('\n').slice(0,3).join(' // ').slice(0,300));
+  /* entrega parcial */
+  await p.click('[data-act="ag-aba"][data-v="aguardando"]'); await H.dorme(300); await p.click('.ag-ln[data-v="p900009"] .ag-mid'); await p.waitForSelector('dialog.ag-jan'); await p.click('[data-act="ag-dividir"]'); await p.waitForSelector('dialog.ag-jan .ag-dvq');
+  await p.fill('.ag-dvq[data-k="0"]','5'); await p.click('[data-act="ag-dvsalvar"]'); await H.dorme(800);
+  const pa=await banco(p,'p900009'), pr=await banco(p,'p900009-r2');
+  ok('Entrega parcial: 5 de 20 CX vão agora; o resto (15) vira outro agendamento esperando data', pa.itens.find(i=>i.cod==='ZZ0002').pend===5&&pr&&pr.status==='aguardando'&&pr.itens.length===1&&pr.itens[0].pend===15&&pr.parcial.de==='p900009'&&/entrega parcial/.test(await p.evaluate(()=>document.getElementById('ag-corpo').innerText)), JSON.stringify(pr&&pr.itens));
+  /* colar texto do Focco + pedido repetido */
+  await p.click('[data-act="ag-colar"]'); await p.waitForSelector('#ag-txt');
+  await p.fill('#ag-txt','Empresa.........: 9 - OUTRA FILIAL LTDA\nPedido..........: 900010,900040\nItem Descrição Un. Quantidade Qtd. Atendida Qtd. Cancelada Qtd. Pendent Saldo Est. Valor Total\nZZ0002 REJUNTE TESTE BRANCO 1 KG CX 8,000 0,000 0,000 8,000 45,000 480,000\nZZ0003 PRIMER TESTE 3,6 LT BD 2,000 0,000 0,000 2,000 0,000 77,070');
+  await p.click('[data-act="ag-colarok"]'); await H.dorme(900); const col=await banco(p,'p900010_900040'); await p.keyboard.press('Escape'); await H.dorme(300);
+  const rep=await p.evaluate(()=>{ const l=document.querySelector('.ag-ln[data-v="p900010_900040"] .ag-sub'); return l?l.innerText:''; });
+  ok('Colar texto do Focco: lê empresa, pedidos e itens com unidade', col&&col.empresa.cod==='9'&&col.itens.length===2&&col.itens[0].un==='CX'&&col.itens[0].pend===8&&col.itens[1].un==='BD', JSON.stringify(col&&col.itens));
+  ok('Pedido repetido: 900010 também está em outro agendamento', /pedido repetido/.test(rep), rep);
+  /* motivo do atraso ao passar para o próximo dia útil */
+  await p.click('[data-act="ag-aba"][data-v="agendado"]'); await H.dorme(300);
+  await p.click('#ag-d-'+ontem+' [data-act="ag-adiar"]'); await p.waitForSelector('dialog.ag-jan #ag-motivo'); await p.selectOption('#ag-motivo','Transportadora não veio'); await p.click('[data-act="ag-motok"]'); await H.dorme(800);
+  const at=await banco(p,'p800001');
+  ok('Data passada: "Passar para o próximo dia útil" pede o motivo e guarda', at.data>=ymd(new Date())&&at.atrasos&&at.atrasos[0].motivo==='Transportadora não veio'&&at.atrasos[0].de===ontem, JSON.stringify(at.atrasos));
+  /* atalhos de data pulam domingo e sábado */
+  await p.click('.ag-ln[data-v="p800001"] .ag-mid'); await p.waitForSelector('dialog.ag-jan');
+  const ats=await p.evaluate(()=>[...document.querySelectorAll('dialog.ag-jan .ag-atb[data-v]')].map(b=>b.dataset.v).filter(Boolean).map(d=>new Date(d+'T12:00:00').getDay()));
+  ok('Atalhos de data só com dias de expedição (sem sábado e domingo)', ats.length===4&&ats.every(w=>w>=1&&w<=5), JSON.stringify(ats)); await p.keyboard.press('Escape'); await H.dorme(200);
+  /* arrastar um pedido para um dia do calendário */
+  const alvo=proxU(mais2);
+  await p.dragAndDrop('.ag-ln[data-v="p900050"] .ag-mid','.ag-cd[data-v="'+alvo+'"]').catch(e=>console.log('drag',e.message)); await H.dorme(900);
+  ok('Arrastar o pedido para outro dia do calendário muda a data', (await banco(p,'p900050')).data===alvo, (await banco(p,'p900050')).data+' / '+alvo);
+  /* a lista acompanha o dia tocado */
+  await p.click('.ag-cd[data-v="'+mais2+'"]'); await H.dorme(400);
+  ok('Tocar no dia rola a lista até ele e destaca', await p.evaluate(d=>{ const s=document.getElementById('ag-d-'+d); return !!s&&s.classList.contains('ag-pisca'); },mais2));
+  /* atalho de teclado */
+  await p.evaluate(()=>document.activeElement&&document.activeElement.blur()); await p.keyboard.press('/'); await H.dorme(150);
+  ok('Atalho "/" vai para a busca', await p.evaluate(()=>document.activeElement&&document.activeElement.id==='ag-q'));
+  /* TV da expedição */
+  await p.evaluate(()=>__T.go('expedicao')); await H.dorme(400); const tv=await tela(p);
+  ok('TV da expedição: carregamentos de hoje com a situação', /Carregamentos de hoje/.test(tv)&&/Modo TV/.test(tv)&&/A separar|Separado|Caminhão chegou|Nenhum carregamento/.test(tv), tv.replace(/\n/g,' | ').slice(0,250));
+  await p.evaluate(()=>__T.go('agendamentos')); await H.dorme(300);
+
   /* carregou, cancelar e reabrir */
   await p.evaluate(()=>{ window.__agend.aba='agendado'; __T.go('agendamentos'); }); await H.dorme(400);
-  await p.click('.ag-ln[data-v="p900001"] [data-act="ag-carregou"]'); await H.dorme(600); doc=await banco(p,'p900001');
-  ok('"Carregou" fecha o pedido sem abrir a janela', doc.status==='carregado'&&doc.aberto===false&&!!doc.fechadoEm&&!(await jan(p)));
+  await p.click('.ag-cc[data-ids="p900001"] [data-act="ag-cgcarregou"]'); await H.dorme(600); doc=await banco(p,'p900001');
+  ok('"Carregou" no cartão da carga fecha o pedido com a hora, sem abrir a janela', doc.status==='carregado'&&doc.aberto===false&&!!doc.fechadoEm&&doc.carregadoDia===ymd(new Date())&&/T/.test(doc.carregadoEm)&&(doc.hist||[]).some(e=>/Carregado às \d\d:\d\d/.test(e.t))&&!(await jan(p)));
   await p.click('[data-act="ag-aba"][data-v="carregado"]'); await H.dorme(300); t=await tela(p);
   ok('Aparece em Carregados (com os antigos)', /900001/.test(t)&&/800002/.test(t));
+  await p.click('[data-act="ag-aba"][data-v="indic"]'); await H.dorme(1200); const ind=await tela(p);
+  ok('Indicadores do mês: carregados, no dia combinado e motivos dos atrasos', /Carregados\s*1/.test(ind)&&/No dia combinado/.test(ind)&&/Motivos dos atrasos/.test(ind)&&/Transportadora não veio/.test(ind), ind.replace(/\n/g,' | ').slice(0,300));
+  await p.click('[data-act="ag-aba"][data-v="carregado"]'); await H.dorme(300);
   await p.click('.ag-ln[data-v="p900001"] [data-act="ag-reabrir"]'); await H.dorme(500); doc=await banco(p,'p900001');
   ok('Reabrir volta para Agendado com a mesma data', doc.status==='agendado'&&doc.aberto===true&&doc.data===amanha);
   await p.evaluate(()=>window.__agend&&0); await p.click('[data-act="ag-aba"][data-v="aguardando"]'); await H.dorme(300);
@@ -196,6 +276,16 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   B=await abre('iasmyn','senha123',{width:390,height:800}); p=B.page; await p.evaluate(()=>{ __T.go('agendamentos'); }); await H.dorme(600);
   const lado=await p.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2);
   ok('No celular não tem rolagem para o lado', !lado); await B.browser.close();
+
+  /* faturamento: módulo em "só ver" */
+  B=await abre('fatura','fat123'); p=B.page; await p.evaluate(()=>__T.go('agendamentos')); await H.dorme(500);
+  const fv=await p.evaluate(()=>({tela:document.getElementById('view').innerText.slice(0,200),imp:!!document.getElementById('ag-file'),ck:document.querySelectorAll('.ag-ck').length,ord:document.querySelectorAll('[data-act="ag-ord"]').length}));
+  ok('Faturamento com o módulo em "só ver": vê os agendamentos sem importar, marcar nem mudar', /Agendamentos de pedidos/.test(fv.tela)&&!fv.imp&&fv.ck===0&&fv.ord===0, JSON.stringify(fv)); await B.browser.close();
+  /* celular: janela em abas */
+  B=await abre('iasmyn','senha123',{width:390,height:800}); p=B.page; await p.evaluate(()=>{ window.__agend.aba='agendado'; __T.go('agendamentos'); }); await H.dorme(500);
+  await p.click('.ag-ln .ag-mid'); await p.waitForSelector('dialog.ag-jan .ag-tabs'); await p.click('dialog.ag-jan [data-act="ag-tab"][data-v="itens"]'); await H.dorme(200);
+  const ab=await p.evaluate(()=>{ const j=document.querySelector('dialog.ag-jan'); const vis=s=>{ const e=j.querySelector(s); return !!e&&e.offsetParent!==null; }; return {tabs:vis('.ag-tabs'),itens:vis('.ag-sec[data-tab="itens"]'),dados:vis('.ag-sec[data-tab="dados"]')}; });
+  ok('Celular: a janela do pedido em abas (Dados, Itens, Histórico)', ab.tabs&&ab.itens&&!ab.dados, JSON.stringify(ab)); await B.browser.close();
 
   /* quem não tem o módulo */
   B=await abre('operador','ope123'); p=B.page; const nav2=await p.evaluate(()=>document.getElementById('navlist').innerText); await p.evaluate(()=>__T.go('agendamentos')); await H.dorme(300);

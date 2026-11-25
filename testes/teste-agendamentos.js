@@ -198,6 +198,21 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   await p.fill('#ag-q','zzz'); await p.dispatchEvent('#ag-q','input'); await p.click('[data-act="ag-limpar"]'); await H.dorme(400);
   const lp=await p.evaluate(()=>({sd:window.__agend.soDiario,q:window.__agend.q,input:document.getElementById('ag-q').value,limpa:!!document.querySelector('[data-act="ag-limpar"]'),n:document.querySelectorAll('#ag-corpo .ag-ln').length}));
   ok('"Limpar filtros" desliga o diário, a busca e a empresa e some quando não há filtro', !lp.sd&&!lp.q&&!lp.input&&!lp.limpa&&lp.n>2, JSON.stringify(lp));
+  /* classificação = tipo de produto; dias; copiar */
+  const opc=await p.evaluate(()=>[...document.querySelectorAll('#ag-cls option')].map(o=>o.value).filter(Boolean));
+  await p.selectOption('#ag-cls','Rejunte'); await H.dorme(400);
+  const fc=await p.evaluate(()=>({ids:[...document.querySelectorAll('#ag-corpo .ag-ln')].map(l=>l.dataset.v),qt:(document.querySelector('.ag-ln[data-v="p900001"] .ag-qt')||{}).innerText||''}));
+  ok('Filtro de classificação (tipo de produto): só pedidos com rejunte e só a quantidade de rejunte', opc.includes('Rejunte')&&opc.includes('Primer')&&opc.some(o=>/^Argamassa/.test(o))&&fc.ids.join()==='p900001'&&fc.qt==='20 CX', JSON.stringify([opc,fc]));
+  await p.click('[data-act="ag-limpar"]'); await H.dorme(300);
+  await p.selectOption('#ag-per','amanha'); await H.dorme(400);
+  const fdA=await p.evaluate(()=>[...document.querySelectorAll('#ag-corpo .ag-ln')].map(l=>l.dataset.v));
+  await p.selectOption('#ag-per','datas'); await H.dorme(300); await p.fill('#ag-pde',mais2); await p.dispatchEvent('#ag-pde','change'); await H.dorme(300); await p.fill('#ag-pate',mais2); await p.dispatchEvent('#ag-pate','change'); await H.dorme(400);
+  const fdB=await p.evaluate(()=>[...document.querySelectorAll('#ag-corpo .ag-ln')].map(l=>l.dataset.v).sort());
+  ok('Filtro de dias: "Amanhã" e "Escolher datas" (de/até)', fdA.join()==='p900001'&&fdB.join()==='p900010,p900011', JSON.stringify([fdA,fdB]));
+  await p.click('[data-act="ag-copiar"]'); await H.dorme(300); const cp1=await p.evaluate(()=>window.__agendCopiado);
+  await p.click('.ag-cc [data-act="ag-copiarids"]'); await H.dorme(300); const cp2=await p.evaluate(()=>window.__agendCopiado);
+  ok('Copiar pedidos: os números da lista filtrada e da carga, separados por vírgula (formato do Focco)', cp1==='900010,900011'&&cp2==='900010,900011', cp1+' / '+cp2);
+  await p.click('[data-act="ag-limpar"]'); await H.dorme(300);
   await cal(mais2); ok('Calendário marca o dia com falta de material e o item mostra "falta 200"', await p.evaluate(d=>document.querySelector('.ag-cd[data-v="'+d+'"]').classList.contains('fal'),mais2)&&/falta 200/.test(await painelDia())); await lst('agendado');
   /* produção programada cobre a falta */
   await p.evaluate(d=>window.Painel.db().collection('ordens').doc('oAG1').set({num:'9901',produto:'ZZ0001',linha:'Linha 2',data:d,total:300,status:'aberta',turno:'Dia todo'}),ymd(new Date(h.getTime()+864e5))); await H.dorme(1500);
@@ -274,6 +289,20 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   await cal(mais2); await p.evaluate(()=>document.activeElement&&document.activeElement.blur()); await p.keyboard.press('ArrowRight'); await H.dorme(300);
   ok('A tela da TV saiu e a aba Calendário muda de dia com → ', !/true$/.test(nav3)&&await p.evaluate(()=>window.__agend.cal)===ymd(new Date(new Date(mais2+'T12:00:00').getTime()+864e5)));
   await lst('agendado');
+
+  /* análise com o saldo novo (importação da base do PCP) */
+  ok('Sem base do PCP, não aparece o aviso de saldo novo', !(await p.$('.ag-sn2')));
+  await p.evaluate(()=>window.Painel.db().doc('pcpbase/itens').set({atual:{SALDO:'2026-11-25T11:50'},l:{ZZ0001:{a3:100,a30:0},ZZ0002:{a3:1000,a30:0},ZZ0003:{a3:0,a30:0}}})); await H.dorme(1500);
+  await lst('agendado'); const sn=await p.evaluate(()=>(document.querySelector('.ag-sn2')||{}).innerText||'');
+  ok('Saldo novo importado: aviso no topo com cargas sem material e o que já dá para agendar', /Saldo novo importado/.test(sn)&&/25\/11\/2026 11:50/.test(sn)&&/sem material/.test(sn)&&/já pode/.test(sn), sn.replace(/\n/g,' '));
+  await p.click('.ag-sn2 [data-act="ag-analise"]'); await p.waitForSelector('dialog.ag-jan .ag-ans'); const an=await jan(p);
+  ok('Análise: o que produzir (ZZ0001), cargas sem material e pedidos que já podem ser agendados', /Análise dos agendamentos/.test(an)&&/Produzir/.test(an)&&/ZZ0001/.test(an)&&/Cargas sem material/.test(an)&&/Já dá para agendar/.test(an)&&/900009/.test(an), an.replace(/\n/g,' | ').slice(0,400));
+  await p.click('[data-act="ag-anok"]'); await H.dorme(400);
+  ok('Depois de ver a análise, o aviso some até o próximo saldo', !(await p.$('.ag-sn2')));
+  await p.evaluate(()=>window.Painel.db().doc('pcpbase/itens').set({atual:{SALDO:'2026-11-25T15:10'},l:{ZZ0001:{a3:9000,a30:0},ZZ0002:{a3:1000,a30:0},ZZ0003:{a3:50,a30:0}}})); await H.dorme(1500);
+  await lst('agendado'); await p.click('.ag-sn2 [data-act="ag-analise"]'); await p.waitForSelector('dialog.ag-jan .ag-ans'); const an2=await jan(p);
+  ok('Segundo saldo: a análise mostra o que passou a ter material', /O que mudou desde a análise de 25\/11\/2026 11:50/.test(an2)&&/Agora tem material:[^\n]*ZZ0001/.test(an2), an2.replace(/\n/g,' | ').slice(-300));
+  await p.click('[data-act="ag-anok"]'); await H.dorme(300);
 
   /* carregou, cancelar e reabrir */
   await p.evaluate(()=>{ window.__agend.aba='agendado'; __T.go('agendamentos'); }); await H.dorme(400);

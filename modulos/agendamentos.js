@@ -111,7 +111,8 @@
   /* ---------- banco ---------- */
   function carregar(){ if(!P.db()) return;
     P.inscrever('agend-abertos',()=>P.db().collection(COL).where('aberto','==',true).limit(600),s=>{ A.abertos=s.docs.map(d=>normaliza(Object.assign({_id:d.id},d.data()))); A.lido.a=true; P.rerender(); });
-    if(!baseItens()) P.db().doc('pcpbase/itens').get().then(g=>{ if(g.exists){ A.base=g.data(); A._pl=null; P.rerender(); } }).catch(()=>{});
+    /* base do PCP ao vivo: a importação de saldo nova atualiza o plano e dispara o aviso da análise */
+    P.inscrever('agend-base',()=>P.db().doc('pcpbase/itens'),g=>{ A.base=g&&g.exists?g.data():null; A._pl=null; P.rerender(); });
     P.db().doc('config/agendamentos').get().then(g=>{ if(g.exists) A.cfg=Object.assign({transps:[],pp:{}},g.data()); P.rerender(); }).catch(()=>{});
     /* o tamanho do palete vem de Ajustes › Itens: quem não tem a Produção não recebe os itens; aí lê uma vez */
     setTimeout(()=>{ if((P.S.itens||[]).length) return; P.db().collection('itens').limit(1000).get().then(q=>{ if((P.S.itens||[]).length) return; P.S.itens=q.docs.map(d=>Object.assign({_id:d.id},d.data())); P.rerender(); }).catch(()=>{}); },5000);
@@ -200,8 +201,26 @@
     return empConhecidas().find(e=>String(e.cod)===v)||{cod:v,nome:''}; }
   /* filtros da tela: empresa e "só as cargas do diário de bordo" (25/11, ajuste: "filtro somente as cargas do diário, inclusive para
      saber se vai ter material para os pedidos do diário") — com o do diário ligado, o plano de estoque também conta só esses pedidos */
-  const fE=xs=>{ if(A.emp) xs=xs.filter(x=>empK(x)===A.emp); if(A.soDiario) xs=xs.filter(x=>String(x.diario||'').trim()); return xs; };
-  const temFiltro=()=>!!(A.emp||A.soDiario||A.q||A.dia||A.tq);
+  /* CLASSIFICAÇÃO = tipo de produto (25/11, ajuste "filtro de classificação"; a Iasmyn escolheu "tipo de produto"): pela descrição do
+     Focco — ARGAMASSA + CINZA/BRANCA/…, REJUNTE, PRIMER… (1ª palavra; argamassa leva a 2ª). Com o filtro, o pedido entra se tiver o tipo
+     e as quantidades/paletes contam SÓ os itens daquele tipo (cópia do pedido com os itens filtrados; gravar usa sempre o original). */
+  const tc=t=>String(t||'').toLowerCase().replace(/(^|\s)\S/g,m=>m.toUpperCase());
+  function classeDe(i){ const w=String(i&&i.desc||'').toUpperCase().replace(/[^A-ZÀ-Ú0-9 ]/g,' ').trim().split(/\s+/); if(!w[0]) return String(i&&i.cod||'').replace(/\d+.*$/,'')||'Outros';
+    if(/^ARGAMASS/.test(w[0])&&w[1]&&!/^\d/.test(w[1])&&!/^AC\d/.test(w[1])) return tc(w[0]+' '+w[1]); return tc(w[0]); }
+  const classesOpc=()=>{ const m={}; todos().forEach(x=>(x.itens||[]).forEach(i=>{ const c=classeDe(i); m[c]=(m[c]||0)+1; })); return Object.keys(m).sort((a,b)=>a.localeCompare(b,'pt-BR')); };
+  /* DIAS (25/11, ajuste "filtro de dias"): hoje, amanhã, esta semana, próximos 7 dias ou de/até */
+  function perDias(){ const t=A.per&&A.per.t, h=hoje(); if(!t) return null; if(t==='hoje') return [h,h]; if(t==='amanha'){ const d=addD(h,1); return [d,d]; }
+    if(t==='semana'){ const w=new Date(h+'T12:00:00').getDay(), seg=addD(h,-(w===0?6:w-1)); return [seg,addD(seg,6)]; } if(t==='prox7') return [h,addD(h,6)];
+    if(t==='datas') return [A.per.de||'0000-00-00',A.per.ate||'9999-12-31']; return null; }
+  const naPer=x=>{ const r=perDias(); if(!r) return true; return !!x.data&&x.data>=r[0]&&x.data<=r[1]; };
+  const fE=xs=>{ if(A.emp) xs=xs.filter(x=>empK(x)===A.emp); if(A.soDiario) xs=xs.filter(x=>String(x.diario||'').trim());
+    if(A.cls) xs=xs.filter(x=>(x.itens||[]).some(i=>classeDe(i)===A.cls)).map(x=>Object.assign({},x,{itens:(x.itens||[]).filter(i=>classeDe(i)===A.cls),_cls:A.cls})); return xs; };
+  const temFiltro=()=>!!(A.emp||A.soDiario||A.cls||A.per||A.q||A.dia||A.tq);
+  /* COPIAR os números dos pedidos (25/11, ajuste "copiar os pedidos"): "169992,169988,170028" — o formato do filtro do Focco */
+  async function copiar(xs,oque){ const ns=[...new Set(xs.flatMap(x=>pedList(x)))]; if(!ns.length){ P.toast('Nenhum pedido para copiar.'); return; } const t=ns.join(',');
+    let ok=false; try{ if(navigator.clipboard&&window.isSecureContext){ await navigator.clipboard.writeText(t); ok=true; } }catch(e){}
+    if(!ok){ try{ const a=document.createElement('textarea'); a.value=t; a.setAttribute('readonly',''); a.style.cssText='position:fixed;left:-9999px;top:0'; document.body.appendChild(a); a.select(); ok=document.execCommand('copy'); a.remove(); }catch(e){} }
+    window.__agendCopiado=t; P.toast(ok?(ns.length+' pedido'+(ns.length>1?'s':'')+' copiado'+(ns.length>1?'s':'')+(oque?' ('+oque+')':'')+': '+(t.length>60?t.slice(0,60)+'…':t)):'Não deu para copiar automaticamente: '+t); }
   const empOpcoes=()=>[...new Set(todos().map(empK))].sort((a,b)=>a==='Sem empresa'?1:b==='Sem empresa'?-1:a.localeCompare(b,'pt-BR',{numeric:true}));
   const diarioTxt=x=>x.diario?'Diário nº '+x.diario:'';
   /* tabela "paletes por item" de um grupo (dia, carga ou pedidos marcados) */
@@ -270,7 +289,7 @@
       ${temH?`<section class="ag-sec" data-tab="hist"><details class="ag-hist"><summary>Histórico (${x.hist.length})</summary>${u.tempo(x.hist.slice().reverse().map(e=>({t:e.t,q:new Date(e.em).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})+(e.por?' · '+e.por:'')})))}</details></section>`:''}`;
     const fechado=x.status==='carregado'||x.status==='cancelado';
     const rod=`${!novo?(fechado?u.bt('Reabrir','ag-reabrir',{sec:1,dv:x._id}):u.bt('Cancelar pedido','ag-cancelar',{sec:1,dv:x._id}))+u.bt('Apagar','ag-apagar',{sec:1,dv:x._id,cls:'ag-apg'})+(!fechado&&(x.itens||[]).some(i=>qtdDe(i)>1)?u.bt('Dividir','ag-dividir',{sec:1,dv:x._id,cls:'ag-dvb'}):''):''}<span style="flex:1"></span>
-      ${!novo&&x.status==='agendado'&&pode()?u.bt('Reagendar','ag-reag',{sec:1,dv:x._id}):''}${!novo&&x.status==='agendado'?u.bt('Carregou','ag-carregou',{sec:1,dv:x._id}):''}${pode()?u.bt('Salvar','ag-salvar',{dv:x._id||''}):''}`;
+      ${!novo?u.bt('Copiar nº','ag-copiarids',{sec:1,dv:x._id}):''}${!novo&&x.status==='agendado'&&pode()?u.bt('Reagendar','ag-reag',{sec:1,dv:x._id}):''}${!novo&&x.status==='agendado'?u.bt('Carregou','ag-carregou',{sec:1,dv:x._id}):''}${pode()?u.bt('Salvar','ag-salvar',{dv:x._id||''}):''}`;
     const sub=novo?[empTxt(x),A.ed.arquivo||''].filter(Boolean).join(' · '):[empTxt(x),STN[x.status]||'',x.data?'para '+br(x.data)+' ('+semana(x.data)+')':'',cargaTxt(x),x.transp||'',x.parcial&&x.parcial.de?'parte de uma entrega parcial':''].filter(Boolean).join(' · ');
     A.jan=u.janela({tit:novo?'Pedido novo':(pedList(x).length>1?pedList(x).length+' pedidos: '+pedTodos(x):'Pedido '+x.pedido)+(x.cliente?' · '+x.cliente:''),sub,corpo,rodape:rod,larga:true,foco:novo,aoFechar:()=>{ A.jan=null; A.ed=null; }});
     A.jan.el.classList.add('ag-jan'); }
@@ -416,13 +435,13 @@
         <div class="ag-ccs"><b class="ag-tp">${esc(totDia(r))}</b><small>${r.kg?esc(fKg(r.kg)):''}${cap.v?' de '+fN(cap.v.pal)+' pal. / '+esc(fKg(cap.v.kg)):''}</small>${cap.v?`<i class="ag-cap"><i style="width:${pct}%"></i></i>`:''}${cap.palOver||cap.kgOver?`<span class="ag-wn">${esc(capTxt(cap))}</span>`:''}</div>
       </header>
       <div class="ag-cce">${pode()?`<button type="button" class="ag-et${sep?' on':''}" data-act="ag-etapa" data-v="sep|${esc(ids)}">${sep?'✓ Separado '+hm(ys[0].sep):'Separado'}</button><button type="button" class="ag-et${che?' on':''}" data-act="ag-etapa" data-v="chegou|${esc(ids)}">${che?'✓ Chegou '+hm(ys[0].chegou):'Caminhão chegou'}</button><button type="button" class="ag-et fim" data-act="ag-cgcarregou" data-v="${esc(ids)}">Carregou</button>`:`<span class="ag-stx">${sep?'Separado '+hm(ys[0].sep):'Não separado'}${che?' · chegou '+hm(ys[0].chegou):''}</span>`}
-        <span class="ag-cesp"></span>${pode()?`<button type="button" class="lnk" data-act="ag-reag" data-v="${esc(ids)}">Reagendar</button>`:''}${atr&&pode()?`<button type="button" class="lnk" data-act="ag-adiar" data-v="${esc(ids)}">Passar para ${esc(brC(diaUtil(h)?h:proxUtil(h,0)))}</button>`:''}<button type="button" class="lnk" data-act="ag-pdfsep" data-v="${esc(ids)}">PDF de separação</button>${pode()?`<button type="button" class="lnk" data-act="ag-cgedit" data-v="${esc(ids)}">${k[0]==='r'?'Dar o número':'Editar carga'}</button>`:''}</div>
+        <span class="ag-cesp"></span>${pode()?`<button type="button" class="lnk" data-act="ag-reag" data-v="${esc(ids)}">Reagendar</button>`:''}${atr&&pode()?`<button type="button" class="lnk" data-act="ag-adiar" data-v="${esc(ids)}">Passar para ${esc(brC(diaUtil(h)?h:proxUtil(h,0)))}</button>`:''}<button type="button" class="lnk" data-act="ag-copiarids" data-v="${esc(ids)}">Copiar pedidos</button><button type="button" class="lnk" data-act="ag-pdfsep" data-v="${esc(ids)}">PDF de separação</button>${pode()?`<button type="button" class="lnk" data-act="ag-cgedit" data-v="${esc(ids)}">${k[0]==='r'?'Dar o número':'Editar carga'}</button>`:''}</div>
       ${ys.map(x=>linha(x,{semCarga:true,ck:true})).join('')}</article>`; }
   /* dia: título com paletes (só), avisos de limite e de falta; cartões das cargas */
   function grupoDia(d,xs){ const h=hoje(), r=soma(xs), lim=limiteDia(), fal=diaFaltas(d), gs=gruposDia(xs), cargas=gs.filter(g=>g.k!=='sem'), sem=gs.find(g=>g.k==='sem');
     const nome=d<h?'Já passou':d===h?'Hoje':d===addD(h,1)?'Amanhã':semana(d)[0].toUpperCase()+semana(d).slice(1);
     return `<section class="ag-dia${d<h?' atr':d===h?' hj':''}" id="ag-d-${d}"><header class="ag-dh"><h3>${esc(nome)} <span>${esc(br(d))}</span></h3>
-        <div class="ag-dt2">${(()=>{ const ok=fE(A.fechados).filter(y=>y.status==='carregado'&&y.data===d); return ok.length?`<span class="ag-okt">${ok.length} já carregado${ok.length>1?'s':''}</span> · pendente `:''; })()}${xs.length} pedido${xs.length>1?'s':''} · ${totLin(r)}${lim?` <span class="${r.pal>lim?'ag-wn':'ag-lm'}">de ${fN(lim)}</span>`:''}</div></header>
+        <div class="ag-dt2"><button type="button" class="lnk ag-cpd" data-act="ag-copiarids" data-v="${esc(xs.map(x=>x._id).join(','))}" title="Copiar os números dos pedidos do dia">Copiar</button> ${(()=>{ const ok=fE(A.fechados).filter(y=>y.status==='carregado'&&y.data===d); return ok.length?`<span class="ag-okt">${ok.length} já carregado${ok.length>1?'s':''}</span> · pendente `:''; })()}${xs.length} pedido${xs.length>1?'s':''} · ${totLin(r)}${lim?` <span class="${r.pal>lim?'ag-wn':'ag-lm'}">de ${fN(lim)}</span>`:''}</div></header>
       ${d<h?`<p class="ag-atx">Marque "Carregou" ou mude a data.${pode()?` <button type="button" class="lnk" data-act="ag-adiar" data-v="${esc(xs.map(x=>x._id).join(','))}">Passar tudo para ${esc(brC(diaUtil(h)?h:proxUtil(h,0)))}</button>`:''}</p>`:''}
       ${fal.length?`<p class="ag-fdia">Falta material: ${fal.map(o=>`<b>${esc(o.cod)}</b> ${esc(fN(o.falta))}`).join(' · ')}</p>`:''}
       ${cargas.map((g,i)=>cartaoCarga(g.k,g.ys,i,cargas.length,d)).join('')}
@@ -496,6 +515,46 @@
     const nc=new Set(xs.map(x=>x.carga?'c'+x.carga:ehCarga(x)?'r'+x._id:'s'+x._id)).size;
     return `<div class="ag-fdx${fal.length?' c':''}"><b>Cargas do diário de bordo</b><span>${xs.length?`${nc} carga${nc>1?'s':''} · ${xs.length} pedido${xs.length>1?'s':''} · ${esc(totDia(r))}`:'Nenhum pedido agendado tem nº do diário.'}</span>
       ${xs.length?(fal.length?`<span class="ag-f">Falta material: ${fal.map(f=>esc(f.o.cod)+' '+esc(fN(f.o.falta))+' ('+esc(f.d===h?'hoje':brC(f.d))+')').join(' · ')}</span>`:'<span class="ag-okt">Tem material para todos os pedidos do diário.</span>'):''}</div>`; }
+  /* ---------- ANÁLISE COM O SALDO NOVO (25/11: "quando eu importar o saldo, ele faz uma análise do que tenho que fazer nos agendamentos
+     atualizado?") ----------
+     A base do PCP (pcpbase/itens) é acompanhada ao vivo; quando a data do saldo muda (importação nova), aparece o aviso "Saldo novo
+     importado" com a análise: o que PRODUZIR (falta depois da produção programada, a partir de que dia), as CARGAS SEM MATERIAL por dia,
+     os pedidos ESPERANDO DATA que já têm material para agendar e o que MUDOU desde a última análise vista (guardada neste navegador). */
+  const LS_AN='ag-analise-'+((P.S&&P.S.uid)||'x');
+  function lsLer(){ try{ return JSON.parse(localStorage.getItem(LS_AN)||'null'); }catch(e){ return null; } }
+  function lsGravar(o){ try{ localStorage.setItem(LS_AN,JSON.stringify(o)); }catch(e){} }
+  function analise(){ const pl=plano(), h=hoje(), ag=A.abertos.filter(x=>x.status==='agendado'&&x.data&&(!A.soDiario||String(x.diario||'').trim()));
+    const prod={}, cargas=[], faltas={};
+    ag.slice().sort((a,b)=>ordK(a).localeCompare(ordK(b))).forEach(x=>{ const fs=(x.itens||[]).map(i=>({i,r:faltaPl(pl,x,i)})).filter(o=>o.r&&qtdDe(o.i)>0);
+      fs.forEach(o=>{ const c=String(o.i.cod).toUpperCase(); faltas[x._id+'|'+c]=o.r.falta; if(o.r.falta>0||o.r.faltaSemProd>0){ const p=prod[c]||(prod[c]={cod:o.i.cod,desc:o.i.desc,un:o.i.un,falta:0,cobre:0,dia:x.data,pp:ppDe(o.i)}); p.falta+=o.r.falta; p.cobre+=Math.max(0,o.r.faltaSemProd-o.r.falta); if(x.data<p.dia) p.dia=x.data; } });
+      const f=fs.filter(o=>o.r.falta>0); if(f.length) cargas.push({x,f}); });
+    /* esperando data: dá para agendar se o que sobra do saldo (depois de todos os agendados e com a produção programada) cobre o pedido */
+    const sobra={}; Object.keys(pl.s0).forEach(c=>{ const usado=ag.reduce((s,x)=>s+(x.itens||[]).filter(i=>String(i.cod).toUpperCase()===c).reduce((t,i)=>t+qtdDe(i),0),0); sobra[c]=pl.s0[c].q+(pl.pr[c]||[]).reduce((s,p)=>s+p.q,0)-usado; });
+    const pode=[], naoPode=[];
+    A.abertos.filter(x=>x.status==='aguardando'&&(!A.soDiario||String(x.diario||'').trim())).sort((a,b)=>String(a.criadoEm||'').localeCompare(String(b.criadoEm||''))).forEach(x=>{
+      const its=(x.itens||[]).filter(i=>qtdDe(i)>0); if(!its.length) return; const fal=[];
+      its.forEach(i=>{ const c=String(i.cod).toUpperCase(); if(!(c in sobra)){ const st=saldoTotal(c); sobra[c]=st.q+prodDe(c).reduce((s,p)=>s+p.q,0); } if(qtdDe(i)>sobra[c]) fal.push({i,f:qtdDe(i)-Math.max(0,sobra[c])}); });
+      if(!fal.length){ its.forEach(i=>{ sobra[String(i.cod).toUpperCase()]-=qtdDe(i); }); pode.push(x); } else naoPode.push({x,fal}); });
+    const prodL=Object.values(prod).sort((a,b)=>a.dia.localeCompare(b.dia)||b.falta-a.falta);
+    /* o que mudou desde a última análise vista */
+    const ult=lsLer(), mud={ok:[],falta:[]}; if(ult&&ult.faltas){ ag.forEach(x=>(x.itens||[]).forEach(i=>{ const k=x._id+'|'+String(i.cod).toUpperCase(); if(!(k in faltas)||!(k in ult.faltas)) return; if(ult.faltas[k]>0&&faltas[k]<=0) mud.ok.push({x,i}); else if(ult.faltas[k]<=0&&faltas[k]>0) mud.falta.push({x,i,f:faltas[k]}); })); }
+    return {em:baseEm(),prodL,cargas,pode,naoPode,mud,ult,faltas,nAg:ag.length,okAg:ag.filter(x=>!cargas.some(c=>c.x._id===x._id)).length}; }
+  const novoSaldo=()=>{ const em=baseEm(), u=lsLer(); return !!em&&!!A.lido.a&&(!u||u.em!==em)&&A.abertos.length>0; };
+  function janAnalise(){ const u=U(), a=analise(); if(A.jan) A.jan.fechar(); A.ed={analise:true};
+    const pedL=x=>`<button type="button" class="lnk" data-act="ag-abrir" data-v="${esc(x._id)}">${esc(pedCurto(x))}</button>${x.cliente?' '+esc(x.cliente):''}`;
+    const sec=(t,n,h)=>`<section class="ag-ans"><h3 class="ag-h3">${esc(t)}${n!=null?` <span class="ag-ann">${n}</span>`:''}</h3>${h}</section>`;
+    const corpo=`<p class="ag-dica">Saldo da base do PCP ${a.em?'de <b>'+esc(br(a.em.slice(0,10))+' às '+a.em.slice(11))+'</b>':'(não carregado)'}${A.soDiario?' · só as cargas do diário de bordo':''}. O estoque é consumido pelos agendados em ordem de data e soma a produção programada.</p>
+      ${u.nums([{r:'Agendados com material',v:a.okAg+' de '+a.nAg,tom:a.okAg<a.nAg?'warn':'ok'},{r:'Itens para produzir',v:a.prodL.filter(p=>p.falta>0).length,tom:a.prodL.some(p=>p.falta>0)?'crit':'ok'},{r:'Podem ser agendados',v:a.pode.length,tom:a.pode.length?'info':'',s:'esperando data, com material'}])}
+      ${sec('Produzir',a.prodL.filter(p=>p.falta>0).length,a.prodL.length?`<table class="ag-pit"><thead><tr><th>Item</th><th class="dir">Falta</th><th class="dir">A partir de</th><th class="dir">Produção programada</th></tr></thead><tbody>${a.prodL.map(p=>`<tr${p.falta>0?'':' class="ag-anok"'}><td><b>${esc(p.cod)}</b> <span>${esc(p.desc||'')}</span></td><td class="dir">${p.falta>0?`<b class="ag-f">${esc(qtdUn(p.falta,p.un))}</b>${p.pp>0?'<small> = '+esc(fP(p.falta/p.pp))+' pal.</small>':''}`:'<span class="ag-okt">coberto</span>'}</td><td class="dir">${esc(atl(p.dia))} ${esc(brC(p.dia))}</td><td class="dir">${esc(prodTxt(prodDe(p.cod))||'—')}</td></tr>`).join('')}</tbody></table>`:'<p class="ag-okt">Nada para produzir: o saldo cobre todos os agendados.</p>')}
+      ${sec('Cargas sem material',a.cargas.length,a.cargas.length?`<ul class="ag-anl">${a.cargas.map(c=>`<li><span class="ag-and">${esc(atl(c.x.data))} ${esc(brC(c.x.data))}</span><span>${c.x.carga?'Carga '+esc(c.x.carga)+' · ':''}${pedL(c.x)}</span><span class="ag-f">falta ${c.f.map(o=>esc(o.i.cod)+' '+esc(fN(o.r.falta))).join(' · ')}</span>${pode()?`<button type="button" class="lnk" data-act="ag-reag" data-v="${esc(c.x._id)}">Reagendar</button>`:''}</li>`).join('')}</ul>`:'<p class="ag-okt">Todas as cargas agendadas têm material.</p>')}
+      ${sec('Já dá para agendar',a.pode.length,a.pode.length?`<ul class="ag-anl">${a.pode.map(x=>`<li><span>${pedL(x)}</span><span>${esc(totDia(soma([x])))}</span>${pode()?`<button type="button" class="ag-bt sec" data-act="ag-abrir" data-v="${esc(x._id)}">Agendar</button>`:''}</li>`).join('')}</ul>${a.naoPode.length?`<p class="ag-dica">Ainda sem material: ${a.naoPode.map(o=>esc(pedCurto(o.x))+' ('+o.fal.map(f=>esc(f.i.cod)+' '+esc(fN(f.f))).join(', ')+')').join(' · ')}</p>`:''}`:(a.naoPode.length?`<p class="ag-dica">Nenhum pedido esperando data tem material completo ainda: ${a.naoPode.map(o=>esc(pedCurto(o.x))).join(', ')}.</p>`:'<p class="ag-dica">Nenhum pedido esperando data.</p>'))}
+      ${a.ult&&a.ult.em?sec('O que mudou desde a análise de '+br(String(a.ult.em).slice(0,10))+' '+String(a.ult.em).slice(11),null,(a.mud.ok.length||a.mud.falta.length)?`${a.mud.ok.length?`<p class="ag-okt">Agora tem material: ${a.mud.ok.map(o=>esc(pedCurto(o.x))+' '+esc(o.i.cod)).join(' · ')}</p>`:''}${a.mud.falta.length?`<p class="ag-f">Passou a faltar: ${a.mud.falta.map(o=>esc(pedCurto(o.x))+' '+esc(o.i.cod)+' '+esc(fN(o.f))).join(' · ')}</p>`:''}`:'<p class="ag-dica">Nada mudou nos agendados.</p>'):''}`;
+    A.jan=u.janela({tit:'Análise dos agendamentos',sub:a.em?'Saldo de '+br(a.em.slice(0,10))+' '+a.em.slice(11):'',corpo,rodape:`<span style="flex:1"></span>${u.bt('Entendi','ag-anok')}`,larga:true,aoFechar:()=>{ A.jan=null; A.ed=null; lsGravar({em:a.em,faltas:a.faltas,vistoEm:new Date().toISOString()}); P.rerender(); }});
+    A.jan.el.classList.add('ag-jan'); }
+  /* aviso no topo da tela quando chegou saldo novo */
+  function faixaSaldo(){ if(!novoSaldo()) return ''; const a=analise(), nP=a.prodL.filter(p=>p.falta>0).length;
+    return `<div class="ag-sn2" role="status"><div><b>Saldo novo importado</b> (${esc(br(a.em.slice(0,10))+' '+a.em.slice(11))}): ${a.cargas.length?`<span class="ag-f">${a.cargas.length} carga${a.cargas.length>1?'s':''} sem material</span>`:'<span class="ag-okt">todas as cargas com material</span>'} · ${nP?nP+' ite'+(nP>1?'ns':'m')+' para produzir':'nada para produzir'} · ${a.pode.length} pedido${a.pode.length===1?'':'s'} já pode${a.pode.length===1?'':'m'} ser agendado${a.pode.length===1?'':'s'}</div><button type="button" class="btn" data-act="ag-analise">Ver análise</button></div>`; }
+
   /* ---------- ajustes do módulo (limite por dia, sábado, saldo da base, veículos, telefones das transportadoras) ---------- */
   function janAjustes(){ const u=U(); if(A.jan) A.jan.fechar(); A.ed={ajustes:true};
     const vs=veics(), tels=A.cfg.tels||{}, tl=transps();
@@ -579,9 +638,9 @@
         ${trfOk.length?`<p class="ag-dcok">Já transferido: ${trfOk.map(o=>esc(o.i.cod)+' '+esc(fN(o.f.q))+' para '+esc(o.t.emp)+(o.f.em?' ('+esc(hm(o.f.em))+')':'')).join(' · ')}${pode()?` <button type="button" class="lnk" data-act="ag-trfdesf" data-v="${esc(d)}">desfazer</button>`:''}</p>`:''}</details>`:''}`:''}
     </section>`;
     const head=`<div class="head ag-head"><div><div class="eyebrow">AGENDAMENTOS</div><h1>Calendário de carregamentos</h1><div class="sub">Toque num dia para ver os itens, o que já foi carregado e o que ainda está pendente.</div></div>
-      <div class="ag-acts"><button type="button" class="ag-fdb${A.soDiario?' on':''}" data-act="ag-sodiario" aria-pressed="${!!A.soDiario}">${A.soDiario?'✓ ':''}Só do diário de bordo</button>${A.emp||A.soDiario||A.tq?'<button type="button" class="lnk ag-limpa" data-act="ag-limpar">Limpar filtros</button>':''}${eo.length>1||A.emp?`<select id="ag-emp" class="txt ag-esel${A.emp?' on':''}" aria-label="Filtrar por empresa"><option value="">Todas as empresas</option>${eo.map(e=>`<option value="${esc(e)}"${A.emp===e?' selected':''}>${esc(e)}</option>`).join('')}</select>`:''}<button type="button" class="btn sec" data-act="ag-pdfsem" data-v="${d}">PDF da semana</button><button type="button" class="btn sec" data-act="ag-csv">Planilha</button></div></div>`;
+      <div class="ag-acts">${(()=>{ const cl=classesOpc(); return cl.length>1||A.cls?`<select id="ag-cls" class="txt ag-fs${A.cls?' on':''}" aria-label="Tipo de produto"><option value="">Todos os produtos</option>${cl.map(c=>`<option value="${esc(c)}"${A.cls===c?' selected':''}>${esc(c)}</option>`).join('')}</select>`:''; })()}<button type="button" class="ag-fdb${A.soDiario?' on':''}" data-act="ag-sodiario" aria-pressed="${!!A.soDiario}">${A.soDiario?'✓ ':''}Só do diário de bordo</button>${A.emp||A.soDiario||A.cls||A.tq?'<button type="button" class="lnk ag-limpa" data-act="ag-limpar">Limpar filtros</button>':''}${eo.length>1||A.emp?`<select id="ag-emp" class="txt ag-esel${A.emp?' on':''}" aria-label="Filtrar por empresa"><option value="">Todas as empresas</option>${eo.map(e=>`<option value="${esc(e)}"${A.emp===e?' selected':''}>${esc(e)}</option>`).join('')}</select>`:''}<button type="button" class="btn sec" data-act="ag-pdfsem" data-v="${d}">PDF da semana</button><button type="button" class="btn sec" data-act="ag-csv">Planilha</button></div></div>`;
     if(A.tq) setTimeout(tqFiltra,0);
-    return head+faixaDiario()+`<div class="ag-cl2"><section class="ag-cal ag-calg" aria-label="Calendário"><div class="ag-ch"><button type="button" class="ag-mv" data-act="ag-mes" data-v="-1" aria-label="Mês anterior">‹</button><b>${esc(nomeMes)}</b><button type="button" class="ag-mv" data-act="ag-mes" data-v="1" aria-label="Próximo mês">›</button></div>
+    return head+faixaSaldo()+faixaDiario()+`<div class="ag-cl2"><section class="ag-cal ag-calg" aria-label="Calendário"><div class="ag-ch"><button type="button" class="ag-mv" data-act="ag-mes" data-v="-1" aria-label="Mês anterior">‹</button><b>${esc(nomeMes)}</b><button type="button" class="ag-mv" data-act="ag-mes" data-v="1" aria-label="Próximo mês">›</button></div>
       <div class="ag-cg7">${cel.join('')}</div>
       <div class="ag-leg"><span><i class="l1"></i>paletes pendentes</span><span><i class="l4"></i>carregado</span>${lim?`<span><i class="l2"></i>passa de ${fN(lim)}</span>`:''}<span><i class="l3"></i>falta material</span><span>← → mudam o dia</span></div></section>${painel}</div>`; }
 
@@ -683,35 +742,42 @@
     const eo=empOpcoes(); if(A.emp&&!eo.includes(A.emp)) A.emp='';
     const head=`<div class="head ag-head"><div><div class="eyebrow">AGENDAMENTOS</div><h1>Agendamentos de pedidos</h1><div class="sub">Importe o PDF do Focco (ou arraste para esta tela), confira o estoque e escolha a data.</div>
         ${ag.length||atr.length?`<div class="ag-alt">${ag.length?`<button type="button" class="ag-al1 warn" data-act="ag-aba" data-v="aguardando">${ag.length} esperando data${velhos.length?' ('+velhos.length+' há mais de 3 dias)':''}</button>`:''}${atr.length?`<button type="button" class="ag-al1 crit" data-act="ag-aba" data-v="agendado">${atr.length} com a data passada</button>`:''}</div>`:''}</div>
-      <div class="ag-acts">${pode()?`<button type="button" class="btn sec" data-act="ag-colar">Colar texto</button><label class="btn ag-imp">${ic('agendar',16)}Importar PDF<input type="file" id="ag-file" accept=".pdf,application/pdf" multiple hidden></label><button type="button" class="btn sec" data-act="ag-ajustes" title="Limite de paletes por dia, veículos, sábado, telefones">Ajustes</button>`:''}</div></div>
+      <div class="ag-acts">${pode()?`<button type="button" class="btn sec" data-act="ag-colar">Colar texto</button><label class="btn ag-imp">${ic('agendar',16)}Importar PDF<input type="file" id="ag-file" accept=".pdf,application/pdf" multiple hidden></label><button type="button" class="btn sec" data-act="ag-analise" title="O que produzir, cargas sem material e o que já dá para agendar, com o saldo mais novo">Análise</button><button type="button" class="btn sec" data-act="ag-ajustes" title="Limite de paletes por dia, veículos, sábado, telefones">Ajustes</button>`:''}</div></div>
       ${A.lendo?`<div class="ag-lendo" id="ag-drop"><span class="ag-spin"></span>${esc(A.lendo)}</div>`:`<div class="ag-drop" id="ag-drop" aria-hidden="true"><div><b>Solte o PDF do Focco aqui</b><span>Pode ser mais de um</span></div></div>`}`;
-    const barra=`<div class="ag-bar">${u.chips([['aguardando','Esperando data',ag.length,A.aba==='aguardando'],['agendado','Agendados',agd.length,A.aba==='agendado'],['carregado','Carregados',car.length,A.aba==='carregado'],['cancelado','Cancelados',can.length,A.aba==='cancelado'],['indic','Indicadores',null,A.aba==='indic']],'ag-aba')}
-      ${eo.length>1||A.emp?`<select id="ag-emp" class="txt ag-esel${A.emp?' on':''}" aria-label="Filtrar por empresa"><option value="">Todas as empresas</option>${eo.map(e=>`<option value="${esc(e)}"${A.emp===e?' selected':''}>${esc(e)}</option>`).join('')}</select>`:''}
-      <button type="button" class="ag-fdb${A.soDiario?' on':''}" data-act="ag-sodiario" aria-pressed="${!!A.soDiario}">${A.soDiario?'✓ ':''}Só do diário de bordo</button>
-      ${temFiltro()?'<button type="button" class="lnk ag-limpa" data-act="ag-limpar">Limpar filtros</button>':''}
-      ${A.aba==='indic'?'':`<input type="search" id="ag-q" class="txt ag-q" aria-label="Buscar agendamento" autocomplete="off" placeholder="Buscar pedido, cliente, carga, item…  ( / )" value="${esc(A.q)}">`}</div>`;
+    /* barra (25/11, "melhorar o layout"): linha 1 = abas + busca; linha 2 = filtros (empresa, produto, dias, diário) + limpar + copiar */
+    const cl=classesOpc(), pr=A.per||{}, visiveis=()=>{ if(A.aba==='aguardando') return filtra(ag); if(A.aba==='agendado') return filtra(agd).filter(naPer).filter(x=>!A.dia||x.data===A.dia); if(A.aba==='carregado') return filtra(car).filter(naPer); if(A.aba==='cancelado') return filtra(can).filter(naPer); return []; };
+    A._vis=visiveis;
+    const barra=`<div class="ag-bar"><div class="ag-br1">${u.chips([['aguardando','Esperando data',ag.length,A.aba==='aguardando'],['agendado','Agendados',agd.length,A.aba==='agendado'],['carregado','Carregados',car.length,A.aba==='carregado'],['cancelado','Cancelados',can.length,A.aba==='cancelado'],['indic','Indicadores',null,A.aba==='indic']],'ag-aba')}
+        ${A.aba==='indic'?'':`<input type="search" id="ag-q" class="txt ag-q" aria-label="Buscar agendamento" autocomplete="off" placeholder="Buscar pedido, cliente, carga, item…  ( / )" value="${esc(A.q)}">`}</div>
+      <div class="ag-br2" role="group" aria-label="Filtros"><span class="ag-brl">Filtros</span>
+        ${eo.length>1||A.emp?`<select id="ag-emp" class="txt ag-fs${A.emp?' on':''}" aria-label="Empresa"><option value="">Todas as empresas</option>${eo.map(e=>`<option value="${esc(e)}"${A.emp===e?' selected':''}>${esc(e)}</option>`).join('')}</select>`:''}
+        ${cl.length>1||A.cls?`<select id="ag-cls" class="txt ag-fs${A.cls?' on':''}" aria-label="Tipo de produto"><option value="">Todos os produtos</option>${cl.map(c=>`<option value="${esc(c)}"${A.cls===c?' selected':''}>${esc(c)}</option>`).join('')}</select>`:''}
+        ${A.aba==='aguardando'||A.aba==='indic'?'':`<select id="ag-per" class="txt ag-fs${A.per?' on':''}" aria-label="Dias"><option value="">Todos os dias</option>${[['hoje','Hoje'],['amanha','Amanhã'],['semana','Esta semana'],['prox7','Próximos 7 dias'],['datas','Escolher datas…']].map(([v,t])=>`<option value="${v}"${pr.t===v?' selected':''}>${t}</option>`).join('')}</select>${pr.t==='datas'?`<span class="ag-fdt"><input type="date" id="ag-pde" class="txt" value="${esc(pr.de||'')}" aria-label="De"><span>até</span><input type="date" id="ag-pate" class="txt" value="${esc(pr.ate||'')}" aria-label="Até"></span>`:''}`}
+        <button type="button" class="ag-fdb${A.soDiario?' on':''}" data-act="ag-sodiario" aria-pressed="${!!A.soDiario}">${A.soDiario?'✓ ':''}Só do diário</button>
+        ${temFiltro()?'<button type="button" class="lnk ag-limpa" data-act="ag-limpar">Limpar filtros</button>':''}
+        <span class="ag-cesp"></span>${A.aba==='indic'?'':`<button type="button" class="ag-bt sec ag-cpb" data-act="ag-copiar" title="Copia os números dos pedidos da lista (com os filtros), separados por vírgula, para colar no Focco">Copiar pedidos</button>`}</div></div>`;
     let corpo='';
     if(!A.lido.a) corpo='<div class="empty">Carregando…</div>';
     else if(A.aba==='indic') corpo=vIndic();
     else if(!todos().length) corpo=vazioPassos();
     else if(A.aba==='aguardando'){ const xs=filtra(ag).sort((a,b)=>String(a.criadoEm||'').localeCompare(String(b.criadoEm||'')));
       corpo=xs.length?'<div class="ag-grp">'+xs.map(x=>linha(x,{bt:['Agendar','ag-abrir'],ck:true})).join('')+'</div>':u.vazio({tom:A.q?'':'ok',tit:A.q?'Nada com essa busca':'Nenhum pedido esperando data',txt:A.q?'':'Quando o faturamento mandar um pedido, importe o PDF do Focco.'}); }
-    else if(A.aba==='agendado'){ let xs=filtra(agd); if(A.dia) xs=xs.filter(x=>x.data===A.dia); const g={}; xs.forEach(x=>(g[x.data]=g[x.data]||[]).push(x));
+    else if(A.aba==='agendado'){ let xs=filtra(agd).filter(naPer); if(A.dia) xs=xs.filter(x=>x.data===A.dia); const g={}; xs.forEach(x=>(g[x.data]=g[x.data]||[]).push(x));
       const ds=Object.keys(g).sort();
       corpo=(A.dia?`<div class="ag-fil">Mostrando só <b>${esc(atl(A.dia))} · ${esc(br(A.dia))}</b> <button type="button" class="lnk" data-act="ag-dia" data-v="">Ver todos os dias</button></div>`:'')
         +(ds.length?ds.map(d=>grupoDia(d,g[d])).join(''):u.vazio({tit:A.q?'Nada com essa busca':A.dia?'Nada agendado neste dia':'Nenhum pedido agendado'}))
         +(ds.length?'<p class="ag-dica">Os itens, o total e o que falta carregar de cada dia estão na aba Calendário.</p>':''); }
-    else { const xs=filtra(A.aba==='carregado'?car:can);
+    else { const xs=filtra(A.aba==='carregado'?car:can).filter(naPer);
       corpo=xs.length?'<div class="ag-grp">'+xs.map(x=>linha(x,{st:true,bt:['Reabrir','ag-reabrir',1]})).join('')+'</div>':u.vazio({tit:A.q?'Nada com essa busca':'Nenhum pedido '+(A.aba==='carregado'?'carregado':'cancelado')+' ainda'});
       if(xs.length) corpo+=`<p class="ag-dica">Mostrando os últimos ${A.fechados.length>=80?'80 ':''}pedidos fechados. Os do mês inteiro estão em Indicadores.</p>`; }
     [...A.sel].forEach(id=>{ const x=deId(id); if(!x||!x.aberto) A.sel.delete(id); });
     const ms=[...A.sel].map(deId).filter(Boolean), rm=soma(ms);
     const marc=ms.length&&(A.aba==='aguardando'||A.aba==='agendado')?`<div class="ag-mk" role="region" aria-label="Pedidos marcados"><span><b>${ms.length} pedido${ms.length>1?'s':''} marcado${ms.length>1?'s':''}</b> · ${esc(ms.map(pedCurto).join(', '))}</span><span class="ag-mkt">${esc(unTxt(rm))} · <b>${esc(totDia(rm))}</b>${rm.kg?' · '+esc(fKg(rm.kg)):''}</span>
-      <span class="ag-mkb"><button type="button" class="lnk" data-act="ag-selnada">Desmarcar</button><button type="button" class="btn" data-act="ag-montar">Montar carga</button></span></div>`:'';
+      <span class="ag-mkb"><button type="button" class="lnk" data-act="ag-selnada">Desmarcar</button><button type="button" class="ag-bt sec" data-act="ag-copiarsel">Copiar pedidos</button><button type="button" class="btn" data-act="ag-montar">Montar carga</button></span></div>`:'';
     const dicaM=pode()&&(A.aba==='aguardando'||A.aba==='agendado')&&!ms.length&&A.abertos.length>1?`<p class="ag-dm">Marque os pedidos do mesmo caminhão para montar a carga.</p>`:'';
     if(A.tq) setTimeout(tqFiltra,0);
     if(A.rolar){ const d=A.rolar; A.rolar=''; setTimeout(()=>{ const s=document.getElementById('ag-d-'+d); if(s){ s.scrollIntoView({behavior:'smooth',block:'start'}); s.classList.add('ag-pisca'); setTimeout(()=>s.classList.remove('ag-pisca'),1600); } },60); }
-    return head+`<div class="ag-main ag-full">${u.cartao({cls:'ag-lista',corpo:barra+faixaDiario()+dicaM+`<div id="ag-corpo">${corpo}</div>`+marc})}</div>`; }
+    return head+faixaSaldo()+`<div class="ag-main ag-full">${u.cartao({cls:'ag-lista',corpo:barra+faixaDiario()+dicaM+`<div id="ag-corpo">${corpo}</div>`+marc})}</div>`; }
 
   /* ---------- montar carga: vários pedidos no mesmo caminhão ---------- */
   function janCarga(ids){ const u=U(); if(A.jan) A.jan.fechar(); const xs=ids.map(deId).filter(Boolean); if(!xs.length) return;
@@ -766,6 +832,7 @@
     if(ag.length) out.push({nivel:velhos.length?'crit':'warn',rotulo:'Agendamento',titulo:ag.length+' pedido'+(ag.length>1?'s':'')+' esperando data'+(velhos.length?' ('+velhos.length+' há mais de 3 dias)':''),texto:velhos.length?'Mais antigos: '+velhos.slice(0,4).map(x=>pedCurto(x)+(x.cliente?' ('+x.cliente+')':'')).join(', '):'Confira o estoque e escolha quando agendar.',go:'agendamentos'});
     const prox=[h,proxUtil(h,1)].filter((d,k,a)=>a.indexOf(d)===k), fal=prox.map(d=>({d,f:diaFaltas(d)})).filter(o=>o.f.length);
     if(fal.length) out.push({nivel:'crit',rotulo:'Agendamento',titulo:'Falta material para carregar '+fal.map(o=>o.d===h?'hoje':brC(o.d)).join(' e '),texto:fal.map(o=>o.f.slice(0,3).map(i=>i.cod+' '+fN(i.falta)).join(', ')).join(' · '),go:'agendamentos'});
+    if(novoSaldo()){ const an=analise(); out.push({nivel:an.cargas.length?'crit':'info',rotulo:'Agendamento',titulo:'Saldo novo: veja a análise dos agendamentos',texto:(an.cargas.length?an.cargas.length+' carga(s) sem material · ':'Todas as cargas com material · ')+an.pode.length+' pedido(s) já podem ser agendados',go:'agendamentos'}); }
     const lim=limiteDia(); if(lim){ const ov=prox.filter(d=>soma(A.abertos.filter(x=>x.status==='agendado'&&x.data===d)).pal>lim); if(ov.length) out.push({nivel:'warn',rotulo:'Agendamento',titulo:'Passa do limite de '+fN(lim)+' paletes: '+ov.map(d=>d===h?'hoje':brC(d)).join(' e '),texto:'Mude a data de algum pedido ou aumente o limite nos Ajustes.',go:'agendamentos'}); }
     return out; });
 
@@ -779,12 +846,17 @@
     if(act==='ag-cgsalvar'){ salvarCarga(); return; }
     if(act==='ag-pdfdia'){ pdfDia(v); return; }
     if(act==='ag-sodiario'){ A.soDiario=!A.soDiario; A._pl=null; P.render(); return; }
-    if(act==='ag-limpar'){ A.emp=''; A.soDiario=false; A.q=''; A.dia=''; A.tq=''; A._pl=null; P.render(); return; }
+    if(act==='ag-analise'){ janAnalise(); return; }
+    if(act==='ag-anok'){ if(A.jan) A.jan.fechar(); return; }
+    if(act==='ag-limpar'){ A.emp=''; A.soDiario=false; A.cls=''; A.per=null; A.q=''; A.dia=''; A.tq=''; A._pl=null; P.render(); return; }
+    if(act==='ag-copiar'){ copiar(A._vis?A._vis():[],'da lista'); return; }
+    if(act==='ag-copiarsel'){ copiar([...A.sel].map(deId).filter(Boolean),'marcados'); return; }
+    if(act==='ag-copiarids'){ copiar(v.split(',').map(deId).filter(Boolean)); return; }
     if(act==='ag-trf'){ const i=v.lastIndexOf('|'), k=v.slice(0,i), q=+v.slice(i+1); salvarCfg({trfFeito:{[k]:{q,em:new Date().toISOString(),por:eu()}}}).then(()=>{ P.toast('Transferência marcada como feita.'); P.rerender(); }); return; }
     if(act==='ag-trfdesf'){ const tf=Object.assign({},A.cfg.trfFeito||{}); Object.keys(tf).forEach(k=>{ if(k.startsWith(v+'|')) tf[k]=null; }); P.db().doc('config/agendamentos').set({trfFeito:tf},{merge:true}).then(()=>{ Object.keys(tf).forEach(k=>{ if(tf[k]===null) delete tf[k]; }); A.cfg.trfFeito=tf; P.rerender(); }).catch(e=>P.erro(e)); return; }
     if(act==='ag-cal'){ A.cal=v; A.mes=v.slice(0,7); A.tq=''; P.rerender(); return; }
     if(act==='ag-verdia'){ A.dia=v; A.aba='agendado'; A.rolar=v; P.go('agendamentos'); return; }
-    if(act==='ag-reag'){ janReagendar(v.split(',').filter(Boolean)); return; }
+    if(act==='ag-reag'){ if(A.ed&&A.ed.analise&&A.jan) A.jan.fechar(); janReagendar(v.split(',').filter(Boolean)); return; }
     if(act==='ag-reagok'){ const d=val('#ag-data'), m=val('#ag-motivo'), ids=(A.ed&&A.ed.reag)||[]; if(!d){ P.toast('Escolha a nova data.'); return; } const h=hoje(); if(!m&&ids.some(id=>{ const x=deId(id); return x&&x.data&&x.data<h; })){ P.toast('A data já passou: escolha o motivo.'); return; } A.jan.fechar(); moverPara(ids,d,'reagendou',m||'-'); return; }
     if(act==='ag-etapa'){ const [k,ids]=v.split('|'); etapa(ids.split(',').filter(Boolean),k); return; }
     if(act==='ag-cgcarregou'){ etapa(v.split(',').filter(Boolean),'carregou'); return; }
@@ -804,7 +876,7 @@
     if(act==='ag-tab'){ const j=A.jan&&A.jan.el; if(!j) return; j.querySelectorAll('.ag-tabs button').forEach(x=>x.classList.toggle('on',x===b)); j.querySelectorAll('.ag-sec').forEach(x=>x.classList.toggle('on',x.dataset.tab===v)); return; }
     if(act==='ag-mes'){ const [y,m]=(A.mes||hoje().slice(0,7)).split('-').map(Number), x=new Date(y,m-1+(+v),1,12); A.mes=x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0'); P.rerender(); return; }
     if(act==='ag-dia'){ A.dia=v&&A.dia!==v?v:''; if(v){ A.cal=v; A.mes=v.slice(0,7); } A.aba='agendado'; P.rerender(); return; }
-    if(act==='ag-abrir'){ editar(v); return; } /* closest() pega o botão antes da linha: Carregou/Reabrir não abrem a janela */
+    if(act==='ag-abrir'){ if(A.ed&&A.ed.analise&&A.jan) A.jan.fechar(); editar(v); return; } /* closest() pega o botão antes da linha: Carregou/Reabrir não abrem a janela */
     if(act==='ag-dt'){ const i=A.jan&&A.jan.el.querySelector('#ag-data'); if(i){ i.value=v; janAtualiza(); } return; }
     if(act==='ag-salvar'){ salvar(v); return; }
     if(act==='ag-ehcarga'){ const on=!b.classList.contains('on'); b.classList.toggle('on',on); b.setAttribute('aria-pressed',on); b.textContent=(on?'✓ ':'')+b.textContent.replace(/^✓ /,''); return; }
@@ -818,6 +890,10 @@
   });
   document.addEventListener('toggle',e=>{ const d=e.target; if(d&&d.classList&&d.classList.contains('ag-dpe')) A.dpe=d.open; },true);
   document.addEventListener('change',e=>{ if(e.target&&e.target.id==='ag-empsel'){ const n=A.jan&&A.jan.el.querySelector('#ag-empnova'); if(n){ n.hidden=e.target.value!=='__outra'; if(!n.hidden) n.focus(); } } });
+  document.addEventListener('change',e=>{ const t=e.target; if(!t) return;
+    if(t.id==='ag-cls'){ A.cls=t.value; A.cal=''; P.render(); }
+    else if(t.id==='ag-per'){ A.per=t.value?Object.assign({},A.per||{},{t:t.value}):null; if(t.value&&t.value!=='datas') A.dia=''; P.render(); }
+    else if(t.id==='ag-pde'||t.id==='ag-pate'){ A.per=Object.assign({t:'datas'},A.per||{},{[t.id==='ag-pde'?'de':'ate']:t.value}); P.render(); } });
   document.addEventListener('change',e=>{ if(e.target&&e.target.id==='ag-emp'){ A.emp=e.target.value; A.cal=''; P.render(); } });
   document.addEventListener('change',e=>{ if(e.target&&(e.target.id==='ag-file'||e.target.classList.contains('ag-file2'))){ const fs=e.target.files; importar(fs); e.target.value=''; } });
   /* telefone da transportadora aparece ao escolher */
@@ -1080,11 +1156,33 @@
   .ag-limpa{font-size:13px;white-space:nowrap}
   .ag-fdx{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;padding:10px 14px;margin:6px 0 10px;border-radius:12px;background:color-mix(in srgb,var(--ok) 9%,transparent);font-size:13.5px}.ag-fdx.c{background:color-mix(in srgb,var(--crit) 8%,transparent)}.ag-fdx b{font-weight:600}
   .ag-head+.ag-fdx{margin-top:16px}.ag-trb{padding:4px 10px;font-size:12px}
+  /* análise com o saldo novo */
+  .ag-sn2{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin:16px 0 0;padding:12px 16px;border-radius:14px;background:color-mix(in srgb,var(--teal) 10%,transparent);border:1px solid color-mix(in srgb,var(--teal) 30%,transparent);font-size:14px}.ag-sn2 b{font-weight:600}
+  .ag-ans{margin-top:14px}.ag-ann{font-size:12px;font-weight:600;color:var(--muted);background:color-mix(in srgb,var(--muted) 12%,transparent);padding:1px 8px;border-radius:999px;margin-left:4px}
+  .ag-anl{list-style:none;margin:6px 0 0;padding:0}.ag-anl li{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;padding:7px 0;border-top:1px solid color-mix(in srgb,var(--line) 60%,transparent);font-size:13.5px}.ag-anl li:first-child{border-top:0}
+  .ag-anl li>span:last-of-type{margin-left:auto}.ag-and{font-weight:600;min-width:90px}.ag-anok td{opacity:.6}
   /* reagendado */
   .ag-rg{color:#8a5a00;font-weight:600;background:color-mix(in srgb,var(--warn) 14%,transparent);padding:0 6px;border-radius:5px}
   .ag-mot.op{color:var(--muted)}.ag-mt{margin-top:12px}
   @media (max-width:1100px){.ag-cl2{grid-template-columns:1fr}.ag-calg{position:static}}
   @media (max-width:760px){.ag-calg{padding:12px}.ag-calg .ag-cd{min-height:52px}.ag-calg .ag-cd small{font-size:11px}.ag-dc{grid-template-columns:26px minmax(0,1fr) auto;grid-template-areas:"o n n" "o p b" "o s b"}.ag-dc>.ag-stx{justify-self:start}.ag-dit th:first-child{width:36%}}
+  /* 25/11 (ajustes, 3ª): barra em duas linhas, filtros compactos, cabeçalho do dia fixo, "Sem carga" com moldura */
+  .ag-acts{flex-wrap:wrap;justify-content:flex-end}
+  .ag-bar{display:block;margin-bottom:10px}
+  .ag-br1{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.ag-br1 .ag-q{flex:1;min-width:220px;max-width:340px;margin-left:auto;height:38px}
+  .ag-br2{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+  .ag-brl{font-size:12px;color:var(--muted);margin-right:2px}
+  .ag-fs{height:34px;padding:0 30px 0 12px;font-size:13px;max-width:210px;border-radius:999px}.ag-fs.on{border-color:var(--teal);color:var(--teal-strong);font-weight:600;background-color:color-mix(in srgb,var(--teal) 7%,var(--surface))}
+  .ag-br2 .ag-fdb{height:34px;font-size:13px}
+  .ag-fdt{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;color:var(--muted)}.ag-fdt input{height:34px;width:150px;padding:0 8px}
+  .ag-cpb{padding:7px 12px}
+  .ag-dm{margin:8px 2px 0}
+  .ag-dia{margin-top:26px}.ag-dia:first-child{margin-top:14px}
+  .ag-dh{position:sticky;top:64px;z-index:3;background:var(--surface);padding-top:8px}
+  .ag-dh h3{font-size:17px}.ag-cpd{font-size:12.5px;margin-right:4px}
+  .ag-cgb.sem{margin-top:12px;border:1px dashed var(--line);border-radius:14px;padding:4px 4px 6px}.ag-cgb.sem .ag-cgh{padding:8px 10px 4px}
+  .ag-grp{margin-top:6px}
+  @media (max-width:760px){.ag-head .ag-acts{width:100%;flex-wrap:wrap}.ag-head .ag-acts>*{flex:1 1 auto;justify-content:center}.ag-br1 .ag-q{max-width:none;margin-left:0}.ag-fs{max-width:none;flex:1 1 140px}.ag-dh{top:56px}.ag-cpb{flex:1 1 100%}}
   </style>`);
 
   P.registrarModulo({ id:'agend', nome:'Agendamentos', ic:'agendar',

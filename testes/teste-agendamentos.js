@@ -171,6 +171,10 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   await p.evaluate(()=>{ window.__agend.aba='agendado'; __T.go('agendamentos'); }); await H.dorme(300);
   await cal(mais2); const te=await painelDia();
   ok('Calendário: transferências entre empresas (ZZ0001: Empresa 9 pede 500, saldo 0, transferir 500)', /Por empresa e transferências \(1\)/.test(te)&&/ZZ0001\s*Empresa 9 \(Outra\)\s*500\s*0\s*500/.test(te), te.replace(/\n/g,' | ').slice(-300));
+  await p.click('[data-act="ag-trf"]'); await H.dorme(600); const te2=await painelDia(); const cfgT=await p.evaluate(()=>{ const b=JSON.parse(localStorage.getItem('__srv')||'{}'); return ((b.docs||{})['config/agendamentos']||{}).trfFeito||{}; });
+  ok('"Transferido" tira a linha da lista de transferir e fica como feita', /transferências \(feitas\)/.test(te2)&&/Já transferido: ZZ0001 500 para Empresa 9 \(Outra\)/.test(te2)&&!/\bTransferido\b/.test(te2.replace('Já transferido',''))&&Object.keys(cfgT).some(k=>/\|ZZ0001\|Empresa 9/.test(k)), te2.replace(/\n/g,' | ').slice(-300));
+  await p.click('[data-act="ag-trfdesf"]'); await H.dorme(600);
+  ok('"desfazer" volta a transferência para a lista', /transferências \(1\)/.test(await painelDia()));
   const [dl]=await Promise.all([p.waitForEvent('download',{timeout:20000}),p.click('[data-act="ag-pdfdia"]')]); const arq='/tmp/agend/dia.pdf'; await dl.saveAs(arq);
   let txtPdf=''; if(process.env.JSPDF_REAL){ const pj=require('./node_modules/pdfjs-dist/legacy/build/pdf.js'); const dpdf=await pj.getDocument({data:new Uint8Array(fs.readFileSync(arq))}).promise; for(let k=1;k<=dpdf.numPages;k++){ const tc=await (await dpdf.getPage(k)).getTextContent(); txtPdf+=tc.items.map(i=>i.str).join(' ')+'\n'; } }
   ok('PDF do dia: baixa o arquivo com o total, por empresa, a transferência e os pedidos', dl.suggestedFilename()==='carregamentos-'+mais2+'.pdf'&&(!process.env.JSPDF_REAL||(/Carregamentos/.test(txtPdf)&&/10,41/.test(txtPdf)&&/Transferir entre empresas/.test(txtPdf)&&/Empresa 9 \(Outra\)/.test(txtPdf)&&/500 SC/.test(txtPdf)&&/900010/.test(txtPdf)&&/Por empresa/.test(txtPdf))), dl.suggestedFilename()+' '+txtPdf.replace(/\s+/g,' ').slice(0,300));
@@ -187,6 +191,13 @@ const ITENS=[['ZZ0001','ARGAMASSA TESTE AC3 20 KG','SC','1.200,000','300,000','1
   await p.evaluate(()=>{ window.__agend.aba='agendado'; __T.go('agendamentos'); }); await H.dorme(400);
   let dmais2=await p.evaluate(d=>{ const x=document.getElementById('ag-d-'+d); return x?x.innerText:''; },mais2);
   ok('Estoque somado entre os pedidos: saldo total 2.000, antes vão 1.200 (amanhã), então no dia +2 faltam 200 de ZZ0001', /Falta material: ZZ0001 200/.test(dmais2), dmais2.replace(/\n/g,' | ').slice(0,200));
+  /* só as cargas do diário: o plano conta só esses pedidos (os 1.000 de ZZ0001 do diário cabem nos 2.000) */
+  await p.click('[data-act="ag-sodiario"]'); await H.dorme(400);
+  const sd=await p.evaluate(()=>({ids:[...document.querySelectorAll('#ag-corpo .ag-ln')].map(l=>l.dataset.v).sort(),fx:(document.querySelector('.ag-fdx')||{}).innerText||'',limpa:!!document.querySelector('[data-act="ag-limpar"]'),txt:document.getElementById('ag-corpo').innerText}));
+  ok('Filtro "Só do diário de bordo": só as cargas com nº do diário e se tem material para elas', sd.ids.join()==='p900010,p900011'&&/Cargas do diário de bordo/.test(sd.fx)&&/Tem material para todos os pedidos do diário/.test(sd.fx)&&!/Falta material/.test(sd.txt)&&sd.limpa, JSON.stringify(sd).slice(0,300));
+  await p.fill('#ag-q','zzz'); await p.dispatchEvent('#ag-q','input'); await p.click('[data-act="ag-limpar"]'); await H.dorme(400);
+  const lp=await p.evaluate(()=>({sd:window.__agend.soDiario,q:window.__agend.q,input:document.getElementById('ag-q').value,limpa:!!document.querySelector('[data-act="ag-limpar"]'),n:document.querySelectorAll('#ag-corpo .ag-ln').length}));
+  ok('"Limpar filtros" desliga o diário, a busca e a empresa e some quando não há filtro', !lp.sd&&!lp.q&&!lp.input&&!lp.limpa&&lp.n>2, JSON.stringify(lp));
   await cal(mais2); ok('Calendário marca o dia com falta de material e o item mostra "falta 200"', await p.evaluate(d=>document.querySelector('.ag-cd[data-v="'+d+'"]').classList.contains('fal'),mais2)&&/falta 200/.test(await painelDia())); await lst('agendado');
   /* produção programada cobre a falta */
   await p.evaluate(d=>window.Painel.db().collection('ordens').doc('oAG1').set({num:'9901',produto:'ZZ0001',linha:'Linha 2',data:d,total:300,status:'aberta',turno:'Dia todo'}),ymd(new Date(h.getTime()+864e5))); await H.dorme(1500);

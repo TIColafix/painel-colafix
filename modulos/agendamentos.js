@@ -198,7 +198,10 @@
     if(v==='__manter') return undefined; if(!v) return null;
     if(v==='__outra'){ const t=val('#ag-empnova'), m=t.match(/^\s*(\d+)\s*[-–]?\s*(.*)$/); if(!m){ P.toast('Digite a empresa como "código - nome", ex.: 9 - FIXCOL.'); return false; } return {cod:m[1],nome:(m[2]||'').trim().toUpperCase()}; }
     return empConhecidas().find(e=>String(e.cod)===v)||{cod:v,nome:''}; }
-  const fE=xs=>A.emp?xs.filter(x=>empK(x)===A.emp):xs;
+  /* filtros da tela: empresa e "só as cargas do diário de bordo" (25/11, ajuste: "filtro somente as cargas do diário, inclusive para
+     saber se vai ter material para os pedidos do diário") — com o do diário ligado, o plano de estoque também conta só esses pedidos */
+  const fE=xs=>{ if(A.emp) xs=xs.filter(x=>empK(x)===A.emp); if(A.soDiario) xs=xs.filter(x=>String(x.diario||'').trim()); return xs; };
+  const temFiltro=()=>!!(A.emp||A.soDiario||A.q||A.dia||A.tq);
   const empOpcoes=()=>[...new Set(todos().map(empK))].sort((a,b)=>a==='Sem empresa'?1:b==='Sem empresa'?-1:a.localeCompare(b,'pt-BR',{numeric:true}));
   const diarioTxt=x=>x.diario?'Diário nº '+x.diario:'';
   /* tabela "paletes por item" de um grupo (dia, carga ou pedidos marcados) */
@@ -462,9 +465,9 @@
   const prodTxt=ps=>ps.slice(0,3).map(p=>fN(p.q)+' em '+brC(p.data)+(p.linha?' ('+String(p.linha).replace(/^linha\s*/i,'L')+')':'')).join(' · ');
   const ordK=x=>[x.data||'9999',String(+x.ordemDia>0?x.ordemDia:99).padStart(3,'0'),x.carga||'~',pedList(x)[0]||''].join('|');
   /* plano: consome o saldo total em ordem. extra = pedido simulado (ex.: a data escolhida na janela) */
-  function plano(extra){ const key=extra?null:A.abertos.map(x=>x._id+x.data+x.status+(x.ordemDia||'')+(x.alteradoEm||'')).join()+'|'+(P.S.ordens||[]).length+'|'+baseEm()+'|'+(A.cfg.usarBase!==false);
+  function plano(extra){ const key=extra?null:A.abertos.map(x=>x._id+x.data+x.status+(x.ordemDia||'')+(x.alteradoEm||'')).join()+'|'+(P.S.ordens||[]).length+'|'+baseEm()+'|'+(A.cfg.usarBase!==false)+'|'+(A.soDiario?1:0);
     if(key&&A._pl&&A._pl.k===key) return A._pl.v;
-    let xs=A.abertos.filter(x=>x.status==='agendado'&&x.data); if(extra){ xs=xs.filter(x=>x._id!==extra._id); if(extra.data) xs.push(extra); }
+    let xs=A.abertos.filter(x=>x.status==='agendado'&&x.data&&(!A.soDiario||String(x.diario||'').trim())); if(extra){ xs=xs.filter(x=>x._id!==extra._id); if(extra.data) xs.push(extra); }
     xs=xs.slice().sort((a,b)=>ordK(a).localeCompare(ordK(b)));
     const usado={}, s0={}, pr={}, porPI={}, porDia={};
     xs.forEach(x=>(x.itens||[]).forEach(i=>{ const q=qtdDe(i); if(!(q>0)) return; const c=String(i.cod).toUpperCase();
@@ -487,6 +490,12 @@
 
   /* "passa de 10 paletes e do peso (6 t) do toco" */
   const capTxt=c=>!c||!c.v?'':'passa '+[c.palOver?'de '+fN(c.v.pal)+' paletes':'',c.kgOver?'do peso ('+fKg(c.v.kg)+')':''].filter(Boolean).join(' e ')+' do '+c.v.nome.toLowerCase();
+  /* faixa "só do diário": quantas cargas e se tem material para elas (pelo plano, contando só os pedidos do diário) */
+  function faixaDiario(){ if(!A.soDiario) return ''; const h=hoje(), xs=fE(A.abertos).filter(x=>x.status==='agendado'&&x.data), r=soma(xs);
+    const ds=[...new Set(xs.map(x=>x.data))].sort(), fal=[]; ds.forEach(d=>diaFaltas(d).forEach(o=>fal.push({d,o})));
+    const nc=new Set(xs.map(x=>x.carga?'c'+x.carga:ehCarga(x)?'r'+x._id:'s'+x._id)).size;
+    return `<div class="ag-fdx${fal.length?' c':''}"><b>Cargas do diário de bordo</b><span>${xs.length?`${nc} carga${nc>1?'s':''} · ${xs.length} pedido${xs.length>1?'s':''} · ${esc(totDia(r))}`:'Nenhum pedido agendado tem nº do diário.'}</span>
+      ${xs.length?(fal.length?`<span class="ag-f">Falta material: ${fal.map(f=>esc(f.o.cod)+' '+esc(fN(f.o.falta))+' ('+esc(f.d===h?'hoje':brC(f.d))+')').join(' · ')}</span>`:'<span class="ag-okt">Tem material para todos os pedidos do diário.</span>'):''}</div>`; }
   /* ---------- ajustes do módulo (limite por dia, sábado, saldo da base, veículos, telefones das transportadoras) ---------- */
   function janAjustes(){ const u=U(); if(A.jan) A.jan.fechar(); A.ed={ajustes:true};
     const vs=veics(), tels=A.cfg.tels||{}, tl=transps();
@@ -544,7 +553,10 @@
     const pctP=r.pal>0?Math.min(100,Math.round(c.car.pal/r.pal*100)):(c.n?Math.round(c.ncar/c.n*100):0);
     const nota=i=>{ const o=D[String(i.cod).toUpperCase()]; if(!o||!(i.pq>0)) return ''; if(o.falta>0) return `<small class="ag-tfl c">falta ${esc(fN(o.falta))}</small>`; if(o.faltaSemProd>0) return '<small class="ag-tfl">com a produção</small>'; return ''; };
     const itens=c.it.map(i=>`<tr data-b="${esc(norm(i.cod+' '+(i.desc||'')))}"${i.pq>0?'':' class="feito"'}><td><b>${esc(i.cod)}</b><span>${esc(i.desc||'')}</span>${nota(i)}</td><td class="dir">${esc(vq(i.pal,i.q,i.un))}${i.pal!=null?`<small>${esc(qtdUn(i.q,i.un))}</small>`:''}</td><td class="dir ag-cq">${i.cq>0?esc(vq(i.cpal,i.cq,i.un)):'—'}</td><td class="dir ag-pq">${i.pq>0?`<b>${esc(vq(i.ppal,i.pq,i.un))}</b>${i.ppal!=null?`<small>${esc(qtdUn(i.pq,i.un))}</small>`:''}`:'<span class="ag-okt">✓</span>'}</td></tr>`).join('');
-    const empr=[...new Set(xs.map(empK))], trf=[]; soma(xs.filter(x=>x.status==='agendado')).it.forEach(i=>i.trf.filter(t=>t.falta>0).forEach(t=>trf.push({i,t})));
+    /* transferências (25/11, ajuste: "os itens que já foram carregados têm que sair da parte de transferir"): só o que ainda falta carregar,
+       e o botão "Transferido" tira a linha (config/agendamentos.trfFeito["dia|cód|empresa"]) */
+    const empr=[...new Set(xs.filter(x=>x.status==='agendado').map(empK))], tf=A.cfg.trfFeito||{}, trf=[], trfOk=[];
+    soma(xs.filter(x=>x.status==='agendado')).it.forEach(i=>i.trf.filter(t=>t.falta>0).forEach(t=>{ const k=d+'|'+i.cod+'|'+t.emp, f=tf[k]; if(f&&+f.q>=t.falta) trfOk.push({i,t,f}); else trf.push({i,t,k}); }));
     const gs=gruposDia(xs.filter(x=>x.status==='agendado')), carrs=xs.filter(x=>x.status==='carregado');
     const cargaL=(k,ys,i)=>{ const x0=ys[0], rr=soma(ys), sep=ys.every(y=>y.sep), che=ys.every(y=>y.chegou), ids=ys.map(y=>y._id).join(',');
       const nome=k==='sem'?'Pedido '+pedCurto(x0):k[0]==='r'?'Carga com '+pedList(x0).length+' pedidos':'Carga '+k.slice(2);
@@ -561,14 +573,15 @@
       <div class="ag-h3r"><h3 class="ag-h3">Itens do dia</h3>${c.it.length>=3?`<input type="search" id="ag-tq" class="txt ag-tq" placeholder="Buscar item…" aria-label="Buscar item do dia" autocomplete="off" value="${esc(A.tq||'')}">`:''}</div>
       <div class="pc-rola"><table class="ag-pit ag-dit"><thead><tr><th>Item</th><th class="dir">Total</th><th class="dir">Carregado</th><th class="dir">Pendente</th></tr></thead><tbody class="ag-tl">${itens}</tbody>
         <tfoot><tr><td>Total</td><td class="dir">${esc(totDia(r))}</td><td class="dir">${esc(c.ncar?totDia(c.car):'—')}</td><td class="dir"><b>${esc(c.pen.n?totDia(c.pen):'✓')}</b></td></tr></tfoot></table></div><p class="ag-tqv" hidden>Nenhum item com essa busca.</p>
-      ${empr.length>1||trf.length?`<details class="ag-dpe"${A.dpe?' open':''}><summary>Por empresa${trf.length?' e transferências ('+trf.length+')':''}</summary>
+      ${empr.length>1||trf.length||trfOk.length?`<details class="ag-dpe"${A.dpe?' open':''}><summary>Por empresa${trf.length?' e transferências ('+trf.length+')':trfOk.length?' e transferências (feitas)':''}</summary>
         ${empr.length>1?`<table class="ag-pit"><tbody>${empr.map(e=>{ const ce=cxp(xs.filter(x=>empK(x)===e)); return `<tr><td>${esc(e)}</td><td class="dir">pendente <b>${esc(ce.pen.n?totDia(ce.pen):'✓')}</b></td><td class="dir">total ${esc(totDia(ce.tot))}</td></tr>`; }).join('')}</tbody></table>`:''}
-        ${trf.length?`<table class="ag-pit"><thead><tr><th>Transferir</th><th>Para</th><th class="dir">Pedido</th><th class="dir">Saldo</th><th class="dir">Transferir</th></tr></thead><tbody>${trf.map(o=>`<tr><td><b>${esc(o.i.cod)}</b></td><td>${esc(o.t.emp)}</td><td class="dir">${esc(fN(o.t.q))}</td><td class="dir">${esc(fN(o.t.saldo||0))}</td><td class="dir ag-f">${esc(fN(o.t.falta))}</td></tr>`).join('')}</tbody></table>`:''}</details>`:''}`:''}
+        ${trf.length?`<table class="ag-pit"><thead><tr><th>Transferir</th><th>Para</th><th class="dir">Pedido</th><th class="dir">Saldo</th><th class="dir">Transferir</th><th></th></tr></thead><tbody>${trf.map(o=>`<tr><td><b>${esc(o.i.cod)}</b></td><td>${esc(o.t.emp)}</td><td class="dir">${esc(fN(o.t.q))}</td><td class="dir">${esc(fN(o.t.saldo||0))}</td><td class="dir ag-f">${esc(fN(o.t.falta))}</td><td class="dir">${pode()?`<button type="button" class="ag-bt sec ag-trb" data-act="ag-trf" data-v="${esc(o.k)}|${o.t.falta}">Transferido</button>`:''}</td></tr>`).join('')}</tbody></table>`:''}
+        ${trfOk.length?`<p class="ag-dcok">Já transferido: ${trfOk.map(o=>esc(o.i.cod)+' '+esc(fN(o.f.q))+' para '+esc(o.t.emp)+(o.f.em?' ('+esc(hm(o.f.em))+')':'')).join(' · ')}${pode()?` <button type="button" class="lnk" data-act="ag-trfdesf" data-v="${esc(d)}">desfazer</button>`:''}</p>`:''}</details>`:''}`:''}
     </section>`;
     const head=`<div class="head ag-head"><div><div class="eyebrow">AGENDAMENTOS</div><h1>Calendário de carregamentos</h1><div class="sub">Toque num dia para ver os itens, o que já foi carregado e o que ainda está pendente.</div></div>
-      <div class="ag-acts">${eo.length>1||A.emp?`<select id="ag-emp" class="txt ag-esel${A.emp?' on':''}" aria-label="Filtrar por empresa"><option value="">Todas as empresas</option>${eo.map(e=>`<option value="${esc(e)}"${A.emp===e?' selected':''}>${esc(e)}</option>`).join('')}</select>`:''}<button type="button" class="btn sec" data-act="ag-pdfsem" data-v="${d}">PDF da semana</button><button type="button" class="btn sec" data-act="ag-csv">Planilha</button></div></div>`;
+      <div class="ag-acts"><button type="button" class="ag-fdb${A.soDiario?' on':''}" data-act="ag-sodiario" aria-pressed="${!!A.soDiario}">${A.soDiario?'✓ ':''}Só do diário de bordo</button>${A.emp||A.soDiario||A.tq?'<button type="button" class="lnk ag-limpa" data-act="ag-limpar">Limpar filtros</button>':''}${eo.length>1||A.emp?`<select id="ag-emp" class="txt ag-esel${A.emp?' on':''}" aria-label="Filtrar por empresa"><option value="">Todas as empresas</option>${eo.map(e=>`<option value="${esc(e)}"${A.emp===e?' selected':''}>${esc(e)}</option>`).join('')}</select>`:''}<button type="button" class="btn sec" data-act="ag-pdfsem" data-v="${d}">PDF da semana</button><button type="button" class="btn sec" data-act="ag-csv">Planilha</button></div></div>`;
     if(A.tq) setTimeout(tqFiltra,0);
-    return head+`<div class="ag-cl2"><section class="ag-cal ag-calg" aria-label="Calendário"><div class="ag-ch"><button type="button" class="ag-mv" data-act="ag-mes" data-v="-1" aria-label="Mês anterior">‹</button><b>${esc(nomeMes)}</b><button type="button" class="ag-mv" data-act="ag-mes" data-v="1" aria-label="Próximo mês">›</button></div>
+    return head+faixaDiario()+`<div class="ag-cl2"><section class="ag-cal ag-calg" aria-label="Calendário"><div class="ag-ch"><button type="button" class="ag-mv" data-act="ag-mes" data-v="-1" aria-label="Mês anterior">‹</button><b>${esc(nomeMes)}</b><button type="button" class="ag-mv" data-act="ag-mes" data-v="1" aria-label="Próximo mês">›</button></div>
       <div class="ag-cg7">${cel.join('')}</div>
       <div class="ag-leg"><span><i class="l1"></i>paletes pendentes</span><span><i class="l4"></i>carregado</span>${lim?`<span><i class="l2"></i>passa de ${fN(lim)}</span>`:''}<span><i class="l3"></i>falta material</span><span>← → mudam o dia</span></div></section>${painel}</div>`; }
 
@@ -588,7 +601,7 @@
       Q.secao('Itens do dia','soma de todos os pedidos'); Q.tabela(cols,rows);
       if(es.length>1){ Q.secao('Por empresa'); const re=es.map(e=>{ const ys=xs.filter(x=>(empTxt(x)||'Sem empresa')===e), z=soma(ys); return [e,String(ys.length),unTxt(z),totDia(z),fR(z.vp)]; });
         Q.tabela([{t:'Empresa',w:30},{t:'Pedidos',w:10,al:'r'},{t:'Quantidade',w:30,al:'r'},{t:'Paletes / unidades',w:30,al:'r'},{t:'Valor',w:20,al:'r'}],re); }
-      const trf=[]; r.it.forEach(i=>i.trf.filter(t=>t.falta>0).forEach(t=>trf.push([i.cod,i.desc||'',t.emp,qtdUn(t.q,i.un),t.saldo!=null?fN(t.saldo):'—',fN(t.falta)+' '+i.un])));
+      const trf=[], tfd=A.cfg.trfFeito||{}; r.it.forEach(i=>i.trf.filter(t=>t.falta>0&&!(tfd[d+'|'+i.cod+'|'+t.emp]&&+tfd[d+'|'+i.cod+'|'+t.emp].q>=t.falta)).forEach(t=>trf.push([i.cod,i.desc||'',t.emp,qtdUn(t.q,i.un),t.saldo!=null?fN(t.saldo):'—',fN(t.falta)+' '+i.un])));
       Q.secao('Transferir entre empresas','pedido da empresa maior que o saldo dela no PDF do Focco');
       if(trf.length){ const c=[{t:'Item',w:14},{t:'Descrição',w:40},{t:'Empresa',w:24},{t:'Pedido',w:18,al:'r'},{t:'Saldo',w:12,al:'r'},{t:'Transferir',w:18,al:'r'}]; trf.forEach(t=>{ t._cor=[null,null,null,null,null,'crit']; }); Q.tabela(c,trf); }
       else Q.vazio('Nenhuma transferência: cada empresa tem saldo para os próprios pedidos.');
@@ -674,6 +687,8 @@
       ${A.lendo?`<div class="ag-lendo" id="ag-drop"><span class="ag-spin"></span>${esc(A.lendo)}</div>`:`<div class="ag-drop" id="ag-drop" aria-hidden="true"><div><b>Solte o PDF do Focco aqui</b><span>Pode ser mais de um</span></div></div>`}`;
     const barra=`<div class="ag-bar">${u.chips([['aguardando','Esperando data',ag.length,A.aba==='aguardando'],['agendado','Agendados',agd.length,A.aba==='agendado'],['carregado','Carregados',car.length,A.aba==='carregado'],['cancelado','Cancelados',can.length,A.aba==='cancelado'],['indic','Indicadores',null,A.aba==='indic']],'ag-aba')}
       ${eo.length>1||A.emp?`<select id="ag-emp" class="txt ag-esel${A.emp?' on':''}" aria-label="Filtrar por empresa"><option value="">Todas as empresas</option>${eo.map(e=>`<option value="${esc(e)}"${A.emp===e?' selected':''}>${esc(e)}</option>`).join('')}</select>`:''}
+      <button type="button" class="ag-fdb${A.soDiario?' on':''}" data-act="ag-sodiario" aria-pressed="${!!A.soDiario}">${A.soDiario?'✓ ':''}Só do diário de bordo</button>
+      ${temFiltro()?'<button type="button" class="lnk ag-limpa" data-act="ag-limpar">Limpar filtros</button>':''}
       ${A.aba==='indic'?'':`<input type="search" id="ag-q" class="txt ag-q" aria-label="Buscar agendamento" autocomplete="off" placeholder="Buscar pedido, cliente, carga, item…  ( / )" value="${esc(A.q)}">`}</div>`;
     let corpo='';
     if(!A.lido.a) corpo='<div class="empty">Carregando…</div>';
@@ -696,7 +711,7 @@
     const dicaM=pode()&&(A.aba==='aguardando'||A.aba==='agendado')&&!ms.length&&A.abertos.length>1?`<p class="ag-dm">Marque os pedidos do mesmo caminhão para montar a carga.</p>`:'';
     if(A.tq) setTimeout(tqFiltra,0);
     if(A.rolar){ const d=A.rolar; A.rolar=''; setTimeout(()=>{ const s=document.getElementById('ag-d-'+d); if(s){ s.scrollIntoView({behavior:'smooth',block:'start'}); s.classList.add('ag-pisca'); setTimeout(()=>s.classList.remove('ag-pisca'),1600); } },60); }
-    return head+`<div class="ag-main ag-full">${u.cartao({cls:'ag-lista',corpo:barra+dicaM+`<div id="ag-corpo">${corpo}</div>`+marc})}</div>`; }
+    return head+`<div class="ag-main ag-full">${u.cartao({cls:'ag-lista',corpo:barra+faixaDiario()+dicaM+`<div id="ag-corpo">${corpo}</div>`+marc})}</div>`; }
 
   /* ---------- montar carga: vários pedidos no mesmo caminhão ---------- */
   function janCarga(ids){ const u=U(); if(A.jan) A.jan.fechar(); const xs=ids.map(deId).filter(Boolean); if(!xs.length) return;
@@ -763,6 +778,10 @@
     if(act==='ag-cgedit'){ janCarga(v.split(',').filter(Boolean)); return; }
     if(act==='ag-cgsalvar'){ salvarCarga(); return; }
     if(act==='ag-pdfdia'){ pdfDia(v); return; }
+    if(act==='ag-sodiario'){ A.soDiario=!A.soDiario; A._pl=null; P.render(); return; }
+    if(act==='ag-limpar'){ A.emp=''; A.soDiario=false; A.q=''; A.dia=''; A.tq=''; A._pl=null; P.render(); return; }
+    if(act==='ag-trf'){ const i=v.lastIndexOf('|'), k=v.slice(0,i), q=+v.slice(i+1); salvarCfg({trfFeito:{[k]:{q,em:new Date().toISOString(),por:eu()}}}).then(()=>{ P.toast('Transferência marcada como feita.'); P.rerender(); }); return; }
+    if(act==='ag-trfdesf'){ const tf=Object.assign({},A.cfg.trfFeito||{}); Object.keys(tf).forEach(k=>{ if(k.startsWith(v+'|')) tf[k]=null; }); P.db().doc('config/agendamentos').set({trfFeito:tf},{merge:true}).then(()=>{ Object.keys(tf).forEach(k=>{ if(tf[k]===null) delete tf[k]; }); A.cfg.trfFeito=tf; P.rerender(); }).catch(e=>P.erro(e)); return; }
     if(act==='ag-cal'){ A.cal=v; A.mes=v.slice(0,7); A.tq=''; P.rerender(); return; }
     if(act==='ag-verdia'){ A.dia=v; A.aba='agendado'; A.rolar=v; P.go('agendamentos'); return; }
     if(act==='ag-reag'){ janReagendar(v.split(',').filter(Boolean)); return; }
@@ -1055,6 +1074,12 @@
   .ag-dit{table-layout:fixed;width:100%}.ag-dit th:first-child{width:40%}.ag-dit td{vertical-align:top}.ag-dit td:first-child b{font-weight:600;display:block}.ag-dit td:first-child span{color:var(--muted);display:block;font-size:12px;line-height:1.3}.ag-dit .dir{white-space:normal}.ag-dit td small{display:block;font-size:11px;color:var(--muted)}
   .ag-dit tr.feito td{opacity:.55}.ag-dit .ag-cq{color:var(--ok)}.ag-dit .ag-pq b{color:var(--teal-strong);font-weight:700}
   .ag-dpe summary{cursor:pointer;font-size:13px;color:var(--teal-strong);font-weight:500}.ag-dpe .ag-pit{margin-top:8px}
+  /* 25/11 (ajustes): filtro do diário, limpar filtros, transferido */
+  .ag-fdb{all:unset;box-sizing:border-box;cursor:pointer;height:38px;display:inline-flex;align-items:center;padding:0 12px;border-radius:999px;border:1px solid var(--line);font-size:13.5px;color:var(--muted);white-space:nowrap}
+  .ag-fdb:hover{border-color:var(--teal)}.ag-fdb.on{border-color:var(--teal);background:color-mix(in srgb,var(--teal) 12%,transparent);color:var(--teal-strong);font-weight:600}.ag-fdb:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+  .ag-limpa{font-size:13px;white-space:nowrap}
+  .ag-fdx{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;padding:10px 14px;margin:6px 0 10px;border-radius:12px;background:color-mix(in srgb,var(--ok) 9%,transparent);font-size:13.5px}.ag-fdx.c{background:color-mix(in srgb,var(--crit) 8%,transparent)}.ag-fdx b{font-weight:600}
+  .ag-head+.ag-fdx{margin-top:16px}.ag-trb{padding:4px 10px;font-size:12px}
   /* reagendado */
   .ag-rg{color:#8a5a00;font-weight:600;background:color-mix(in srgb,var(--warn) 14%,transparent);padding:0 6px;border-radius:5px}
   .ag-mot.op{color:var(--muted)}.ag-mt{margin-top:12px}

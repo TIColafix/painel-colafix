@@ -31,8 +31,8 @@ service cloud.firestore {
 
     // Tudo o que é operacional (ordens, entregas, paradas, ranchos, almox, premix, chamados, config...)
     match /{col}/{id} {
-      allow read: if le() && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'carrosf', 'api', 'apibots', 'erros', 'pedsenha']);
-      allow write: if grava() && !bloq(col) && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'carrosf', 'api', 'apibots', 'erros', 'pedsenha'])
+      allow read: if le() && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'carrosf', 'carrosp', 'carrost', 'api', 'apibots', 'erros', 'pedsenha']);
+      allow write: if grava() && !bloq(col) && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'carrosf', 'carrosp', 'carrost', 'api', 'apibots', 'erros', 'pedsenha'])
         && !(col == 'config' && id == 'geral'); // config/geral tem regra própria (logo abaixo)
     }
 
@@ -70,8 +70,8 @@ service cloud.firestore {
       allow delete: if dono();
     }
     match /{col}/{id}/{resto=**} {
-      allow read: if le() && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'carrosf', 'api', 'apibots', 'erros', 'pedsenha']);
-      allow write: if grava() && !bloq(col) && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'carrosf', 'api', 'apibots', 'erros', 'pedsenha'])
+      allow read: if le() && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'carrosf', 'carrosp', 'carrost', 'api', 'apibots', 'erros', 'pedsenha']);
+      allow write: if grava() && !bloq(col) && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'carrosf', 'carrosp', 'carrost', 'api', 'apibots', 'erros', 'pedsenha'])
         && !(col == 'config' && id == 'geral'); // o ** também pega o próprio documento (config/geral não tem subcoleções)
     }
 
@@ -214,7 +214,7 @@ service cloud.firestore {
     // Carros · portaria (26/11/2026): a portaria registra saída e volta; só o adm (módulo carros) muda carros e motoristas
     function carrosOk() { return dono() || (liberado() && (acs().get('mods', []).hasAny(['carros', 'portaria']) || acs().get('extras', []).hasAny(['carros', 'portaria']))); }
     function carrosAdm() { return dono() || (liberado() && !soVer() && (acs().get('mods', []).hasAny(['carros']) || acs().get('extras', []).hasAny(['carros']))); }
-    match /carros/{id} { allow read: if carrosOk(); allow write: if carrosAdm(); }
+    match /carros/{id} { allow read: if carrosOk() || carrosMot(); allow write: if carrosAdm(); }  // o motorista lê o termo de ciência
     // motorista (26/11): lê só as próprias viagens (motUid) e grava só o aceite e o combustível
     function carrosMot() { return liberado() && (acs().get('mods', []).hasAny(['motorista']) || acs().get('extras', []).hasAny(['motorista'])); }
     match /carrosv/{id} {
@@ -223,6 +223,11 @@ service cloud.firestore {
       allow update: if (carrosOk() && (dono() || !soVer()))
         || (carrosMot() && resource.data.motUid == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aceite', 'devol', 'comb']));
       allow delete: if false; }
+    // CPF e nome do motorista (26/11): só o adm grava; leem o adm e o próprio motorista
+    match /carrosp/{id} { allow read: if carrosAdm() || (carrosMot() && resource.data.uid == request.auth.uid); allow write: if carrosAdm(); }
+    // termo de ciência aceito: o motorista cria o próprio (não muda depois); o adm lê
+    match /carrost/{id} { allow read: if carrosAdm() || (carrosMot() && resource.data.uid == request.auth.uid);
+      allow create: if carrosMot() && request.resource.data.uid == request.auth.uid; allow update, delete: if false; }
     // fotos das avarias (motorista na saída/volta): quem tirou lê e cria; portaria e adm leem
     match /carrosf/{id} {
       allow read: if carrosOk() || (carrosMot() && resource.data.por == request.auth.uid);

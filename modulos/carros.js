@@ -57,12 +57,44 @@
   /* ---------- banco ---------- */
   let lendo=false;
   function carregar(){ if(lendo) return; lendo=true;
-    P.inscrever('cv-cad',()=>P.db().doc('carros/cad'),g=>{ const d=g&&g.exists?g.data():{}; C.cad={carros:Array.isArray(d.carros)?d.carros:[],mot:Array.isArray(d.mot)?d.mot:[]}; C.lido.cad=true; logoCss(); abrirDaUrl(); P.rerender(); });
+    P.inscrever('cv-cad',()=>P.db().doc('carros/cad'),g=>{ const d=g&&g.exists?g.data():{}; C.cad={carros:Array.isArray(d.carros)?d.carros:[],mot:Array.isArray(d.mot)?d.mot:[],termo:d.termo||null}; C.lido.cad=true; logoCss(); abrirDaUrl(); P.rerender(); });
     P.inscrever('cv-fora',()=>P.db().collection('carrosv').where('aberta','==',true).limit(200),s=>{ C.fora=s.docs.map(d=>Object.assign({_id:d.id},d.data())).filter(v=>!v.removido); C.lido.fora=true; P.rerender(); });
     P.inscrever('cv-hist',()=>P.db().collection('carrosv').orderBy('emS','desc').limit(600),s=>{ C.viag=s.docs.map(d=>Object.assign({_id:d.id},d.data())); C.lido.hist=true; P.rerender(); });
-    P.inscrever('cv-km',()=>P.db().collection('carrosk').limit(300),s=>{ const m={}; s.docs.forEach(d=>{ m[d.id]=d.data(); }); C.km=m; C.lido.km=true; P.rerender(); }); }
+    P.inscrever('cv-km',()=>P.db().collection('carrosk').limit(300),s=>{ const m={}; s.docs.forEach(d=>{ m[d.id]=d.data(); }); C.km=m; C.lido.km=true; P.rerender(); });
+    if(adm()){ P.inscrever('cv-priv',()=>P.db().collection('carrosp').limit(300),s=>{ const m={}; s.docs.forEach(d=>{ m[d.id]=d.data(); }); C.priv=m; P.rerender(); });
+      P.inscrever('cv-termos',()=>P.db().collection('carrost').limit(500),s=>{ C.termos=s.docs.map(d=>Object.assign({_id:d.id},d.data())); P.rerender(); }); } }
+  C.priv={}; C.termos=[];
+  /* CPF (26/11, "cadastrar o nome e CPF do motorista para relatórios"): guardado à parte em carrosp/<motId> (só o adm e o próprio motorista leem) */
+  const cpfL=v=>String(v||'').replace(/\D/g,'');
+  const cpfOk=v=>{ const c=cpfL(v); if(c.length!==11||/^(\d)\1{10}$/.test(c)) return false; const dv=n=>{ let s=0; for(let i=0;i<n;i++) s+=+c[i]*(n+1-i); const r=(s*10)%11; return r===10?0:r; }; return dv(9)===+c[9]&&dv(10)===+c[10]; };
+  const cpfF=v=>{ const c=cpfL(v); return c.length===11?c.slice(0,3)+'.'+c.slice(3,6)+'.'+c.slice(6,9)+'-'+c.slice(9):String(v||''); };
+  const cpfM=v=>{ const c=cpfL(v); return c.length===11?'***.'+c.slice(3,6)+'.'+c.slice(6,9)+'-**':''; };
+  const cpfDe=id=>(C.priv[id]||{}).cpf||'';
+  /* termo de ciência (aceite único; nova versão = aceitar de novo) */
+  const TERMO_CIENCIA=`TERMO DE CIÊNCIA E RESPONSABILIDADE · USO DE VEÍCULO DA EMPRESA
+
+Eu, {NOME}, CPF {CPF}, declaro que estou ciente e de acordo com as regras abaixo para usar os veículos da Colafix:
+
+1. Uso o veículo somente a serviço da empresa, nos trajetos e horários do meu trabalho.
+2. Tenho Carteira Nacional de Habilitação válida e na categoria exigida, e aviso a empresa se ela for suspensa, cassada ou vencer.
+3. Respeito as leis de trânsito. Multas por infração cometida enquanto eu estiver com o veículo poderão ser indicadas a mim como condutor, conforme a legislação de trânsito e a política interna.
+4. Não empresto o veículo a outra pessoa e não transporto pessoas ou cargas sem autorização.
+5. Registro a saída e a devolução no Painel da Colafix, confirmando o km, o estado do carro, avarias (com foto quando possível), abastecimento e limpeza, com informações verdadeiras.
+6. Comunico na hora qualquer acidente, avaria, furto ou problema com o veículo.
+7. Devolvo o veículo na portaria nas mesmas condições em que o recebi, salvo o desgaste normal de uso.
+8. Estou ciente de que meu nome, CPF, horários, km, respostas e fotos ficam registrados para o controle da frota.`;
+  const termoAtual=()=>{ const t=C.cad.termo; return t&&t.texto?t:{texto:TERMO_CIENCIA,versao:1}; };
+  const termoPreenche=(tx,nome,cpf)=>String(tx).replace(/\{NOME\}/g,nome||'________').replace(/\{CPF\}/g,cpf?cpfF(cpf):'________');
+  const termoDe=m=>{ const v=termoAtual().versao; return C.termos.filter(t=>t.motId===m.id||(m.uid&&t.uid===m.uid)).sort((a,b)=>(b.versao||0)-(a.versao||0)||String(b.em).localeCompare(String(a.em))).find(t=>t)||null; };
+  /* lembretes pelo ntfy enquanto o motorista não confirma (o celular da portaria fica aberto): 5, 15 e 30 min */
+  const LEMB=[5,15,30];
+  setInterval(async()=>{ try{ if(!lido()||!C.lido.hist||P.soVer()||!S.uid) return; const ag=Date.now();
+    for(const v of C.fora.filter(aceitePend)){ const min=(ag-new Date(v.emS).getTime())/60000, nv=LEMB.filter(x=>min>=x).length; if(nv<=(+v.lembS||0)||min>60) continue; const m=motDe(v.mot); if(!m) continue;
+      await P.db().doc('carrosv/'+v._id).update({lembS:nv}); v.lembS=nv; avisaMot(m,'Lembrete: confirme a saída com o '+plT(v.placa),'Você ainda não confirmou a saída registrada às '+hm(v.emS)+'. Abra o painel e confirme.'); }
+    for(const v of C.viag.filter(x=>devolPend(x))){ const min=(ag-new Date(v.emV).getTime())/60000, nv=LEMB.filter(x=>min>=x).length; if(nv<=(+v.lembV||0)||min>60) continue; const m=motDe(v.mot); if(!m) continue;
+      await P.db().doc('carrosv/'+v._id).update({lembV:nv}); v.lembV=nv; avisaMot(m,'Lembrete: confirme a devolução do '+plT(v.placa),'A volta foi registrada às '+hm(v.emV)+'. Abra o painel, confira o km e responda as perguntas.'); } }catch(e){ console.warn('[carros] lembretes',e); } },60000);
   const lido=()=>C.lido.cad&&C.lido.fora;
-  async function gravaCad(novo,msg){ C.salv=true; P.render(); try{ await P.db().doc('carros/cad').set({carros:novo.carros,mot:novo.mot,em:new Date().toISOString(),por:S.uid||null}); C.cad=novo; if(msg) P.toast(msg); return true; }
+  async function gravaCad(novo,msg){ C.salv=true; P.render(); try{ const tm=novo.termo!==undefined?novo.termo:(C.cad.termo||null); await P.db().doc('carros/cad').set({carros:novo.carros,mot:novo.mot,termo:tm,em:new Date().toISOString(),por:S.uid||null}); C.cad=Object.assign({},novo,{termo:tm}); if(msg) P.toast(msg); return true; }
     catch(e){ P.erro(e); return false; } finally{ C.salv=false; P.render(); } }
 
   /* ---------- QR: ler ---------- */
@@ -238,9 +270,9 @@
     if(kmV!=null){ up.kmV=kmV; up.rodou=kmV-kmS; if(v.aberta){ Object.assign(up,{aberta:false,emV:new Date().toISOString(),porV:S.uid||null,porVN:eu(),obsV:'Encerrada pelo administrador'}); } }
     try{ await P.db().doc('carrosv/'+v._id).update(up); if(kmV!=null||v.aberta){ const k=C.km[v.carro]; const nk=kmV!=null?kmV:kmS; if(!k||k.viagem===v._id) await P.db().doc('carrosk/'+v.carro).set({km:nk,em:new Date().toISOString(),viagem:v._id,placa:v.placa}); }
       C.edV=null; C.f.ed=null; P.toast('Viagem corrigida.'); }catch(e){ P.erro(e); } P.render(); }
-  function csv(){ const xs=filtradas(); const L=[['Placa','Modelo','Motorista','Saída','Km saída','Último km antes','Km sem registro','Volta','Km volta','Rodou','Aceite do motorista','Limpo na saída','Avaria antes da saída','Devolução confirmada','Km do motorista na volta','Abasteceu','Litros','Valor abastecido','Avaria no trajeto','Limpo na volta','Porteiro saída','Porteiro volta','Observação']];
+  function csv(){ const xs=filtradas(); const L=[['Placa','Modelo','Nº de frota','Motorista','CPF do motorista','Saída','Km saída','Último km antes','Km sem registro','Volta','Km volta','Rodou','Aceite do motorista','Limpo na saída','Avaria antes da saída','Devolução confirmada','Km do motorista na volta','Abasteceu','Litros','Valor abastecido','Avaria no trajeto','Limpo na volta','Porteiro saída','Porteiro volta','Observação']];
     const dt=iso=>iso?new Date(iso).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):'';
-    xs.forEach(v=>L.push([plT(v.placa),v.modelo||'',v.motNome||'',dt(v.emS),v.kmS,v.kmEsp==null?'':v.kmEsp,v.kmDif?(+v.kmS)-(+v.kmEsp):'',v.aberta?'ainda fora':dt(v.emV),v.aberta?'':v.kmV,v.aberta?'':v.rodou,v.aceite?dt(v.aceite.em):aceitePend(v)?'pendente':'sem login',v.aceite?(v.aceite.limpo===false?'não':v.aceite.limpo?'sim':''):'',v.aceite?(v.aceite.avaria?(v.aceite.avariaTxt||'sim'):'não'):'',v.devol?dt(v.devol.em):devolPend(v)?'pendente':'',v.devol?(v.devol.kmOk?'confere':v.devol.kmMot):'',v.devol?(v.devol.abast?'sim':'não'):'',v.devol&&v.devol.litros!=null?String(v.devol.litros).replace('.',','):'',v.devol&&v.devol.valor!=null?String(v.devol.valor).replace('.',','):'',v.devol?(v.devol.avaria?(v.devol.avariaTxt||'sim'):'não'):'',v.devol?(v.devol.limpo?'sim':'não'):'',v.porSN||'',v.porVN||'',[v.obsS,v.obsV].filter(Boolean).join(' · ')]));
+    xs.forEach(v=>L.push([plT(v.placa),v.modelo||'',v.frota||'',v.motNome||'',cpfDe(v.mot)?cpfF(cpfDe(v.mot)):'',dt(v.emS),v.kmS,v.kmEsp==null?'':v.kmEsp,v.kmDif?(+v.kmS)-(+v.kmEsp):'',v.aberta?'ainda fora':dt(v.emV),v.aberta?'':v.kmV,v.aberta?'':v.rodou,v.aceite?dt(v.aceite.em):aceitePend(v)?'pendente':'sem login',v.aceite?(v.aceite.limpo===false?'não':v.aceite.limpo?'sim':''):'',v.aceite?(v.aceite.avaria?(v.aceite.avariaTxt||'sim'):'não'):'',v.devol?dt(v.devol.em):devolPend(v)?'pendente':'',v.devol?(v.devol.kmOk?'confere':v.devol.kmMot):'',v.devol?(v.devol.abast?'sim':'não'):'',v.devol&&v.devol.litros!=null?String(v.devol.litros).replace('.',','):'',v.devol&&v.devol.valor!=null?String(v.devol.valor).replace('.',','):'',v.devol?(v.devol.avaria?(v.devol.avariaTxt||'sim'):'não'):'',v.devol?(v.devol.limpo?'sim':'não'):'',v.porSN||'',v.porVN||'',[v.obsS,v.obsV].filter(Boolean).join(' · ')]));
     const txt='﻿'+L.map(r=>r.map(c=>{ const s=String(c==null?'':c); return /[;"\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }).join(';')).join('\r\n');
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'})); a.download='viagens-carros-'+hoje()+'.csv'; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500); }
 
@@ -260,14 +292,19 @@
         ${carros().length?carros().slice().sort((a,b)=>(a.ativo===false)-(b.ativo===false)||a.placa.localeCompare(b.placa)).map(c=>{ const a=abertaDe(c.id); return `<div class="cv-cr${c.ativo===false?' ina':''}">${placa(c)}<div class="cv-cari"><b>${esc([c.frota?'Frota '+c.frota:'',c.modelo].filter(Boolean).join(' · '))}</b><small>${fK(ultKm(c))} km · ${c.ativo===false?'desativado':a?'fora com '+esc(a.motNome):'na empresa'}</small></div>
           ${ok?`<div class="cv-ac"><button type="button" class="lnk" data-act="cv-qr1" data-v="${esc(c.id)}">QR</button><button type="button" class="lnk" data-act="cv-c-ed" data-v="${esc(c.id)}">Editar</button><button type="button" class="lnk" data-act="cv-c-at" data-v="${esc(c.id)}">${c.ativo===false?'Reativar':'Desativar'}</button></div>`:''}</div>`; }).join(''):'<p class="cv-nada">Cadastre o primeiro carro acima.</p>'}</section>`; }
     else { const E=C.edM||{};
-      corpo=`${ok?`<section class="card cv-ed"><h2>${E.id?'Editar motorista':'Cadastrar motorista'}</h2><div class="cv-g2"><label>Nome<input id="cv-m-no" class="cv-in" autocomplete="off" placeholder="Nome e sobrenome" value="${esc(E.nome||'')}"></label>
+      corpo=`${ok?`<section class="card cv-ed"><h2>${E.id?'Editar motorista':'Cadastrar motorista'}</h2><div class="cv-g2"><label>Nome completo<input id="cv-m-no" class="cv-in" autocomplete="off" placeholder="Nome e sobrenome" value="${esc(E.nome||'')}"></label>
+          <label>CPF<input id="cv-m-cpf" class="cv-in" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="000.000.000-00" value="${esc(E.cpf!=null?cpfF(E.cpf):(E.id?cpfF(cpfDe(E.id)):''))}"></label>
           <div class="cv-lgn"><span class="cv-lgt">Login no painel <small>para o motorista dar o aceite e ver o histórico</small></span>
           ${E.uid?`<div class="cv-lgs"><span class="cv-av" aria-hidden="true">${esc(ini(E.uidNome))}</span><b>${esc(E.uidNome||'')}</b><button type="button" class="lnk" data-act="cv-m-lx">Trocar</button></div>`
             :`<input id="cv-m-lq" class="cv-in" autocomplete="off" placeholder="Digite o nome ou usuário do login" value="${esc(C.lq||'')}"><div class="cv-lgr" id="cv-m-lr">${lgRes()}</div>`}</div></div>
           ${E.err?`<p class="cv-err">${esc(E.err)}</p>`:''}<div class="cv-bts">${E.id?'<button type="button" class="btn sec" data-act="cv-m-x">Cancelar</button>':''}<button type="button" class="btn" data-act="cv-m-salva"${C.salv?' disabled':''}>${E.id?'Salvar':'Cadastrar motorista'}</button></div></section>`:''}
         <section class="card"><h2>Motoristas <span>${liberados().length} liberados · ${mots().length-liberados().length} bloqueados</span></h2>
-        ${mots().length?mots().map(m=>`<div class="cv-cr${m.ok===false?' ina':''}"><div class="cv-cari"><b>${esc(m.nome)}</b><small>${m.ok===false?'Bloqueado'+(m.bloqEm?' em '+esc(brD(diaDe(m.bloqEm))):''):'Liberado'} · ${m.uid?'login: '+esc(m.uidNome||''):'sem login (não dá aceite)'}${m.topico?` · avisos no app ntfy: <button type="button" class="lnk" data-act="cv-m-tp" data-v="${esc(m.topico)}" title="Copiar o tópico">${esc(m.topico)}</button>`:''}</small></div><span class="cv-tag ${m.ok===false?'crit':'ok'}">${m.ok===false?'Bloqueado':'Liberado'}</span>
-          ${ok?`<div class="cv-ac"><button type="button" class="lnk" data-act="cv-m-ed" data-v="${esc(m.id)}">Editar</button><button type="button" class="lnk${m.ok===false?'':' cv-del'}" data-act="cv-m-bl" data-v="${esc(m.id)}">${m.ok===false?'Liberar':'Bloquear'}</button></div>`:''}</div>`).join(''):'<p class="cv-nada">Cadastre os motoristas que podem sair com os carros.</p>'}</section>`; }
+        ${mots().length?mots().map(m=>`<div class="cv-cr${m.ok===false?' ina':''}"><div class="cv-cari"><b>${esc(m.nome)}</b><small>${cpfDe(m.id)?'CPF '+esc(cpfM(cpfDe(m.id)))+' · ':'<span class="cv-wn">sem CPF</span> · '}${(()=>{ const t=termoDe(m); return t&&t.versao>=termoAtual().versao?'termo aceito em '+esc(brD(diaDe(t.em)))+' '+esc(hm(t.em))+' · ':m.uid?'<span class="cv-wn">termo pendente</span> · ':''; })()}${m.ok===false?'Bloqueado'+(m.bloqEm?' em '+esc(brD(diaDe(m.bloqEm))):''):'Liberado'} · ${m.uid?'login: '+esc(m.uidNome||''):'sem login (não dá aceite)'}${m.topico?` · avisos no app ntfy: <button type="button" class="lnk" data-act="cv-m-tp" data-v="${esc(m.topico)}" title="Copiar o tópico">${esc(m.topico)}</button>`:''}</small></div><span class="cv-tag ${m.ok===false?'crit':'ok'}">${m.ok===false?'Bloqueado':'Liberado'}</span>
+          ${ok?`<div class="cv-ac"><button type="button" class="lnk" data-act="cv-m-ed" data-v="${esc(m.id)}">Editar</button><button type="button" class="lnk${m.ok===false?'':' cv-del'}" data-act="cv-m-bl" data-v="${esc(m.id)}">${m.ok===false?'Liberar':'Bloquear'}</button></div>`:''}</div>`).join(''):'<p class="cv-nada">Cadastre os motoristas que podem sair com os carros.</p>'}</section>
+        <section class="card cv-ed"><div class="cv-h2b"><h2>Termo de ciência <span>versão ${termoAtual().versao}</span></h2>${ok&&!C.edT?'<button type="button" class="btn sec" data-act="cv-t-ed">Editar o termo</button>':''}</div>
+          <p class="cv-hint">Cada motorista aceita uma vez no celular dele, antes de confirmar a primeira saída. {NOME} e {CPF} viram os dados do motorista. Ao salvar uma nova versão, todos precisam aceitar de novo.</p>
+          ${C.edT?`<textarea id="cv-t-tx" class="cv-in cv-ta cv-tta">${esc(C.edT.texto)}</textarea>${C.edT.err?`<p class="cv-err">${esc(C.edT.err)}</p>`:''}<div class="cv-bts"><button type="button" class="btn sec" data-act="cv-t-x">Cancelar</button><button type="button" class="btn" data-act="cv-t-salva">Salvar nova versão</button></div>`
+            :`<pre class="cv-tpre">${esc(termoAtual().texto)}</pre>`}</section>`; }
     return `<header class="cv-top"><div><h1>Carros e motoristas</h1><p>Quem cadastra e libera é o administrador; a portaria só escolhe da lista</p></div></header>${abas}${corpo}`; }
   async function salvaCarro(){ const fr=String((document.getElementById('cv-c-fr')||{}).value||'').trim().slice(0,12), pl=plN((document.getElementById('cv-c-pl')||{}).value), mo=String((document.getElementById('cv-c-mo')||{}).value||'').trim(), kmT=(document.getElementById('cv-c-km')||{}).value, km=String(kmT||'').trim()?kmNum(kmT):0;
     const E=C.edC||{}; const err=t=>{ C.edC=Object.assign({},E,{placa:pl,modelo:mo,km:kmT,frota:fr,err:t}); P.render(); };
@@ -276,13 +313,15 @@
     const novo={carros:(C.cad.carros||[]).map(c=>Object.assign({},c)),mot:C.cad.mot||[]};
     if(E.id){ const c=novo.carros.find(x=>x.id===E.id); if(c) Object.assign(c,{placa:pl,modelo:mo,km,frota:fr}); } else novo.carros.push({id:novoId('c'),placa:pl,modelo:mo,km,frota:fr,ativo:true,em:new Date().toISOString()});
     if(await gravaCad(novo,E.id?'Carro salvo.':'Carro '+plT(pl)+' cadastrado. Imprima o QR code para colar no carro.')) C.edC=null; P.render(); }
-  async function salvaMot(){ const no=String((document.getElementById('cv-m-no')||{}).value||'').trim().replace(/\s+/g,' '), E=C.edM||{}; const err=t=>{ C.edM=Object.assign({},E,{nome:no,err:t}); P.render(); };
+  async function salvaMot(){ const no=String((document.getElementById('cv-m-no')||{}).value||'').trim().replace(/\s+/g,' '), cpf=cpfL((document.getElementById('cv-m-cpf')||{}).value), E=C.edM||{}; const err=t=>{ C.edM=Object.assign({},E,{nome:no,cpf,err:t}); P.render(); };
+    if(cpf&&!cpfOk(cpf)) return err('CPF inválido. Confira os números.'); if(cpf&&Object.entries(C.priv).some(([k,x])=>x&&cpfL(x.cpf)===cpf&&k!==E.id)) return err('Este CPF já está em outro motorista.');
     if(no.length<3) return err('Digite o nome do motorista.'); if(mots().some(m=>m.nome.toLowerCase()===no.toLowerCase()&&m.id!==E.id)) return err('Este motorista já está cadastrado.');
     const novo={carros:C.cad.carros||[],mot:(C.cad.mot||[]).map(m=>Object.assign({},m))};
     if(E.uid&&mots().some(m=>m.uid===E.uid&&m.id!==E.id)) return err('Este login já está ligado a outro motorista.');
     const tp=()=>'colafix-carro-'+Math.random().toString(36).slice(2,8)+Math.random().toString(36).slice(2,8);
     if(E.id){ const m=novo.mot.find(x=>x.id===E.id); if(m) Object.assign(m,{nome:no,uid:E.uid||null,uidNome:E.uid?E.uidNome||'':null,topico:m.topico||tp()}); } else novo.mot.push({id:novoId('m'),nome:no,ok:true,uid:E.uid||null,uidNome:E.uid?E.uidNome||'':null,topico:tp(),em:new Date().toISOString()});
-    if(await gravaCad(novo,E.id?'Motorista salvo.':no+' cadastrado e liberado.')){ C.edM=null; C.lq=''; C.lres=[]; } P.render(); }
+    const mid=E.id||novo.mot[novo.mot.length-1].id, mm=novo.mot.find(x=>x.id===mid);
+    if(await gravaCad(novo,E.id?'Motorista salvo.':no+' cadastrado e liberado.')){ try{ await P.db().doc('carrosp/'+mid).set({nome:no,cpf:cpf||'',uid:(mm&&mm.uid)||null,em:new Date().toISOString(),por:S.uid||null}); C.priv[mid]={nome:no,cpf:cpf||'',uid:(mm&&mm.uid)||null}; }catch(e){ P.erro(e); } C.edM=null; C.lq=''; C.lres=[]; } P.render(); }
   function lgRes(){ const r=C.lres||[]; if(!C.lq||C.lq.length<2) return ''; if(!r.length) return '<p class="cv-nada">Nenhum login com esse nome. Crie o login em Equipe e cargos com o cargo "Motorista (carros)".</p>'; return r.map(u=>`<button type="button" class="cv-lgi" data-act="cv-m-lsel" data-v="${esc(u.id)}" data-n="${esc(u.name||u.email)}"><span class="cv-av" aria-hidden="true">${esc(ini(u.name||u.email))}</span><span><b>${esc(u.name||'')}</b><small>${esc(u.email||'')}</small></span></button>`).join(''); }
   let _lgT=null; function lgBusca(q){ C.lq=q; clearTimeout(_lgT); if(q.trim().length<2){ C.lres=[]; const el=document.getElementById('cv-m-lr'); if(el) el.innerHTML=''; return; } _lgT=setTimeout(async()=>{ try{ C.lres=S.user&&S.user.search?(await S.user.search(q)).filter(u=>!u.isMe):[]; }catch(e){ C.lres=[]; } const el=document.getElementById('cv-m-lr'); if(el) el.innerHTML=lgRes(); },250); }
 
@@ -321,7 +360,22 @@
   C.meus=[]; C.ma={}; C.md={}; C.fotos={};
   let lendoMot=false, _vistos=null;
   function carregarMot(){ if(lendoMot) return; lendoMot=true;
-    P.inscrever('cv-meus',()=>P.db().collection('carrosv').where('motUid','==',S.uid).limit(300),s=>{ C.meus=s.docs.map(d=>Object.assign({_id:d.id},d.data())).filter(v=>!v.removido).sort((a,b)=>String(b.emS).localeCompare(String(a.emS))); C.lido.meus=true; notificaMot(); P.rerender(); }); }
+    P.inscrever('cv-meus',()=>P.db().collection('carrosv').where('motUid','==',S.uid).limit(300),s=>{ C.meus=s.docs.map(d=>Object.assign({_id:d.id},d.data())).filter(v=>!v.removido).sort((a,b)=>String(b.emS).localeCompare(String(a.emS))); C.lido.meus=true; notificaMot(); P.rerender(); });
+    if(!lendo) P.inscrever('cv-cad-m',()=>P.db().doc('carros/cad'),g=>{ const d=g&&g.exists?g.data():{}; C.cad={carros:Array.isArray(d.carros)?d.carros:[],mot:Array.isArray(d.mot)?d.mot:[],termo:d.termo||null}; C.lido.cadM=true; P.rerender(); });
+    P.inscrever('cv-eu-p',()=>P.db().collection('carrosp').where('uid','==',S.uid).limit(5),s=>{ C.euP=s.docs.length?s.docs[0].data():{}; C.lido.euP=true; P.rerender(); });
+    P.inscrever('cv-eu-t',()=>P.db().collection('carrost').where('uid','==',S.uid).limit(50),s=>{ C.euT=s.docs.map(d=>d.data()); C.lido.euT=true; P.rerender(); }); }
+  C.euP={}; C.euT=[]; C.mt={};
+  const termoOk=()=>{ const v=termoAtual().versao; return (C.euT||[]).some(t=>(+t.versao||0)>=v); };
+  function cTermo(){ const nome=C.euP.nome||eu(), cpf=C.euP.cpf||'', tx=termoPreenche(termoAtual().texto,nome,cpf);
+    return `<section class="card cv-fl cv-ace cv-termoc"><div class="cv-flh vol"><p class="cv-eb">Antes de usar os carros</p><h2 class="cv-tth">Termo de ciência</h2><p class="cv-fmod">Leia e aceite uma vez. Fica registrado com data e hora.</p></div><div class="cv-flb">
+      <pre class="cv-tpre cv-tpm">${esc(tx)}</pre>${!cpf?'<p class="cv-obs0 warn">Seu CPF ainda não foi cadastrado. Peça para o administrador da frota cadastrar.</p>':''}
+      <label class="cv-termo"><input type="checkbox" data-act="cv-mt-c"${C.mt.ok?' checked':''}><span>Li o termo e estou ciente das regras de uso dos veículos da empresa.</span></label>
+      ${C.mt.err?`<p class="cv-err" role="alert">${esc(C.mt.err)}</p>`:''}
+      <button type="button" class="cv-bt1 vol cv-wide" data-act="cv-mt-ok"${C.salv?' disabled':''}>${C.salv?'Salvando…':'Aceito o termo'}</button></div></section>`; }
+  async function aceitaTermo(){ if(C.salv) return; if(!C.mt.ok){ C.mt.err='Marque que leu o termo e está ciente.'; P.render(); return; }
+    const T=termoAtual(), nome=C.euP.nome||eu(), cpf=C.euP.cpf||'', mot=(C.cad.mot||[]).find(m=>m.uid===S.uid), id='u'+S.uid+'-v'+T.versao;
+    const d={uid:S.uid,motId:mot?mot.id:null,nome,cpf,versao:T.versao,texto:termoPreenche(T.texto,nome,cpf),em:new Date().toISOString(),aparelho:String(navigator.userAgent||'').slice(0,160)};
+    C.salv=true; P.render(); try{ await P.db().doc('carrost/'+id).set(d); C.euT=(C.euT||[]).concat([d]); C.mt={}; P.toast('Termo aceito. Obrigado!'); }catch(e){ P.erro(e); } finally{ C.salv=false; P.render(); } }
   const devolPend=v=>!!(v&&v.precisaAceite&&!v.aberta&&v.emV&&!v.devol&&!v.removido);
   /* aviso no próprio aparelho quando chega pendência nova (o painel aberto ou em segundo plano) */
   function notificaMot(){ const ids=C.meus.filter(v=>aceitePend(v)||devolPend(v)).map(v=>v._id+(v.emV?'v':'s')); if(_vistos===null){ _vistos=new Set(ids); return; }
@@ -330,7 +384,7 @@
     try{ if('Notification' in window&&Notification.permission==='granted'&&navigator.serviceWorker){ navigator.serviceWorker.getRegistration().then(r=>{ if(r) r.showNotification(tit,{body:txt,icon:'icons/icon-192.png',badge:'icons/icon-192.png',tag:'cv-'+v._id,renotify:true}); else new Notification(tit,{body:txt}); }); } }catch(e){} try{ if(navigator.vibrate) navigator.vibrate([200,100,200]); }catch(e){} }
   /* aviso pelo ntfy (app ntfy no celular da empresa, tópico do motorista): chega mesmo com o painel fechado */
   async function avisaMot(m,tit,txt){ if(!m||!m.topico) return; try{ const ct=new AbortController(), t=setTimeout(()=>ct.abort(),8000);
-    await fetch('https://ntfy.sh/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic:m.topico,title:tit,message:txt,priority:4,tags:['red_car'],click:((window.claude&&window.claude.link)||location.origin+location.pathname)}),signal:ct.signal}); clearTimeout(t); }catch(e){ console.warn('[carros] aviso ntfy',e&&e.message); } }
+    await fetch('https://ntfy.sh/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic:m.topico,title:tit,message:txt,priority:5,tags:['rotating_light','red_car'],click:((window.claude&&window.claude.link)||location.origin+location.pathname)}),signal:ct.signal}); clearTimeout(t); }catch(e){ console.warn('[carros] aviso ntfy',e&&e.message); } }
   const frotaTxt=c=>c&&c.frota?'Frota '+c.frota:'';
   /* foto: reduz e guarda em carrosf/<id> (como as fotos dos chamados) */
   function reduzFoto(file){ return new Promise((ok,no)=>{ const fr=new FileReader(); fr.onload=()=>{ const img=new Image(); img.onload=()=>{ const k=Math.min(1,1280/Math.max(img.width,img.height)), w=Math.round(img.width*k), h=Math.round(img.height*k);
@@ -344,11 +398,11 @@
       ${fs.length<3?`<label class="cv-ftadd"><input type="file" accept="image/*" capture="environment" data-cvfoto="${id}" hidden><span>📷</span><b>${fs.length?'Mais uma foto':'Tirar foto'}</b></label>`:''}</div>`; }
   function vMotorista(){ const so=soloDe('motorista','motorista'); try{ document.body.classList.toggle('cv-solo',so); }catch(e){}
     const corpo=vMotCorpo(); return so?`<div class="cv-app">${appBar('Motorista')}<main class="cv-appc">${corpo}</main></div>`:corpo; }
-  function vMotCorpo(){ if(!C.lido.meus) return '<section class="card"><div class="empty">Carregando as suas viagens…</div></section>';
+  function vMotCorpo(){ if(!C.lido.meus||!C.lido.cadM||!C.lido.euT) return '<section class="card"><div class="empty">Carregando as suas viagens…</div></section>';
     const xs=C.meus, h=hoje(), cp=h.slice(0,7), mes=xs.filter(v=>(v.diaS||'').slice(0,7)===cp), kmMes=mes.reduce((a,v)=>a+(+v.rodou||0),0);
     const pend=xs.filter(aceitePend), dev=xs.filter(devolPend), comigo=xs.filter(v=>v.aberta&&v.aceite);
     const nm=(eu()||'').split(' ')[0], np=('Notification' in window)?Notification.permission:'x';
-    const hero=`<section class="cv-hero so cv-mh"><div class="cv-hh"><div><p class="cv-eb">Olá${nm?', '+esc(nm):''}</p><h1>${pend.length?'Confirme a saída':dev.length?'Confirme a devolução':comigo.length?'Você está com o carro':'Suas viagens'}</h1></div></div>
+    const hero=`<section class="cv-hero so cv-mh"><div class="cv-hh"><div><p class="cv-eb">Olá${nm?', '+esc(nm):''}</p><h1>${!termoOk()?'Aceite o termo':pend.length?'Confirme a saída':dev.length?'Confirme a devolução':comigo.length?'Você está com o carro':'Suas viagens'}</h1></div></div>
       <div class="cv-cnt"><div><b>${mes.length}</b><span>viagens no mês</span></div><div><b>${fK(kmMes)}</b><span>km no mês</span></div><div><b>${xs.length}</b><span>no total</span></div></div></section>
       ${np==='default'?`<button type="button" class="cv-notif" data-act="cv-notif">${SVG.rel}<span><b>Ativar avisos neste celular</b><small>Para saber na hora quando a portaria registrar a saída ou a volta</small></span></button>`:''}`;
     const cab=(v,t,cl)=>`<div class="cv-flh ${cl}"><p class="cv-eb">${t}</p>${placa(v.placa,'g')}<p class="cv-fmod">${esc([v.modelo,v.frota?'Frota '+v.frota:''].filter(Boolean).join(' · '))}</p></div>`;
@@ -379,6 +433,7 @@
     const st=v=>aceitePend(v)?'<span class="cv-tag warn">Falta o aceite</span>':devolPend(v)?'<span class="cv-tag warn">Falta a devolução</span>':v.aberta?'<span class="cv-tag info">Em uso</span>':'<span class="cv-tag ok">Concluída</span>';
     const hist=xs.length?`<section class="card cv-tl cv-hist"><h2>Histórico</h2><ul>${xs.slice(0,60).map(v=>`<li>${placa(v.placa,'p')}<span><b>${esc(brD(v.diaS||diaDe(v.emS)))} · ${v.aberta?'em uso':fK(v.rodou)+' km'}</b><small>saída ${esc(hm(v.emS))} · ${fK(v.kmS)} km${v.emV?' — volta '+esc(hm(v.emV))+' · '+fK(v.kmV)+' km':''}${v.devol&&v.devol.abast?' · abasteceu':''}</small></span>${st(v)}</li>`).join('')}</ul></section>`
       :'<section class="card cv-vz"><h2>Nenhuma viagem ainda</h2><p>Quando a portaria registrar uma saída com você, ela aparece aqui para você confirmar.</p></section>';
+    if(!termoOk()) return hero+cTermo()+hist;
     return hero+pend.map(cAceite).join('')+dev.map(cDevol).join('')+comigo.map(cComigo).join('')+hist; }
   const vazioNum=t=>{ const x=String(t||'').trim().replace(/\./g,'').replace(',','.'); return x&&Number.isFinite(+x)?+x:null; };
   async function aceitar(id){ const v=C.meus.find(x=>x._id===id); if(!v||C.salv) return; const M=C.ma[id]||(C.ma[id]={}); const err=t=>{ M.err=t; P.render(); };
@@ -419,17 +474,17 @@
   P.registrarAviso(()=>{ if(!C.lido.meus) return []; const p=C.meus.filter(aceitePend), d=C.meus.filter(devolPend); return [].concat(p.length?[{nivel:'warn',rotulo:'Carro',titulo:'Confirme a saída com o '+plT(p[0].placa),texto:'A portaria registrou a sua saída. Toque para confirmar.',go:'motorista'}]:[]).concat(d.length?[{nivel:'warn',rotulo:'Carro',titulo:'Confirme a devolução do '+plT(d[0].placa),texto:'Confira o km e responda as perguntas da volta.',go:'motorista'}]:[]); });
 
   /* ---------- eventos ---------- */
-  document.addEventListener('input',ev=>{ const t=ev.target; if(!t||!t.dataset) return; if(t.id==='cv-m-lq'){ lgBusca(t.value); return; } if(t.dataset.cvmv){ (C.ma[t.dataset.cvmv]||(C.ma[t.dataset.cvmv]={})).avariaTxt=t.value; return; } if(t.dataset.cvmd){ const [id,k]=t.dataset.cvmd.split('|'); (C.md[id]||(C.md[id]={}))[k]=t.value; return; } const k=t.dataset.cvf; if(!k) return; C.f[k]=t.value; if(C.f.err&&C.f.err.id===t.id){ C.f.err=null; const e=document.getElementById(t.id+'-e'); if(e) e.remove(); t.removeAttribute('aria-invalid'); const w=t.closest('.cv-kmw'); if(w) w.classList.remove('bad'); }
+  document.addEventListener('input',ev=>{ const t=ev.target; if(!t||!t.dataset) return; if(t.id==='cv-m-lq'){ lgBusca(t.value); return; } if(t.id==='cv-m-cpf'){ const c=cpfL(t.value).slice(0,11); const f=c.length>9?c.slice(0,3)+'.'+c.slice(3,6)+'.'+c.slice(6,9)+'-'+c.slice(9):c.length>6?c.slice(0,3)+'.'+c.slice(3,6)+'.'+c.slice(6):c.length>3?c.slice(0,3)+'.'+c.slice(3):c; if(t.value!==f) t.value=f; return; } if(t.dataset.cvmv){ (C.ma[t.dataset.cvmv]||(C.ma[t.dataset.cvmv]={})).avariaTxt=t.value; return; } if(t.dataset.cvmd){ const [id,k]=t.dataset.cvmd.split('|'); (C.md[id]||(C.md[id]={}))[k]=t.value; return; } const k=t.dataset.cvf; if(!k) return; C.f[k]=t.value; if(C.f.err&&C.f.err.id===t.id){ C.f.err=null; const e=document.getElementById(t.id+'-e'); if(e) e.remove(); t.removeAttribute('aria-invalid'); const w=t.closest('.cv-kmw'); if(w) w.classList.remove('bad'); }
     if(k==='km'){ C.f.conf=false; const a=C.sel&&abertaDe(C.sel), r=document.getElementById('cv-rod'); if(a&&r){ const n=kmNum(t.value); r.innerHTML=Number.isFinite(n)&&n>=a.kmS?'<span>Rodou</span><b>'+fK(n-a.kmS)+' km</b>':''; } } });
   document.addEventListener('change',ev=>{ const t=ev.target; if(!t) return;
     if(t.dataset&&t.dataset.cvf){ C.f[t.dataset.cvf]=t.value; if(t.dataset.cvf==='mot'&&C.f.err&&C.f.err.id==='cv-mot'){ C.f.err=null; P.render(); } return; }
     const m={'cv-q-per':'per','cv-q-de':'de','cv-q-ate':'ate','cv-q-car':'car','cv-q-mot':'mot','cv-q-st':'st'}[t.id]; if(m){ C.q[m]=t.value; P.render(); } });
   document.addEventListener('keydown',ev=>{ if(ev.key!=='Enter') return; const t=ev.target; if(!t||!t.dataset||!t.dataset.cvf||t.tagName==='SELECT') return; ev.preventDefault(); const a=C.sel&&abertaDe(C.sel); if(a) volta(); else saida(); });
-  document.addEventListener('click',async ev=>{ const b=ev.target.closest&&ev.target.closest('[data-act^="cv-"]'); if(!b) return; const a=b.dataset.act, v=b.dataset.v; if(a==='cv-ma-t'){ const M=C.ma[v]||(C.ma[v]={}); M.termo=!!b.checked; M.err=''; const e=b.closest('.cv-ace')&&b.closest('.cv-ace').querySelector('.cv-err[role="alert"]'); if(e) e.remove(); return; } ev.preventDefault();
+  document.addEventListener('click',async ev=>{ const b=ev.target.closest&&ev.target.closest('[data-act^="cv-"]'); if(!b) return; const a=b.dataset.act, v=b.dataset.v; if(a==='cv-mt-c'){ C.mt.ok=!!b.checked; C.mt.err=''; const e=b.closest('.cv-ace')&&b.closest('.cv-ace').querySelector('.cv-err[role="alert"]'); if(e) e.remove(); return; } if(a==='cv-ma-t'){ const M=C.ma[v]||(C.ma[v]={}); M.termo=!!b.checked; M.err=''; const e=b.closest('.cv-ace')&&b.closest('.cv-ace').querySelector('.cv-err[role="alert"]'); if(e) e.remove(); return; } ev.preventDefault();
     if(a==='cv-mot'){ C.f.mot=v; if(C.f.err&&C.f.err.id==='cv-mot') C.f.err=null; P.render(); return; }
     if(a==='cv-feito'){ C.msg=null; _autoCam=true; P.render(); return; }
     if(a==='cv-sn'){ const sec=b.closest('.cv-ace'); if(!sec) return; const [g,val]=String(v).split('|'), dev=sec.id.startsWith('cv-dev-'), id=sec.id.replace(/^cv-(ace|dev)-/,''), st=dev?(C.md[id]||(C.md[id]={})):(C.ma[id]||(C.ma[id]={})); st[g]=val==='1'; st.err=''; P.render(); return; }
-    if(a==='cv-ma-ok') return aceitar(v); if(a==='cv-md-ok') return devolver(v);
+    if(a==='cv-ma-ok') return aceitar(v); if(a==='cv-md-ok') return devolver(v); if(a==='cv-mt-ok') return aceitaTermo();
     if(a==='cv-ftx'){ const [k,i]=String(v).split('|'), st=k[0]==='d'?C.md[k.slice(1)]:C.ma[k]; if(st&&st.fotos){ st.fotos.splice(+i,1); P.render(); } return; }
     if(a==='cv-foto') return verFoto(v);
     if(a==='cv-m-tp'){ try{ await navigator.clipboard.writeText(v); P.toast('Tópico copiado: '+v+'. No celular do motorista, abra o app ntfy, toque em + e cole.'); }catch(e){ P.toast('Tópico: '+v); } return; }
@@ -443,17 +498,20 @@
     if(a==='cv-q-limpa'){ C.q={per:'7',de:'',ate:'',car:'',mot:'',st:''}; P.render(); return; }
     if(a==='cv-csv') return csv();
     if(a==='cv-aba'){ C.abaCad=v; P.render(); return; }
-    if(!adm()&&/^cv-(c-|m-|qr|ved|vsalva|vdel)/.test(a)){ P.toast('Só o administrador muda o cadastro.'); return; }
+    if(!adm()&&/^cv-(c-|m-|t-|qr|ved|vsalva|vdel)/.test(a)){ P.toast('Só o administrador muda o cadastro.'); return; }
     if(a==='cv-ved'){ C.edV=v; C.f.ed=null; P.render(); window.scrollTo({top:0,behavior:'smooth'}); return; } if(a==='cv-vedx'){ C.edV=null; C.f.ed=null; P.render(); return; }
     if(a==='cv-vsalva') return salvaEdV();
     if(a==='cv-vdel'){ const E=C.f.ed||{}; if(!E.del){ C.f.ed=Object.assign({},E,{del:true}); P.render(); return; } try{ await P.db().doc('carrosv/'+C.edV).update({removido:true,aberta:false,removidoPor:eu(),removidoEm:new Date().toISOString()}); C.edV=null; C.f.ed=null; P.toast('Viagem apagada.'); }catch(e){ P.erro(e); } P.render(); return; }
     if(a==='cv-c-salva') return salvaCarro(); if(a==='cv-c-x'){ C.edC=null; P.render(); return; }
     if(a==='cv-c-ed'){ const c=carDe(v); if(c){ C.edC={id:c.id,placa:c.placa,modelo:c.modelo,km:c.km,frota:c.frota||''}; P.render(); window.scrollTo({top:0,behavior:'smooth'}); } return; }
     if(a==='cv-c-at'){ const novo={carros:C.cad.carros.map(c=>c.id===v?Object.assign({},c,{ativo:c.ativo===false}):c),mot:C.cad.mot}; const c=novo.carros.find(x=>x.id===v); await gravaCad(novo,c&&c.ativo?'Carro reativado.':'Carro desativado: não aparece mais na portaria.'); return; }
+    if(a==='cv-t-ed'){ C.edT={texto:termoAtual().texto}; P.render(); return; } if(a==='cv-t-x'){ C.edT=null; P.render(); return; }
+    if(a==='cv-t-salva'){ const tx=String((document.getElementById('cv-t-tx')||{}).value||'').trim(); if(tx.length<40){ C.edT={texto:tx,err:'O termo está muito curto.'}; P.render(); return; } const t={texto:tx,versao:termoAtual().versao+1,em:new Date().toISOString(),por:eu()};
+      if(await gravaCad({carros:C.cad.carros,mot:C.cad.mot,termo:t},'Termo salvo (versão '+t.versao+'). Os motoristas vão aceitar de novo no próximo acesso.')) C.edT=null; P.render(); return; }
     if(a==='cv-m-salva'){ const no=document.getElementById('cv-m-no'); if(no&&C.edM) C.edM.nome=no.value; return salvaMot(); } if(a==='cv-m-x'){ C.edM=null; C.lq=''; C.lres=[]; P.render(); return; }
-    if(a==='cv-m-lsel'){ const no=document.getElementById('cv-m-no'); C.edM=Object.assign({},C.edM||{},{nome:no?no.value:(C.edM||{}).nome,uid:v,uidNome:b.dataset.n||''}); C.lq=''; C.lres=[]; P.render(); return; }
+    if(a==='cv-m-lsel'){ const no=document.getElementById('cv-m-no'), cp=document.getElementById('cv-m-cpf'); C.edM=Object.assign({},C.edM||{},{nome:no?no.value:(C.edM||{}).nome,cpf:cp?cpfL(cp.value):(C.edM||{}).cpf,uid:v,uidNome:b.dataset.n||''}); C.lq=''; C.lres=[]; P.render(); return; }
     if(a==='cv-m-lx'){ const no=document.getElementById('cv-m-no'); C.edM=Object.assign({},C.edM||{},{nome:no?no.value:(C.edM||{}).nome,uid:null,uidNome:''}); P.render(); return; }
-    if(a==='cv-m-ed'){ const m=motDe(v); if(m){ C.edM={id:m.id,nome:m.nome,uid:m.uid||null,uidNome:m.uidNome||''}; P.render(); window.scrollTo({top:0,behavior:'smooth'}); } return; }
+    if(a==='cv-m-ed'){ const m=motDe(v); if(m){ C.edM={id:m.id,nome:m.nome,uid:m.uid||null,uidNome:m.uidNome||'',cpf:cpfDe(m.id)}; P.render(); window.scrollTo({top:0,behavior:'smooth'}); } return; }
     if(a==='cv-m-bl'){ const ag=new Date().toISOString(); const novo={carros:C.cad.carros,mot:C.cad.mot.map(m=>m.id===v?Object.assign({},m,m.ok===false?{ok:true,libEm:ag,libPor:eu()}:{ok:false,bloqEm:ag,bloqPor:eu()}):m)}; const m=novo.mot.find(x=>x.id===v);
       await gravaCad(novo,m&&m.ok===false?m.nome+' bloqueado: não aparece mais na portaria.':m.nome+' liberado.'); return; }
     if(a==='cv-qr') return qrPdf(ativos()); if(a==='cv-qr1'){ const c=carDe(v); if(c) qrPdf([c]); return; } });
@@ -620,6 +678,8 @@
   .cv-fro{font-size:12px;font-weight:800;padding:2px 8px;border-radius:6px;background:var(--nav,#163c52);color:#fff;white-space:nowrap;align-self:flex-start}.cv-tt .cv-fro{align-self:center}
   .cv-frog{margin:0;font-weight:800;font-size:15px;padding:3px 12px;border-radius:999px;background:rgba(255,255,255,.16)}
   .cv-fl2{display:block;font-size:12px}.cv-fl2 .lnk{font-size:12px}
+  .cv-tpre{white-space:pre-wrap;font:inherit;font-size:14px;line-height:1.55;margin:0;padding:12px 14px;border-radius:12px;background:color-mix(in srgb,var(--line) 30%,transparent);max-height:320px;overflow:auto}
+  .cv-tpm{max-height:none}.cv-tta{min-height:300px;font-size:14px;line-height:1.5}.cv-tth{margin:2px 0 0;font-size:24px;color:#fff}.cv-wn{color:var(--warn-ink,var(--warn));font-weight:600}
   @media(prefers-reduced-motion:no-preference){.cv-feito .cv-fok{animation:cvOk .35s ease-out}@keyframes cvOk{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}}
   @media(max-width:760px){.cv-hero{padding:18px 16px 16px;border-radius:18px}.cv-cnt{width:100%}.cv-cnt div{flex:1;min-width:0}.cv-grid,.cv-gridp{grid-template-columns:minmax(0,1fr)}
     .cv-tile:not(.fora){flex-direction:row;align-items:center;flex-wrap:wrap}.cv-tile:not(.fora) .cv-mod{flex:1}.cv-tile:not(.fora) .cv-go{margin-top:0;padding:0 16px}

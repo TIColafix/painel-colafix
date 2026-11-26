@@ -93,7 +93,7 @@
   function abrirDaUrl(){ if(_urlFeito) return; const m=location.search.match(/[?&]carro=([A-Za-z0-9_-]+)/); if(!m) { _urlFeito=true; return; } if(!C.lido.cad||!P.viewOk('portaria')) return; _urlFeito=true;
     try{ history.replaceState(null,'',location.pathname+location.search.replace(/([?&])carro=[^&]*&?/,'$1').replace(/[?&]$/,'')+location.hash); }catch(e){}
     abrir(m[1]); }
-  function msg(t,x){ C.msg={t,x}; P.render(); clearTimeout(msg._t); msg._t=setTimeout(()=>{ C.msg=null; P.rerender(); },t==='ok'?6000:8000); }
+  function msg(t,x,d){ C.msg={t,x,d:d||null}; P.render(); clearTimeout(msg._t); msg._t=setTimeout(()=>{ C.msg=null; P.rerender(); },t==='ok'?6000:8000); }
 
   /* ---------- registrar ---------- */
   async function saida(){ const c=carDe(C.sel); if(!c||C.salv) return; if(abertaDe(c.id)){ msg('warn','Este carro já está fora. Registre a volta.'); return; }
@@ -106,7 +106,7 @@
     const doc={carro:c.id,placa:c.placa,modelo:c.modelo||'',mot:m.id,motNome:m.nome,kmS:km,emS:agora,diaS:hoje(),porS:S.uid||null,porSN:eu(),obsS:String(C.f.obs||'').trim().slice(0,300),kmEsp:esp,kmDif:km!==esp,aberta:true};
     C.salv=true; P.render();
     try{ await P.db().doc('carrosv/'+id).set(doc); await P.db().doc('carrosk/'+c.id).set({km,em:agora,viagem:id,placa:c.placa});
-      C.fora=C.fora.concat([Object.assign({_id:id},doc)]); C.sel=null; msg('ok','Saída registrada: '+plT(c.placa)+' com '+m.nome+' · '+fK(km)+' km.'+(outro?' Atenção: '+m.nome+' já estava com o '+plT(outro.placa)+'.':'')); }
+      C.fora=C.fora.concat([Object.assign({_id:id},doc)]); C.sel=null; msg('ok','Saída registrada: '+plT(c.placa)+' com '+m.nome+' · '+fK(km)+' km.'+(outro?' Atenção: '+m.nome+' já estava com o '+plT(outro.placa)+'.':''),{tipo:'saida',placa:c.placa,mod:c.modelo||'',mot:m.nome,km,hora:hm(agora),alerta:outro?m.nome+' já estava com o '+plT(outro.placa)+'.':(km!==esp?fK(km-esp)+' km sem registro desde a última viagem.':'')}); }
     catch(e){ P.erro(e); } finally{ C.salv=false; P.render(); } }
   async function volta(){ const c=carDe(C.sel), a=c&&abertaDe(c.id); if(!a||C.salv) return; const km=kmNum(C.f.km);
     if(!Number.isFinite(km)||km<=0){ campoErro('cv-km','Digite o km do painel do carro.'); return; }
@@ -115,42 +115,67 @@
     const agora=new Date().toISOString(), up={kmV:km,emV:agora,porV:S.uid||null,porVN:eu(),obsV:String(C.f.obs||'').trim().slice(0,300),rodou:km-(+a.kmS||0),aberta:false};
     C.salv=true; P.render();
     try{ await P.db().doc('carrosv/'+a._id).update(up); await P.db().doc('carrosk/'+c.id).set({km,em:agora,viagem:a._id,placa:c.placa});
-      C.fora=C.fora.filter(v=>v._id!==a._id); C.sel=null; msg('ok','Volta registrada: '+plT(c.placa)+' · '+a.motNome+' rodou '+fK(up.rodou)+' km.'); }
+      C.fora=C.fora.filter(v=>v._id!==a._id); C.sel=null; msg('ok','Volta registrada: '+plT(c.placa)+' · '+a.motNome+' rodou '+fK(up.rodou)+' km.',{tipo:'volta',placa:c.placa,mod:c.modelo||'',mot:a.motNome,km,rodou:up.rodou,hora:hm(agora),fora:dur(Date.now()-new Date(a.emS).getTime())}); }
     catch(e){ P.erro(e); } finally{ C.salv=false; P.render(); } }
   function campoErro(id,t){ C.f.err={id,t}; P.render(); setTimeout(()=>{ const i=document.getElementById(id); if(i) i.focus(); },40); }
 
-  /* ---------- tela da portaria ---------- */
+  /* ---------- tela da portaria (26/11: "layout ainda muito básico") ----------
+     faixa da portaria com os contadores e o botão de escanear; carros em cartões (fora / na empresa); movimentos do dia
+     em linha do tempo; saída e volta com a placa grande, motoristas em botões e o km em destaque; confirmação em tela cheia */
+  const ini=n=>String(n||'?').trim().split(/\s+/).filter(Boolean).map((w,i,a)=>i===0||i===a.length-1?w[0]:'').join('').toUpperCase().slice(0,2);
+  const SVG={qr:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><path d="M15 15h2v2h-2zM19 15h2M15 19h2M19 19v2h2v-2M12 3v4M12 11v2h-2M3 12h4"/></svg>',
+    sai:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg>',
+    vol:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7L7 17M15 17H7V9"/></svg>',
+    ok:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    rel:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>'};
+  const DSEM=['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
   function vPortaria(){ if(!lido()) return '<section class="card"><div class="empty">Carregando os carros…</div></section>';
-    const cs=ativos(), fora=cs.filter(c=>abertaDe(c.id)), dentro=cs.filter(c=>!abertaDe(c.id)), h=hoje();
-    const mv=C.viag.filter(v=>!v.removido&&(v.diaS===h||diaDe(v.emV)===h)).slice(0,8);
-    const topo=`<header class="cv-top"><div><h1>Portaria · carros</h1><p>${fora.length} fora · ${dentro.length} na empresa</p></div></header>`;
+    const cs=ativos(), fora=cs.filter(c=>abertaDe(c.id)).sort((a,b)=>String(abertaDe(a.id).emS).localeCompare(String(abertaDe(b.id).emS))), dentro=cs.filter(c=>!abertaDe(c.id)), h=hoje(), ag=Date.now();
+    if(!cs.length) return `<section class="cv-hero"><div class="cv-hh"><div><p class="cv-eb">Portaria</p><h1>Carros</h1></div></div></section><section class="card cv-vz"><h2>Nenhum carro cadastrado</h2><p>O administrador cadastra os carros em Carros › Carros e motoristas e imprime os QR codes.</p></section>`;
+    if(C.msg&&C.msg.d&&C.msg.t==='ok') return vFeito(C.msg);
+    if(C.sel) return (C.msg?`<div class="cv-msg ${C.msg.t}" role="status">${esc(C.msg.x)}</div>`:'')+vFluxo();
+    const dt=new Date(h+'T12:00:00'), mv=C.viag.filter(v=>!v.removido&&(v.diaS===h||diaDe(v.emV)===h));
+    const ev=[]; mv.forEach(v=>{ if(v.diaS===h) ev.push({t:v.emS,k:'sai',v}); if(v.emV&&diaDe(v.emV)===h) ev.push({t:v.emV,k:'vol',v}); }); ev.sort((a,b)=>String(b.t).localeCompare(String(a.t)));
+    const kmHoje=mv.filter(v=>v.emV&&diaDe(v.emV)===h).reduce((a,v)=>a+(+v.rodou||0),0);
+    const hero=`<section class="cv-hero"><div class="cv-hh"><div><p class="cv-eb">Portaria · ${esc(DSEM[dt.getDay()])}, ${esc(brD(h))}</p><h1>Carros</h1></div>
+        <div class="cv-cnt"><div><b>${fora.length}</b><span>fora</span></div><div><b>${dentro.length}</b><span>na empresa</span></div><div><b>${ev.length}</b><span>movimentos hoje</span></div></div></div>
+      ${C.cam.on?`<div class="cv-cam"><div class="cv-vw"><video id="cv-video" playsinline muted autoplay></video><span class="cv-mira" aria-hidden="true"><i></i></span></div><p>Aponte para o QR code colado no carro</p><button type="button" class="cv-bt2" data-act="cv-camx">Cancelar</button></div>`
+        :`<button type="button" class="cv-scan" data-act="cv-cam"><span class="cv-qric" aria-hidden="true">${SVG.qr}</span><span class="cv-sct"><b>Escanear QR do carro</b><small>Abre a saída ou a volta na hora</small></span></button>${C.cam.erro?`<p class="cv-err cv-errh">${esc(C.cam.erro)}</p>`:''}`}</section>`;
     const aviso=C.msg?`<div class="cv-msg ${C.msg.t}" role="status">${esc(C.msg.x)}</div>`:'';
-    if(!cs.length) return topo+`<section class="card cv-vz"><h2>Nenhum carro cadastrado</h2><p>O administrador cadastra os carros em Carros › Carros e motoristas.</p></section>`;
-    if(C.sel) return topo+aviso+vFluxo();
-    const cam=C.cam.on?`<section class="card cv-cam"><div class="cv-vw"><video id="cv-video" playsinline muted autoplay></video><span class="cv-mira" aria-hidden="true"></span></div><p>Aponte para o QR code colado no carro.</p><button type="button" class="btn sec" data-act="cv-camx">Cancelar</button></section>`
-      :`<button type="button" class="cv-scan" data-act="cv-cam"><span class="cv-qric" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><path d="M15 15h2v2h-2zM19 15h2M15 19h2M19 19v2h2v-2M12 3v4M12 11v2h-2M3 12h4"/></svg></span><b>Escanear QR do carro</b><small>ou toque na placa abaixo</small></button>${C.cam.erro?`<p class="cv-err">${esc(C.cam.erro)}</p>`:''}`;
-    const lin=(c,a)=>`<button type="button" class="cv-car${a?' fora':''}" data-act="cv-abre" data-v="${esc(c.id)}">${placa(c)}<span class="cv-cari">${a?`<b>${esc(a.motNome)}</b><small>saiu ${esc(quando(a.emS))} · há ${esc(dur(Date.now()-new Date(a.emS).getTime()))}</small>`:`<b>${esc(c.modelo||'')}</b><small>${fK(ultKm(c))} km</small>`}</span><span class="cv-acao">${a?'Volta':'Saída'}</span></button>`;
-    return topo+aviso+cam+`<div class="cv-cols"><section class="card"><h2>Fora agora <span>${fora.length}</span></h2>${fora.length?fora.map(c=>lin(c,abertaDe(c.id))).join(''):'<p class="cv-nada">Todos os carros estão na empresa.</p>'}</section>
-      <section class="card"><h2>Na empresa <span>${dentro.length}</span></h2>${dentro.length?dentro.map(c=>lin(c,null)).join(''):'<p class="cv-nada">Todos os carros estão fora.</p>'}</section></div>
-      ${mv.length?`<section class="card"><h2>Movimentos de hoje</h2><ul class="cv-mv">${mv.map(v=>`<li>${placa(v.placa,'p')}<span><b>${esc(v.motNome)}</b><small>saída ${esc(hm(v.emS))} · ${fK(v.kmS)} km${v.emV?` — volta ${esc(hm(v.emV))} · ${fK(v.kmV)} km · rodou ${fK(v.rodou)} km`:' — ainda fora'}</small></span></li>`).join('')}</ul></section>`:''}`; }
+    const tFora=c=>{ const a=abertaDe(c.id), ms=ag-new Date(a.emS).getTime(), lg=ms>8*3600e3;
+      return `<button type="button" class="cv-tile fora${lg?' longo':''}" data-act="cv-abre" data-v="${esc(c.id)}"><span class="cv-tt">${placa(c)}<span class="cv-chip${lg?' warn':''}">${SVG.rel}há ${esc(dur(ms))}</span></span>
+        <span class="cv-who"><span class="cv-av" aria-hidden="true">${esc(ini(a.motNome))}</span><span><b>${esc(a.motNome)}</b><small>saiu ${esc(quando(a.emS))} · ${fK(a.kmS)} km</small></span></span>
+        <span class="cv-go vol">${SVG.vol}Registrar volta</span></button>`; };
+    const tDentro=c=>`<button type="button" class="cv-tile" data-act="cv-abre" data-v="${esc(c.id)}"><span class="cv-tt">${placa(c)}</span><span class="cv-mod"><b>${esc(c.modelo||'Carro')}</b><small>${fK(ultKm(c))} km</small></span><span class="cv-go sai">${SVG.sai}Saída</span></button>`;
+    const linha=e=>{ const v=e.v; return `<li class="${e.k}"><span class="cv-tlh">${esc(hm(e.t))}</span><span class="cv-tli" aria-hidden="true">${e.k==='sai'?SVG.sai:SVG.vol}</span><span class="cv-tlt"><b>${e.k==='sai'?'Saída':'Volta'} · ${esc(plT(v.placa))}</b><small>${esc(v.motNome)} · ${e.k==='sai'?fK(v.kmS)+' km':fK(v.kmV)+' km · rodou '+fK(v.rodou)+' km'}</small></span></li>`; };
+    return hero+aviso+`<div class="cv-sec"><h2>Fora agora <span>${fora.length}</span></h2>${fora.length?`<div class="cv-grid">${fora.map(tFora).join('')}</div>`:'<p class="cv-nada cv-nadab">Todos os carros estão na empresa.</p>'}</div>
+      <div class="cv-sec"><h2>Na empresa <span>${dentro.length}</span></h2>${dentro.length?`<div class="cv-grid cv-gridp">${dentro.map(tDentro).join('')}</div>`:'<p class="cv-nada cv-nadab">Todos os carros estão fora.</p>'}</div>
+      ${ev.length?`<section class="card cv-tl"><div class="cv-h2b"><h2>Movimentos de hoje</h2>${kmHoje?`<span class="cv-sub">${fK(kmHoje)} km rodados nas voltas de hoje</span>`:''}</div><ol>${ev.slice(0,12).map(linha).join('')}</ol></section>`:''}`; }
+  function vFeito(M){ const d=M.d, sai=d.tipo==='saida';
+    return `<section class="cv-feito ${sai?'sai':'vol'}" role="status"><span class="cv-fok" aria-hidden="true">${SVG.ok}</span><h1>${sai?'Saída registrada':'Volta registrada'}</h1>${placa(d.placa,'g')}<p class="cv-fmod">${esc(d.mod)}</p>
+      <dl class="cv-fdl"><div><dt>Motorista</dt><dd>${esc(d.mot)}</dd></div><div><dt>${sai?'Km na saída':'Km na volta'}</dt><dd>${fK(d.km)}</dd></div>${sai?`<div><dt>Hora</dt><dd>${esc(d.hora)}</dd></div>`:`<div><dt>Rodou</dt><dd>${fK(d.rodou)} km</dd></div><div><dt>Ficou fora</dt><dd>${esc(d.fora)}</dd></div>`}</dl>
+      ${d.alerta?`<p class="cv-falt">${esc(d.alerta)}</p>`:''}<button type="button" class="cv-bt1" data-act="cv-feito">Voltar para a portaria</button><p class="cv-fauto">Volta sozinho em alguns segundos</p></section>`; }
   function vFluxo(){ const c=carDe(C.sel), a=abertaDe(c.id), uk=ultKm(c), F=C.f, er=F.err||{}, kmv=kmNum(F.km);
     const errDe=id=>er.id===id?`<p class="cv-err" id="${id}-e">${esc(er.t)}</p>`:'';
-    const cab=`<div class="cv-fc">${placa(c,'g')}<div><b>${esc(c.modelo||'Carro')}</b><small>${a?'Está fora · registrar a volta':'Na empresa · registrar a saída'}</small></div></div>`;
+    const topo=`<div class="cv-flh ${a?'vol':'sai'}"><button type="button" class="cv-x" data-act="cv-volta-x" aria-label="Cancelar e voltar">‹ Portaria</button><p class="cv-eb">${a?'Registrar volta':'Registrar saída'}</p>${placa(c,'g')}<p class="cv-fmod">${esc(c.modelo||'Carro')}</p></div>`;
+    const kmBox=(lab,ph,hint)=>`<label class="cv-lb" for="cv-km">${lab}</label><div class="cv-kmw${er.id==='cv-km'?' bad':''}"><input id="cv-km" class="cv-kmi" inputmode="numeric" autocomplete="off" placeholder="${esc(ph)}" value="${esc(F.km)}" data-cvf="km"${er.id==='cv-km'?' aria-invalid="true" aria-describedby="cv-km-e"':''}><span>km</span></div>${hint?`<p class="cv-hint">${hint}</p>`:''}${errDe('cv-km')}`;
+    const obs=ph=>`<label class="cv-lb" for="cv-obs">Observação <small>opcional</small></label><input id="cv-obs" class="cv-in" autocomplete="off" placeholder="${esc(ph)}" value="${esc(F.obs)}" data-cvf="obs" maxlength="300">`;
     if(a){ const rod=Number.isFinite(kmv)&&kmv>=a.kmS?kmv-a.kmS:null;
-      return `<section class="card cv-fl"><h2>Volta</h2>${cab}<dl class="cv-dl"><div><dt>Saiu com</dt><dd>${esc(a.motNome)}</dd></div><div><dt>Saída</dt><dd>${esc(quando(a.emS))}</dd></div><div><dt>Km na saída</dt><dd>${fK(a.kmS)}</dd></div>${a.obsS?`<div><dt>Observação da saída</dt><dd>${esc(a.obsS)}</dd></div>`:''}</dl>
-        <label class="cv-lb" for="cv-km">Km na volta</label><input id="cv-km" class="cv-in cv-kmi" inputmode="numeric" autocomplete="off" placeholder="${esc(fK(a.kmS))}" value="${esc(F.km)}" data-cvf="km"${er.id==='cv-km'?' aria-invalid="true" aria-describedby="cv-km-e"':''}>${errDe('cv-km')}
-        <p class="cv-rod" id="cv-rod">${rod!=null?'Rodou <b>'+fK(rod)+' km</b>':''}</p>
-        <label class="cv-lb" for="cv-obs">Observação <small>(opcional)</small></label><input id="cv-obs" class="cv-in" autocomplete="off" placeholder="Ex.: chegou com o pneu baixo" value="${esc(F.obs)}" data-cvf="obs" maxlength="300">
+      return `<section class="card cv-fl">${topo}<div class="cv-flb"><div class="cv-who big"><span class="cv-av" aria-hidden="true">${esc(ini(a.motNome))}</span><span><b>${esc(a.motNome)}</b><small>saiu ${esc(quando(a.emS))} · ${fK(a.kmS)} km · há ${esc(dur(Date.now()-new Date(a.emS).getTime()))}</small></span></div>
+        ${a.obsS?`<p class="cv-obs0">Na saída: ${esc(a.obsS)}</p>`:''}
+        ${kmBox('Km no painel agora',fK(a.kmS),'Na saída estava com <b>'+fK(a.kmS)+' km</b>')}
+        <div class="cv-rod" id="cv-rod">${rod!=null?'<span>Rodou</span><b>'+fK(rod)+' km</b>':''}</div>
+        ${obs('Ex.: chegou com o pneu baixo')}
         ${F.conf?`<p class="cv-conf">O carro rodou ${fK(rod)} km nesta viagem. Confere o km? Toque de novo para confirmar.</p>`:''}
-        <div class="cv-bts"><button type="button" class="btn sec" data-act="cv-volta-x">Cancelar</button><button type="button" class="btn" data-act="cv-volta"${C.salv?' disabled':''}>${C.salv?'Salvando…':F.conf?'Confirmar volta':'Registrar volta'}</button></div></section>`; }
+        <div class="cv-bts"><button type="button" class="cv-bt2" data-act="cv-volta-x">Cancelar</button><button type="button" class="cv-bt1 vol" data-act="cv-volta"${C.salv?' disabled':''}>${C.salv?'Salvando…':F.conf?'Confirmar volta':'Registrar volta'}</button></div></div></section>`; }
     const ls=liberados();
-    return `<section class="card cv-fl"><h2>Saída</h2>${cab}<dl class="cv-dl"><div><dt>Último km</dt><dd>${fK(uk)}</dd></div></dl>
-      <label class="cv-lb" for="cv-mot">Motorista</label>
-      ${ls.length?`<select id="cv-mot" class="cv-in" data-cvf="mot"${er.id==='cv-mot'?' aria-invalid="true" aria-describedby="cv-mot-e"':''}><option value="">Escolha o motorista</option>${ls.map(m=>`<option value="${esc(m.id)}"${F.mot===m.id?' selected':''}>${esc(m.nome)}</option>`).join('')}</select>`:'<p class="cv-err">Nenhum motorista liberado. Fale com o administrador.</p>'}${errDe('cv-mot')}
-      <label class="cv-lb" for="cv-km">Km na saída</label><input id="cv-km" class="cv-in cv-kmi" inputmode="numeric" autocomplete="off" value="${esc(F.km)}" data-cvf="km"${er.id==='cv-km'?' aria-invalid="true" aria-describedby="cv-km-e"':''}>${errDe('cv-km')}
-      <label class="cv-lb" for="cv-obs">Observação <small>(opcional)</small></label><input id="cv-obs" class="cv-in" autocomplete="off" placeholder="Ex.: destino, avaria, carro sujo" value="${esc(F.obs)}" data-cvf="obs" maxlength="300">
+    return `<section class="card cv-fl">${topo}<div class="cv-flb">
+      <p class="cv-lb" id="cv-mot-l">Quem vai dirigir?</p>
+      ${ls.length?`<div class="cv-mots" role="radiogroup" aria-labelledby="cv-mot-l" id="cv-mot"${er.id==='cv-mot'?' aria-describedby="cv-mot-e"':''}>${ls.map(m=>{ const fo=C.fora.find(v=>v.mot===m.id&&v.aberta); return `<button type="button" role="radio" aria-checked="${F.mot===m.id}" class="cv-mt${F.mot===m.id?' on':''}" data-act="cv-mot" data-v="${esc(m.id)}"><span class="cv-av" aria-hidden="true">${esc(ini(m.nome))}</span><span><b>${esc(m.nome)}</b>${fo?`<small>já está com o ${esc(plT(fo.placa))}</small>`:''}</span></button>`; }).join('')}</div>`:'<p class="cv-err">Nenhum motorista liberado. Fale com o administrador.</p>'}${errDe('cv-mot')}
+      ${kmBox('Km no painel',fK(uk),'Último km registrado: <b>'+fK(uk)+'</b>')}
+      ${obs('Ex.: destino, avaria, carro sujo')}
       ${F.conf?`<p class="cv-conf">O km digitado (${fK(kmv)}) é diferente do último registrado (${fK(uk)}): ${fK(kmv-uk)} km sem registro. A saída fica marcada para o administrador ver. Toque de novo para confirmar.</p>`:''}
-      <div class="cv-bts"><button type="button" class="btn sec" data-act="cv-volta-x">Cancelar</button><button type="button" class="btn" data-act="cv-saida"${C.salv||!ls.length?' disabled':''}>${C.salv?'Salvando…':F.conf?'Confirmar saída':'Registrar saída'}</button></div></section>`; }
+      <div class="cv-bts"><button type="button" class="cv-bt2" data-act="cv-volta-x">Cancelar</button><button type="button" class="cv-bt1 sai" data-act="cv-saida"${C.salv||!ls.length?' disabled':''}>${C.salv?'Salvando…':F.conf?'Confirmar saída':'Registrar saída'}</button></div></div></section>`; }
 
   /* ---------- viagens (adm) ---------- */
   function periodo(){ const q=C.q, h=hoje(); if(q.per==='hoje') return [h,h]; if(q.per==='7') return [addD(h,-6),h]; if(q.per==='30') return [addD(h,-29),h]; if(q.per==='mes') return [h.slice(0,8)+'01',h];
@@ -239,17 +264,24 @@
   function logoPdf(){ if(_logoPdf) return Promise.resolve(_logoPdf); return new Promise(res=>{ const i=new Image(); i.onload=()=>{ try{ const c=document.createElement('canvas'); c.width=i.naturalWidth; c.height=i.naturalHeight; c.getContext('2d').drawImage(i,0,0); _logoPdf=c.toDataURL('image/png'); res(_logoPdf); }catch(e){ res(null); } }; i.onerror=()=>res(null); i.src=LOGO_ESC; }); }
   async function qrPdf(cs){ if(!window.jspdf||!window.jspdf.jsPDF){ P.toast('Gerador de PDF indisponível. Recarregue a página.'); return; } if(typeof window.qrcode!=='function'){ P.toast('Gerador de QR indisponível. Recarregue a página.'); return; }
     if(!cs.length){ P.toast('Nenhum carro ativo para imprimir.'); return; }
-    const pdf=new window.jspdf.jsPDF('p','mm','a4'), W=90, H=120, gx=10, gy=10, x0=(210-2*W-gx)/2, y0=(297-2*H-gy)/2, logo=await logoPdf();
+    /* adesivo (26/11, opção B "faixa Colafix", sem a placa): faixa azul com a logo e "Controle de km · Portaria", QR de 58 mm,
+       modelo e placa em texto pequeno (para saber em qual carro colar); 85 × 112 mm, 4 por folha, linha de corte tracejada */
+    const logo=await logoPdf();
+    const pdf=new window.jspdf.jsPDF('p','mm','a4'), W=85, H=112, gx=12, gy=12, x0=(210-2*W-gx)/2, y0=(297-2*H-gy)/2, NAV=[22,60,82], R=4, FH=19;
     cs.forEach((c,i)=>{ const k=i%4; if(i&&!k) pdf.addPage(); const x=x0+(k%2)*(W+gx), y=y0+Math.floor(k/2)*(H+gy);
-      pdf.setDrawColor(170); pdf.setLineWidth(0.2); pdf.setLineDashPattern([1.5,1.5],0); pdf.rect(x,y,W,H); pdf.setLineDashPattern([],0);
-      /* placa */ const px=x+8, py=y+8, pw=W-16, ph=26; pdf.setDrawColor(20); pdf.setLineWidth(0.6); pdf.setFillColor(255,255,255); pdf.roundedRect(px,py,pw,ph,2.5,2.5,'FD');
-      pdf.setFillColor(0,51,153); pdf.rect(px+0.3,py+0.3,pw-0.6,7,'F'); pdf.setTextColor(255,255,255); pdf.setFont('helvetica','bold'); pdf.setFontSize(8); pdf.text('BRASIL',px+pw/2,py+5.2,{align:'center'});
-      if(logo){ try{ pdf.addImage(logo,'PNG',px+pw-18.5,py+1.3,15.5,4.5); }catch(e){} }
-      pdf.setTextColor(15,15,15); pdf.setFontSize(30); pdf.text(plN(c.placa),px+pw/2,py+21.5,{align:'center'}); pdf.setFontSize(6.5); pdf.text('BR',px+2.5,py+ph-2);
-      /* QR */ const q=window.qrcode(0,'M'); q.addData(urlDe(c)); q.make(); const n=q.getModuleCount(), qs=56, m=qs/n, qx=x+(W-qs)/2, qy=y+40; pdf.setFillColor(0,0,0);
+      pdf.setDrawColor(185); pdf.setLineWidth(0.2); pdf.setLineDashPattern([1.6,1.4],0); pdf.roundedRect(x-2.5,y-2.5,W+5,H+5,R+2,R+2,'S'); pdf.setLineDashPattern([],0);
+      pdf.setFillColor(...NAV); pdf.roundedRect(x,y,W,H,R,R,'F');
+      pdf.setFillColor(255,255,255); pdf.roundedRect(x+0.01,y+FH,W-0.02,H-FH,R,R,'F'); pdf.rect(x+0.01,y+FH,W-0.02,R+1,'F');
+      pdf.setDrawColor(...NAV); pdf.setLineWidth(0.5); pdf.roundedRect(x,y,W,H,R,R,'S');
+      if(logo){ try{ pdf.addImage(logo,'PNG',x+6,y+(FH-7.5)/2,28.1,7.5); }catch(e){} }
+      pdf.setTextColor(255,255,255); pdf.setFont('helvetica','bold'); pdf.setFontSize(9.5); pdf.text('Controle de km',x+W-6,y+8.2,{align:'right'});
+      pdf.setFont('helvetica','normal'); pdf.setFontSize(8); pdf.text('Portaria',x+W-6,y+12.6,{align:'right'});
+      const q=window.qrcode(0,'M'); q.addData(urlDe(c)); q.make(); const n=q.getModuleCount(), qs=58, m=qs/n, qx=x+(W-qs)/2, qy=y+FH+7; pdf.setFillColor(0,0,0);
       for(let r=0;r<n;r++) for(let cc=0;cc<n;cc++) if(q.isDark(r,cc)) pdf.rect(qx+cc*m,qy+r*m,m+0.01,m+0.01,'F');
-      pdf.setFontSize(11); pdf.setTextColor(30,30,30); pdf.text((c.modelo||'').slice(0,34),x+W/2,y+H-14,{align:'center'}); pdf.setFont('helvetica','normal'); pdf.setFontSize(8.5); pdf.setTextColor(90,90,90);
-      pdf.text('Portaria: escaneie para registrar saída e volta',x+W/2,y+H-8,{align:'center'}); });
+      pdf.setTextColor(25,35,42); pdf.setFont('helvetica','bold'); pdf.setFontSize(12); pdf.text((c.modelo||'Carro').slice(0,30),x+W/2,qy+qs+8.5,{align:'center'});
+      pdf.setFont('helvetica','normal'); pdf.setFontSize(9); pdf.setTextColor(95,105,112); pdf.text(plT(c.placa),x+W/2,qy+qs+13.5,{align:'center'});
+      pdf.setDrawColor(225); pdf.setLineWidth(0.3); pdf.line(x+8,y+H-10.5,x+W-8,y+H-10.5);
+      pdf.setFontSize(8); pdf.setTextColor(95,105,112); pdf.text('Aponte a câmera na portaria: saída e volta',x+W/2,y+H-5.5,{align:'center'}); });
     pdf.save('qr-carros-'+hoje()+'.pdf'); }
 
   /* ---------- módulos e cargo ---------- */
@@ -265,13 +297,15 @@
     return xs; });
 
   /* ---------- eventos ---------- */
-  document.addEventListener('input',ev=>{ const t=ev.target; if(!t||!t.dataset) return; const k=t.dataset.cvf; if(!k) return; C.f[k]=t.value; if(C.f.err&&C.f.err.id===t.id){ C.f.err=null; const e=document.getElementById(t.id+'-e'); if(e) e.remove(); t.removeAttribute('aria-invalid'); }
-    if(k==='km'){ C.f.conf=false; const a=C.sel&&abertaDe(C.sel), r=document.getElementById('cv-rod'); if(a&&r){ const n=kmNum(t.value); r.innerHTML=Number.isFinite(n)&&n>=a.kmS?'Rodou <b>'+fK(n-a.kmS)+' km</b>':''; } } });
+  document.addEventListener('input',ev=>{ const t=ev.target; if(!t||!t.dataset) return; const k=t.dataset.cvf; if(!k) return; C.f[k]=t.value; if(C.f.err&&C.f.err.id===t.id){ C.f.err=null; const e=document.getElementById(t.id+'-e'); if(e) e.remove(); t.removeAttribute('aria-invalid'); const w=t.closest('.cv-kmw'); if(w) w.classList.remove('bad'); }
+    if(k==='km'){ C.f.conf=false; const a=C.sel&&abertaDe(C.sel), r=document.getElementById('cv-rod'); if(a&&r){ const n=kmNum(t.value); r.innerHTML=Number.isFinite(n)&&n>=a.kmS?'<span>Rodou</span><b>'+fK(n-a.kmS)+' km</b>':''; } } });
   document.addEventListener('change',ev=>{ const t=ev.target; if(!t) return;
     if(t.dataset&&t.dataset.cvf){ C.f[t.dataset.cvf]=t.value; if(t.dataset.cvf==='mot'&&C.f.err&&C.f.err.id==='cv-mot'){ C.f.err=null; P.render(); } return; }
     const m={'cv-q-per':'per','cv-q-de':'de','cv-q-ate':'ate','cv-q-car':'car','cv-q-mot':'mot','cv-q-st':'st'}[t.id]; if(m){ C.q[m]=t.value; P.render(); } });
   document.addEventListener('keydown',ev=>{ if(ev.key!=='Enter') return; const t=ev.target; if(!t||!t.dataset||!t.dataset.cvf||t.tagName==='SELECT') return; ev.preventDefault(); const a=C.sel&&abertaDe(C.sel); if(a) volta(); else saida(); });
   document.addEventListener('click',async ev=>{ const b=ev.target.closest&&ev.target.closest('[data-act^="cv-"]'); if(!b) return; const a=b.dataset.act, v=b.dataset.v; ev.preventDefault();
+    if(a==='cv-mot'){ C.f.mot=v; if(C.f.err&&C.f.err.id==='cv-mot') C.f.err=null; P.render(); return; }
+    if(a==='cv-feito'){ C.msg=null; P.render(); return; }
     if(a==='cv-cam') return camLiga(); if(a==='cv-camx'){ camDesliga(); P.render(); return; }
     if(a==='cv-abre'){ camDesliga(); return abrir(v); }
     if(a==='cv-volta-x'){ C.sel=null; C.f={mot:'',km:'',obs:'',conf:false}; P.render(); return; }
@@ -300,7 +334,7 @@
   .cv-pl{--h:44px;display:inline-flex;flex-direction:column;height:var(--h);aspect-ratio:3.1/1;box-sizing:border-box;border:calc(var(--h)*.045) solid #111;border-radius:calc(var(--h)*.13);overflow:hidden;background:#fff;color:#111;vertical-align:middle;flex:none}
   .cv-plb{flex:0 0 24%;display:flex;align-items:center;justify-content:center;position:relative;background:#1f3d99;color:#fff}.cv-plb span{font:700 calc(var(--h)*.16)/1 Arial,Helvetica,sans-serif;letter-spacing:.14em}
   .cv-plb i{position:absolute;right:3.5%;top:14%;bottom:14%;width:19%;background:transparent center/contain no-repeat}
-  .cv-plc{flex:1;position:relative;display:flex;align-items:center;justify-content:center;min-height:0}
+  .cv-plc{flex:1;position:relative;display:flex;align-items:center;justify-content:center;min-height:0;padding:0 4% 0 9%}
   .cv-plc em{position:absolute;left:3.5%;bottom:7%;font:800 calc(var(--h)*.13)/1 Arial,Helvetica,sans-serif;font-style:normal;color:#111}
   .cv-plc b{font:700 calc(var(--h)*.5)/1 "Arial Narrow","Roboto Condensed",Arial,Helvetica,sans-serif;font-stretch:condensed;letter-spacing:.04em;white-space:nowrap;color:#111;transform:scaleY(1.15)}
   .cv-pl.p{--h:30px}.cv-pl.g{--h:84px}.cv-pl.p em{display:none}
@@ -340,5 +374,72 @@
   .cv-vz p{color:var(--muted)}
   @media(max-width:760px){.cv-pl{--h:38px}.cv-pl.p{--h:28px}.cv-pl.g{--h:70px}.cv-cols{grid-template-columns:minmax(0,1fr)}.cv-g3{grid-template-columns:minmax(0,1fr)}.cv-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}.cv-bts .btn{flex:1}.cv-fil .btn{margin-left:0}
     .cv-hb{grid-template-columns:minmax(0,1fr) auto}.cv-hb .cv-bar{grid-column:1/-1;grid-row:2}.cv-hb small{display:none}}
+  </style>`);
+  /* layout da portaria, 2ª versão (26/11) */
+  document.head.insertAdjacentHTML('beforeend',`<style id="cv-css2">
+  .cv-hero{background:var(--nav,#163c52);color:#fff;border-radius:20px;padding:22px 22px 20px;margin-bottom:18px;position:relative;overflow:hidden}
+  .cv-hero::after{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;background:rgba(255,255,255,.05);pointer-events:none}
+  .cv-hh{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:18px;position:relative;z-index:1}
+  .cv-hero h1{margin:2px 0 0;font-size:clamp(28px,4vw,38px);line-height:1.05;color:#fff}.cv-eb{margin:0;font-size:13.5px;opacity:.75;font-weight:500}
+  .cv-cnt{display:flex;gap:8px}.cv-cnt div{display:flex;flex-direction:column;align-items:flex-start;background:rgba(255,255,255,.09);border-radius:12px;padding:8px 14px;min-width:78px}
+  .cv-cnt b{font-size:26px;line-height:1.1;font-variant-numeric:tabular-nums}.cv-cnt span{font-size:12px;opacity:.75}
+  .cv-scan{all:unset;box-sizing:border-box;cursor:pointer;position:relative;z-index:1;width:100%;display:flex;align-items:center;gap:18px;padding:18px 20px;border-radius:16px;background:#fff;color:var(--nav,#163c52);text-align:left;margin:0}
+  .cv-scan:hover{background:#f2f6f8}.cv-scan:focus-visible{outline:3px solid #8fd3e8;outline-offset:3px}
+  .cv-qric{flex:none;width:58px;height:58px;border-radius:14px;background:var(--nav,#163c52);color:#fff;display:grid;place-items:center;position:relative}.cv-qric svg{width:32px;height:32px}
+  .cv-sct{display:flex;flex-direction:column}.cv-sct b{font-size:20px;line-height:1.2}.cv-sct small{font-size:14px;color:#5b6b75;margin-top:2px}
+  @media(prefers-reduced-motion:no-preference){.cv-qric::after{content:"";position:absolute;inset:-5px;border-radius:18px;border:2px solid var(--nav,#163c52);opacity:0;animation:cvPulso 2.4s ease-out infinite}@keyframes cvPulso{0%{opacity:.55;transform:scale(.92)}70%,100%{opacity:0;transform:scale(1.18)}}}
+  .cv-errh{position:relative;z-index:1;color:#ffd7d2!important;margin-top:10px}
+  .cv-cam{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:10px;margin:0}.cv-cam p{margin:0;color:#fff;opacity:.85}
+  .cv-vw{position:relative;width:100%;max-width:560px;aspect-ratio:4/3;border-radius:16px;overflow:hidden;background:#000}.cv-vw video{width:100%;height:100%;object-fit:cover}
+  .cv-mira{position:absolute;inset:16% 22%;border-radius:18px;box-shadow:0 0 0 999px rgba(0,0,0,.35)}.cv-mira::before,.cv-mira::after,.cv-mira i::before,.cv-mira i::after{content:"";position:absolute;width:30px;height:30px;border:4px solid #fff}
+  .cv-mira::before{left:0;top:0;border-right:0;border-bottom:0;border-radius:14px 0 0 0}.cv-mira::after{right:0;top:0;border-left:0;border-bottom:0;border-radius:0 14px 0 0}.cv-mira i::before{left:0;bottom:0;border-right:0;border-top:0;border-radius:0 0 0 14px}.cv-mira i::after{right:0;bottom:0;border-left:0;border-top:0;border-radius:0 0 14px 0}
+  .cv-sec{margin-bottom:18px}.cv-sec>h2{font-size:17px;margin:0 0 10px;display:flex;align-items:center;gap:8px}.cv-sec>h2 span{font-size:13px;font-weight:700;background:color-mix(in srgb,var(--line) 70%,transparent);border-radius:999px;padding:1px 9px;color:inherit;margin:0}
+  .cv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}.cv-gridp{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+  .cv-tile{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:12px;padding:14px;border-radius:16px;background:var(--surface,#fff);border:1px solid var(--line);transition:border-color .15s,transform .15s}
+  .cv-tile:hover{border-color:var(--teal);transform:translateY(-1px)}.cv-tile:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+  .cv-tile.fora{border-left:5px solid var(--teal)}.cv-tile.fora.longo{border-left-color:var(--warn)}
+  .cv-tt{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+  .cv-chip{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:999px;background:color-mix(in srgb,var(--teal) 12%,transparent);color:var(--teal);white-space:nowrap}.cv-chip svg{width:14px;height:14px}
+  .cv-chip.warn{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn-ink,var(--warn))}
+  .cv-who{display:flex;align-items:center;gap:10px}.cv-who>span:last-child{display:flex;flex-direction:column;min-width:0}.cv-who b{font-size:16px}.cv-who small{color:var(--muted);font-size:13px}
+  .cv-av{flex:none;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:14px;background:color-mix(in srgb,var(--teal) 16%,transparent);color:var(--teal)}
+  .cv-who.big .cv-av{width:48px;height:48px;font-size:17px}.cv-who.big b{font-size:18px}
+  .cv-mod{display:flex;flex-direction:column}.cv-mod b{font-size:15px}.cv-mod small{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+  .cv-go{display:flex;align-items:center;justify-content:center;gap:6px;font-weight:700;font-size:15px;min-height:44px;border-radius:12px;margin-top:auto}.cv-go svg{width:18px;height:18px}
+  .cv-go.vol{background:var(--teal);color:#fff}.cv-go.sai{background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--ok-ink,var(--ok))}
+  .cv-nadab{padding:16px;border-radius:14px;border:1px dashed var(--line);margin:0}
+  .cv-tl ol{list-style:none;margin:4px 0 0;padding:0}.cv-tl li{display:grid;grid-template-columns:48px 34px minmax(0,1fr);align-items:center;gap:10px;padding:8px 0;position:relative}
+  .cv-tl li:not(:last-child)::after{content:"";position:absolute;left:74px;top:42px;bottom:-8px;width:2px;background:var(--line)}
+  .cv-tlh{font-weight:700;font-variant-numeric:tabular-nums;color:var(--muted);font-size:14px}.cv-tli{width:34px;height:34px;border-radius:50%;display:grid;place-items:center}.cv-tli svg{width:17px;height:17px}
+  .cv-tl li.sai .cv-tli{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok-ink,var(--ok))}.cv-tl li.vol .cv-tli{background:color-mix(in srgb,var(--teal) 15%,transparent);color:var(--teal)}
+  .cv-tlt{display:flex;flex-direction:column}.cv-tlt small{color:var(--muted);font-size:13px}.cv-sub{color:var(--muted);font-size:13.5px}
+  .cv-fl{max-width:640px;width:100%;box-sizing:border-box;margin:0 auto 18px;padding:0!important;overflow:hidden}.cv-feito{width:100%;box-sizing:border-box}.cv-flh>*{max-width:100%}
+  .cv-flh{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px 18px 18px;color:#fff;text-align:center}.cv-flh.sai{background:#17694a}.cv-flh.vol{background:var(--nav,#163c52)}
+  .cv-flh .cv-fmod{margin:0;font-weight:600;font-size:16px;opacity:.9}.cv-flh .cv-eb{opacity:.85}
+  .cv-x{all:unset;cursor:pointer;position:absolute;left:12px;top:12px;font-size:14px;font-weight:600;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.12)}.cv-x:focus-visible{outline:2px solid #fff}
+  .cv-flb{padding:18px 20px 20px}.cv-flb .cv-lb:first-child{margin-top:0}
+  .cv-obs0{margin:10px 0 0;padding:8px 12px;border-radius:10px;background:color-mix(in srgb,var(--line) 40%,transparent);font-size:14px}
+  .cv-mots{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+  .cv-mt{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;border:1.5px solid var(--line);min-height:58px}
+  .cv-mt span:last-child{display:flex;flex-direction:column;min-width:0}.cv-mt small{font-size:12px;color:var(--warn-ink,var(--warn))}.cv-mt:hover{border-color:var(--teal)}.cv-mt:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+  .cv-mt.on{border-color:#17694a;background:color-mix(in srgb,#17694a 10%,transparent)}.cv-mt.on .cv-av{background:#17694a;color:#fff}
+  .cv-kmw{display:flex;align-items:center;border:2px solid var(--line);border-radius:16px;background:var(--surface,#fff);padding:0 18px;min-height:72px}.cv-kmw:focus-within{border-color:var(--teal)}.cv-kmw.bad{border-color:var(--crit)}
+  .cv-kmi{flex:1;min-width:0;border:0;outline:0;background:transparent;color:inherit;font:700 34px/1 inherit;font-family:inherit;font-variant-numeric:tabular-nums;letter-spacing:.5px;padding:0}.cv-kmw .cv-kmi,.cv-kmw .cv-kmi:focus,.cv-kmw .cv-kmi:hover{border:0!important;outline:0!important;box-shadow:none!important;background:transparent!important;min-height:0!important;height:auto!important}.cv-kmw span{font-size:18px;font-weight:600;color:var(--muted)}
+  .cv-hint{margin:6px 0 0;color:var(--muted);font-size:14px}
+  .cv-rod{display:flex;align-items:baseline;gap:10px;margin:12px 0 0;min-height:0}.cv-rod:not(:empty){padding:12px 16px;border-radius:14px;background:color-mix(in srgb,var(--teal) 10%,transparent)}.cv-rod span{color:var(--muted);font-weight:600}.cv-rod b{font-size:28px;color:var(--teal);font-variant-numeric:tabular-nums}
+  .cv-bt1,.cv-bt2{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;min-height:54px;padding:0 24px;border-radius:14px;font-weight:700;font-size:16px;text-align:center}
+  .cv-bt1{background:var(--nav,#163c52);color:#fff;flex:1}.cv-bt1.sai{background:#17694a}.cv-bt1.vol{background:var(--nav,#163c52)}.cv-bt1[disabled]{opacity:.55;cursor:default}
+  .cv-bt2{border:1.5px solid var(--line);color:inherit}.cv-hero .cv-bt2{border-color:rgba(255,255,255,.4);color:#fff}
+  .cv-bt1:focus-visible,.cv-bt2:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+  .cv-feito{max-width:560px;margin:10px auto 18px;padding:30px 22px;border-radius:22px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;background:var(--surface,#fff);border:1px solid var(--line)}
+  .cv-fok{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;color:#fff;background:#17694a}.cv-feito.vol .cv-fok{background:var(--nav,#163c52)}.cv-fok svg{width:40px;height:40px}
+  .cv-feito h1{margin:4px 0 6px;font-size:26px}.cv-feito .cv-fmod{margin:0;color:var(--muted)}
+  .cv-fdl{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;width:100%;margin:8px 0 4px}.cv-fdl div{background:color-mix(in srgb,var(--line) 35%,transparent);border-radius:12px;padding:10px}.cv-fdl dt{font-size:12.5px;color:var(--muted)}.cv-fdl dd{margin:2px 0 0;font-weight:700;font-size:18px;font-variant-numeric:tabular-nums}
+  .cv-falt{margin:0;padding:8px 12px;border-radius:10px;background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn-ink,var(--warn));font-weight:600}
+  .cv-feito .cv-bt1{flex:none;width:100%;margin-top:8px}.cv-fauto{margin:0;font-size:12.5px;color:var(--muted)}
+  @media(prefers-reduced-motion:no-preference){.cv-feito .cv-fok{animation:cvOk .35s ease-out}@keyframes cvOk{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}}
+  @media(max-width:760px){.cv-hero{padding:18px 16px 16px;border-radius:18px}.cv-cnt{width:100%}.cv-cnt div{flex:1;min-width:0}.cv-grid,.cv-gridp{grid-template-columns:minmax(0,1fr)}
+    .cv-tile:not(.fora){flex-direction:row;align-items:center;flex-wrap:wrap}.cv-tile:not(.fora) .cv-mod{flex:1}.cv-tile:not(.fora) .cv-go{margin-top:0;padding:0 16px}
+    .cv-mots{grid-template-columns:minmax(0,1fr)}.cv-flb{padding:16px}.cv-kmi{font-size:30px}}
   </style>`);
 })();

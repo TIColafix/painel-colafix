@@ -37,33 +37,38 @@ const H=require('./harness'); const res=[]; const ok=(n,c,d)=>{ res.push({n,ok:!
  ok('Porteiro não vê o cadastro nem as viagens', !v0.nav.includes('carcad')&&!v0.nav.includes('carviag'), v0.nav.join(','));
  /* QR lido = endereço com ?carro= */
  await pb.goto(H.BASE+'?carro='+cid); await H.dorme(3000);
- const f=await pb.evaluate(()=>({t:(document.querySelector('.cv-fl')||{}).innerText||'',ops:[...document.querySelectorAll('#cv-mot option')].map(o=>o.textContent),km:(document.getElementById('cv-km')||{}).value}));
- ok('QR do carro abre a saída com placa, último km e só motoristas liberados', /Saída/.test(f.t)&&/ABC1D23/.test(f.t)&&/45\.230/.test(f.t)&&f.km==='45230'&&f.ops.includes('Carlos Bento')&&!f.ops.includes('Joana Prado'), JSON.stringify(f).slice(0,300));
+ const f=await pb.evaluate(()=>({t:(document.querySelector('.cv-fl')||{}).innerText||'',ops:[...document.querySelectorAll('#cv-mot .cv-mt b')].map(o=>o.textContent),km:(document.getElementById('cv-km')||{}).value}));
+ ok('QR do carro abre a saída com placa, último km e só motoristas liberados', /Registrar saída/.test(f.t)&&/ABC1D23/.test(f.t)&&/45\.230/.test(f.t)&&f.km==='45230'&&f.ops.includes('Carlos Bento')&&!f.ops.includes('Joana Prado'), JSON.stringify(f).slice(0,300));
  await pb.click('[data-act="cv-saida"]'); await H.dorme(300); ok('Sem motorista não registra', await pb.evaluate(()=>/Escolha o motorista/.test(document.body.innerText)));
- await pb.selectOption('#cv-mot',{label:'Carlos Bento'}); await pb.fill('#cv-km','45200'); await pb.click('[data-act="cv-saida"]'); await H.dorme(300);
+ await pb.click('#cv-mot .cv-mt:has-text("Carlos Bento")'); await H.dorme(200); await pb.fill('#cv-km','45200'); await pb.click('[data-act="cv-saida"]'); await H.dorme(300);
  ok('Km menor que o último é recusado', await pb.evaluate(()=>/não pode ser menor que o último registrado \(45\.230 km\)/.test(document.body.innerText)));
  await pb.fill('#cv-km','45250'); await pb.fill('#cv-obs','Vai ao banco'); await pb.click('[data-act="cv-saida"]'); await H.dorme(300);
  ok('Km diferente do último pede confirmação', await pb.evaluate(()=>/20 km sem registro/.test(document.body.innerText)&&/Confirmar saída/.test(document.body.innerText)));
  await pb.click('[data-act="cv-saida"]'); await H.dorme(700);
  s=await srv(pb); let vs=Object.entries(s).filter(([k])=>k.startsWith('carrosv/')).map(([,v])=>v);
  ok('Saída gravada (motorista, km, aberta, km diferente marcado) e último km atualizado', vs.length===1&&vs[0].aberta===true&&vs[0].motNome==='Carlos Bento'&&vs[0].kmS===45250&&vs[0].kmDif===true&&vs[0].kmEsp===45230&&vs[0].obsS==='Vai ao banco'&&s['carrosk/'+cid].km===45250, JSON.stringify(vs[0]||{}).slice(0,250));
+ const tf=await pb.evaluate(()=>(document.querySelector('.cv-feito')||{}).innerText||'');
+ ok('Tela de confirmação da saída (placa, motorista, km, km sem registro)', /Saída registrada/.test(tf)&&/ABC1D23/.test(tf)&&/Carlos Bento/.test(tf)&&/45\.250/.test(tf)&&/20 km sem registro/.test(tf), tf.replace(/\n/g,' | '));
+ if(process.env.SHOT) await pb.screenshot({path:'/home/claude/scripts/cv-feito.png',fullPage:true});
+ await pb.click('[data-act="cv-feito"]'); await H.dorme(300);
  const t1=await pb.evaluate(()=>document.body.innerText);
- ok('Mensagem de saída e o carro aparece em "Fora agora"', /Saída registrada: ABC1D23 com Carlos Bento · 45\.250 km/.test(t1)&&/Fora agora\s*1/i.test(t1), t1.slice(0,300).replace(/\n/g,' | '));
+ ok('Depois da confirmação o carro aparece em "Fora agora" com o motorista', /Fora agora\s*1/i.test(t1)&&/Registrar volta/.test(t1)&&/Carlos Bento/.test(t1), t1.slice(0,300).replace(/\n/g,' | '));
  await pb.click(`[data-act="cv-abre"][data-v="${cid}"]`); await H.dorme(400);
  const fv=await pb.evaluate(()=>(document.querySelector('.cv-fl')||{}).innerText||'');
- ok('Tocar no carro fora abre a volta (saiu com, km da saída)', /Volta/.test(fv)&&/Carlos Bento/.test(fv)&&/45\.250/.test(fv), fv.replace(/\n/g,' | ').slice(0,200));
+ ok('Tocar no carro fora abre a volta (saiu com, km da saída)', /Registrar volta/.test(fv)&&/Carlos Bento/.test(fv)&&/45\.250/.test(fv), fv.replace(/\n/g,' | ').slice(0,200));
  await pb.fill('#cv-km','45240'); await pb.click('[data-act="cv-volta"]'); await H.dorme(300);
  ok('Km da volta menor que o da saída é recusado', await pb.evaluate(()=>/não pode ser menor que o da saída/.test(document.body.innerText)));
  await pb.fill('#cv-km','45358'); await pb.dispatchEvent('#cv-km','input'); await H.dorme(200);
- ok('Mostra quanto rodou enquanto digita', /Rodou 108 km/.test(await pb.evaluate(()=>document.getElementById('cv-rod').innerText)));
+ ok('Mostra quanto rodou enquanto digita', /Rodou\s*108 km/.test(await pb.evaluate(()=>document.getElementById('cv-rod').innerText)));
  if(process.env.SHOT) await pb.screenshot({path:'/home/claude/scripts/cv-volta.png',fullPage:true});
  await pb.click('[data-act="cv-volta"]'); await H.dorme(700);
  s=await srv(pb); vs=Object.entries(s).filter(([k])=>k.startsWith('carrosv/')).map(([,v])=>v);
  ok('Volta gravada: km, rodou 108, fechada; último km 45.358', vs[0].aberta===false&&vs[0].kmV===45358&&vs[0].rodou===108&&vs[0].porVN==='Seu Zé Porteiro'&&s['carrosk/'+cid].km===45358, JSON.stringify(vs[0]).slice(0,250));
- ok('Mensagem da volta', /Volta registrada: ABC1D23 · Carlos Bento rodou 108 km/.test(await pb.evaluate(()=>document.body.innerText)));
+ ok('Tela de confirmação da volta (rodou 108 km)', await pb.evaluate(()=>{ const t=(document.querySelector('.cv-feito')||{}).innerText||''; return /Volta registrada/.test(t)&&/108 km/.test(t)&&/Ficou fora/.test(t); }));
+ await pb.click('[data-act="cv-feito"]'); await H.dorme(300);
  await pb.evaluate(()=>{ __carros.msg=null; window.scrollTo(0,0); }); await H.dorme(300);
  const lg=await pb.evaluate(()=>document.documentElement.scrollWidth); ok('No celular a portaria não passa da largura', lg<=392, lg);
- if(process.env.SHOT){ await pb.evaluate(()=>{ __T.go('portaria'); }); await H.dorme(400); await pb.screenshot({path:'/home/claude/scripts/cv-port.png',fullPage:true}); await pb.click(`[data-act="cv-abre"][data-v="${cid}"]`); await H.dorme(300); await pb.screenshot({path:'/home/claude/scripts/cv-saida.png',fullPage:true}); }
+ if(process.env.SHOT){ await pb.evaluate(()=>{ __T.go('portaria'); }); await H.dorme(400); await pb.screenshot({path:'/home/claude/scripts/cv-port.png',fullPage:true}); await pb.click(`[data-act="cv-abre"][data-v="${cid}"]`); await H.dorme(300); await pb.screenshot({path:'/home/claude/scripts/cv-saida.png',fullPage:true}); await pb.setViewportSize({width:1280,height:860}); await pb.click('[data-act="cv-volta-x"]'); await H.dorme(500); await pb.screenshot({path:'/home/claude/scripts/cv-desk.png'}); await pb.click(`[data-act="cv-abre"][data-v="${cid}"]`); await H.dorme(400); await pb.screenshot({path:'/home/claude/scripts/cv-desk2.png'}); }
  /* ---------- adm vê as viagens ---------- */
  const A2=await H.abrir({viewport:{width:1366,height:900}}); const pa2=A2.page; pa2.on('pageerror',e=>erros.push(e.message)); await H.preparar(pa2,{users:d.users,docs:await srv(pb)}); await pa2.goto(H.BASE); await H.entrar(pa2,'fernando','fer123'); await H.dorme(2500);
  await pa2.evaluate(()=>__T.go('carviag')); await H.dorme(1200);

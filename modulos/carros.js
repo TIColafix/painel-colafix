@@ -20,6 +20,9 @@
     edC:null,edM:null,edV:null,salv:false,abaCad:'carros',busca:''};
   window.__carros=C;
   const PL_RE=/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
+  const COMB=[['res','Reserva'],['1/4','1/4'],['1/2','1/2'],['3/4','3/4'],['cheio','Cheio']], combTxt=k=>(COMB.find(x=>x[0]===k)||[])[1]||'';
+  const TERMO='Confirmo que estou saindo com este veículo, com o km registrado pela portaria, e que sou responsável por ele até a devolução na portaria.';
+  const aceitePend=v=>!!(v&&v.precisaAceite&&!v.aceite&&!v.removido);
   const plN=p=>String(p||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   const plT=p=>{ p=plN(p); return /^[A-Z]{3}[0-9]{4}$/.test(p)?p.slice(0,3)+'-'+p.slice(3):p; };
   const fK=n=>(n==null||n===''||isNaN(+n))?'—':Math.round(+n).toLocaleString('pt-BR');
@@ -93,7 +96,7 @@
   function abrirDaUrl(){ if(_urlFeito) return; const m=location.search.match(/[?&]carro=([A-Za-z0-9_-]+)/); if(!m) { _urlFeito=true; return; } if(!C.lido.cad||!P.viewOk('portaria')) return; _urlFeito=true;
     try{ history.replaceState(null,'',location.pathname+location.search.replace(/([?&])carro=[^&]*&?/,'$1').replace(/[?&]$/,'')+location.hash); }catch(e){}
     abrir(m[1]); }
-  function msg(t,x,d){ C.msg={t,x,d:d||null}; P.render(); clearTimeout(msg._t); msg._t=setTimeout(()=>{ C.msg=null; P.rerender(); },t==='ok'?6000:8000); }
+  function msg(t,x,d){ C.msg={t,x,d:d||null}; P.render(); clearTimeout(msg._t); msg._t=setTimeout(()=>{ if(C.msg&&C.msg.d) _autoCam=true; C.msg=null; P.rerender(); },t==='ok'?6000:8000); }
 
   /* ---------- registrar ---------- */
   async function saida(){ const c=carDe(C.sel); if(!c||C.salv) return; if(abertaDe(c.id)){ msg('warn','Este carro já está fora. Registre a volta.'); return; }
@@ -103,10 +106,11 @@
     if(km<esp){ campoErro('cv-km','O km não pode ser menor que o último registrado ('+fK(esp)+' km).'); return; }
     if(km!==esp&&!C.f.conf){ C.f.conf=true; P.render(); return; }
     const outro=C.fora.find(v=>v.mot===m.id&&v.aberta); const id=novoId('v'), agora=new Date().toISOString();
-    const doc={carro:c.id,placa:c.placa,modelo:c.modelo||'',mot:m.id,motNome:m.nome,kmS:km,emS:agora,diaS:hoje(),porS:S.uid||null,porSN:eu(),obsS:String(C.f.obs||'').trim().slice(0,300),kmEsp:esp,kmDif:km!==esp,aberta:true};
+    const doc={carro:c.id,placa:c.placa,modelo:c.modelo||'',frota:c.frota||'',mot:m.id,motNome:m.nome,motUid:m.uid||null,precisaAceite:!!m.uid,aceite:null,kmS:km,emS:agora,diaS:hoje(),porS:S.uid||null,porSN:eu(),obsS:String(C.f.obs||'').trim().slice(0,300),kmEsp:esp,kmDif:km!==esp,aberta:true};
     C.salv=true; P.render();
     try{ await P.db().doc('carrosv/'+id).set(doc); await P.db().doc('carrosk/'+c.id).set({km,em:agora,viagem:id,placa:c.placa});
-      C.fora=C.fora.concat([Object.assign({_id:id},doc)]); C.sel=null; msg('ok','Saída registrada: '+plT(c.placa)+' com '+m.nome+' · '+fK(km)+' km.'+(outro?' Atenção: '+m.nome+' já estava com o '+plT(outro.placa)+'.':''),{tipo:'saida',placa:c.placa,mod:c.modelo||'',mot:m.nome,km,hora:hm(agora),alerta:outro?m.nome+' já estava com o '+plT(outro.placa)+'.':(km!==esp?fK(km-esp)+' km sem registro desde a última viagem.':'')}); }
+      if(m.uid) avisaMot(m,'Confirme a saída com o '+plT(c.placa)+(c.frota?' (Frota '+c.frota+')':''),'A portaria registrou a sua saída com '+fK(km)+' km às '+hm(agora)+'. Abra o painel e confirme.');
+      C.fora=C.fora.concat([Object.assign({_id:id},doc)]); C.sel=null; msg('ok','Saída registrada: '+plT(c.placa)+' com '+m.nome+' · '+fK(km)+' km.'+(outro?' Atenção: '+m.nome+' já estava com o '+plT(outro.placa)+'.':''),{tipo:'saida',placa:c.placa,frota:c.frota||'',mod:c.modelo||'',mot:m.nome,km,hora:hm(agora),aceite:m.uid?m.nome.split(' ')[0]:'',alerta:outro?m.nome+' já estava com o '+plT(outro.placa)+'.':(km!==esp?fK(km-esp)+' km sem registro desde a última viagem.':'')}); }
     catch(e){ P.erro(e); } finally{ C.salv=false; P.render(); } }
   async function volta(){ const c=carDe(C.sel), a=c&&abertaDe(c.id); if(!a||C.salv) return; const km=kmNum(C.f.km);
     if(!Number.isFinite(km)||km<=0){ campoErro('cv-km','Digite o km do painel do carro.'); return; }
@@ -115,7 +119,8 @@
     const agora=new Date().toISOString(), up={kmV:km,emV:agora,porV:S.uid||null,porVN:eu(),obsV:String(C.f.obs||'').trim().slice(0,300),rodou:km-(+a.kmS||0),aberta:false};
     C.salv=true; P.render();
     try{ await P.db().doc('carrosv/'+a._id).update(up); await P.db().doc('carrosk/'+c.id).set({km,em:agora,viagem:a._id,placa:c.placa});
-      C.fora=C.fora.filter(v=>v._id!==a._id); C.sel=null; msg('ok','Volta registrada: '+plT(c.placa)+' · '+a.motNome+' rodou '+fK(up.rodou)+' km.',{tipo:'volta',placa:c.placa,mod:c.modelo||'',mot:a.motNome,km,rodou:up.rodou,hora:hm(agora),fora:dur(Date.now()-new Date(a.emS).getTime())}); }
+      if(a.motUid){ const mm=motDe(a.mot); avisaMot(mm,'Confirme a devolução do '+plT(c.placa),'A portaria registrou a volta com '+fK(km)+' km às '+hm(agora)+'. Abra o painel, confira o km e responda as perguntas.'); }
+      C.fora=C.fora.filter(v=>v._id!==a._id); C.sel=null; msg('ok','Volta registrada: '+plT(c.placa)+' · '+a.motNome+' rodou '+fK(up.rodou)+' km.',{tipo:'volta',placa:c.placa,frota:c.frota||'',mod:c.modelo||'',mot:a.motNome,km,rodou:up.rodou,hora:hm(agora),fora:dur(Date.now()-new Date(a.emS).getTime()),devol:a.motUid?(a.motNome||'').split(' ')[0]:''}); }
     catch(e){ P.erro(e); } finally{ C.salv=false; P.render(); } }
   function campoErro(id,t){ C.f.err={id,t}; P.render(); setTimeout(()=>{ const i=document.getElementById(id); if(i) i.focus(); },40); }
 
@@ -129,7 +134,19 @@
     ok:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
     rel:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>'};
   const DSEM=['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
-  function vPortaria(){ if(!lido()) return '<section class="card"><div class="empty">Carregando os carros…</div></section>';
+  /* ---------- modo celular da portaria (26/11: "tem que ser específico para o celular, que nem o celular do almox") ----------
+     o porteiro (cargo portaria) vê só o app da portaria em tela inteira: sem menu, sem barra do painel; barra própria com a
+     logo, relógio, quem está e Sair; a câmera liga sozinha na tela inicial (como o celular do almox). A dona vê com ?portaria=1. */
+  const soloDe=(tela,perfil)=>{ try{ const A=S.acs; if(!A||!A.pronto||S.view!==tela) return false; if(A.dono) return new RegExp('[?&]'+perfil+'=1').test(location.search); return (A.doc||{}).perfil===perfil; }catch(e){ return false; } };
+  const solo=()=>soloDe('portaria','portaria');
+  function appBar(tit){ const nm=eu(), ag=new Date(); return `<div class="cv-bar" role="banner"><img src="${LOGO_ESC}" alt="Colafix"><span class="cv-bart">${esc(tit)}</span><span class="cv-clk" data-rtv-clk>${String(ag.getHours()).padStart(2,'0')}:${String(ag.getMinutes()).padStart(2,'0')}</span>
+      <button type="button" class="cv-sair" data-act="cv-sair" aria-label="Sair da conta ${esc(nm)}"><span class="cv-av" aria-hidden="true">${esc(ini(nm))}</span><span>${Date.now()-_sairConf<4000?'Toque de novo para sair':'Sair'}</span></button></div>`; }
+  let _autoCam=true, _sairConf=0;
+  function vPortaria(){ const so=solo(); try{ document.body.classList.toggle('cv-solo',so); }catch(e){}
+    const corpo=vPortariaCorpo(so); if(!so) return corpo;
+    if(lido()&&!C.sel&&!(C.msg&&C.msg.d)&&!C.cam.on&&!C.cam.erro&&_autoCam&&ativos().length){ _autoCam=false; setTimeout(()=>{ if(solo()&&!C.sel&&!C.cam.on) camLiga(); },60); }
+    return `<div class="cv-app">${appBar('Portaria')}<main class="cv-appc">${corpo}</main></div>`; }
+  function vPortariaCorpo(SO){ if(!lido()) return '<section class="card"><div class="empty">Carregando os carros…</div></section>';
     const cs=ativos(), fora=cs.filter(c=>abertaDe(c.id)).sort((a,b)=>String(abertaDe(a.id).emS).localeCompare(String(abertaDe(b.id).emS))), dentro=cs.filter(c=>!abertaDe(c.id)), h=hoje(), ag=Date.now();
     if(!cs.length) return `<section class="cv-hero"><div class="cv-hh"><div><p class="cv-eb">Portaria</p><h1>Carros</h1></div></div></section><section class="card cv-vz"><h2>Nenhum carro cadastrado</h2><p>O administrador cadastra os carros em Carros › Carros e motoristas e imprime os QR codes.</p></section>`;
     if(C.msg&&C.msg.d&&C.msg.t==='ok') return vFeito(C.msg);
@@ -137,32 +154,34 @@
     const dt=new Date(h+'T12:00:00'), mv=C.viag.filter(v=>!v.removido&&(v.diaS===h||diaDe(v.emV)===h));
     const ev=[]; mv.forEach(v=>{ if(v.diaS===h) ev.push({t:v.emS,k:'sai',v}); if(v.emV&&diaDe(v.emV)===h) ev.push({t:v.emV,k:'vol',v}); }); ev.sort((a,b)=>String(b.t).localeCompare(String(a.t)));
     const kmHoje=mv.filter(v=>v.emV&&diaDe(v.emV)===h).reduce((a,v)=>a+(+v.rodou||0),0);
-    const hero=`<section class="cv-hero"><div class="cv-hh"><div><p class="cv-eb">Portaria · ${esc(DSEM[dt.getDay()])}, ${esc(brD(h))}</p><h1>Carros</h1></div>
+    const hero=`<section class="cv-hero${SO?' so':''}"><div class="cv-hh">${SO?'':`<div><p class="cv-eb">Portaria · ${esc(DSEM[dt.getDay()])}, ${esc(brD(h))}</p><h1>Carros</h1></div>`}
         <div class="cv-cnt"><div><b>${fora.length}</b><span>fora</span></div><div><b>${dentro.length}</b><span>na empresa</span></div><div><b>${ev.length}</b><span>movimentos hoje</span></div></div></div>
       ${C.cam.on?`<div class="cv-cam"><div class="cv-vw"><video id="cv-video" playsinline muted autoplay></video><span class="cv-mira" aria-hidden="true"><i></i></span></div><p>Aponte para o QR code colado no carro</p><button type="button" class="cv-bt2" data-act="cv-camx">Cancelar</button></div>`
         :`<button type="button" class="cv-scan" data-act="cv-cam"><span class="cv-qric" aria-hidden="true">${SVG.qr}</span><span class="cv-sct"><b>Escanear QR do carro</b><small>Abre a saída ou a volta na hora</small></span></button>${C.cam.erro?`<p class="cv-err cv-errh">${esc(C.cam.erro)}</p>`:''}`}</section>`;
     const aviso=C.msg?`<div class="cv-msg ${C.msg.t}" role="status">${esc(C.msg.x)}</div>`:'';
     const tFora=c=>{ const a=abertaDe(c.id), ms=ag-new Date(a.emS).getTime(), lg=ms>8*3600e3;
-      return `<button type="button" class="cv-tile fora${lg?' longo':''}" data-act="cv-abre" data-v="${esc(c.id)}"><span class="cv-tt">${placa(c)}<span class="cv-chip${lg?' warn':''}">${SVG.rel}há ${esc(dur(ms))}</span></span>
+      return `<button type="button" class="cv-tile fora${lg?' longo':''}" data-act="cv-abre" data-v="${esc(c.id)}"><span class="cv-tt">${placa(c)}${c.frota?`<span class="cv-fro">Frota ${esc(c.frota)}</span>`:''}<span class="cv-chip${lg?' warn':''}">${SVG.rel}há ${esc(dur(ms))}</span></span>
         <span class="cv-who"><span class="cv-av" aria-hidden="true">${esc(ini(a.motNome))}</span><span><b>${esc(a.motNome)}</b><small>saiu ${esc(quando(a.emS))} · ${fK(a.kmS)} km</small></span></span>
+        ${aceitePend(a)?'<span class="cv-acp">Aguardando aceite do motorista</span>':a.aceite?`<span class="cv-acok">${SVG.ok}Aceite às ${esc(hm(a.aceite.em))}${a.aceite.avaria?' · avaria anotada':''}</span>`:''}
         <span class="cv-go vol">${SVG.vol}Registrar volta</span></button>`; };
-    const tDentro=c=>`<button type="button" class="cv-tile" data-act="cv-abre" data-v="${esc(c.id)}"><span class="cv-tt">${placa(c)}</span><span class="cv-mod"><b>${esc(c.modelo||'Carro')}</b><small>${fK(ultKm(c))} km</small></span><span class="cv-go sai">${SVG.sai}Saída</span></button>`;
+    const tDentro=c=>`<button type="button" class="cv-tile" data-act="cv-abre" data-v="${esc(c.id)}"><span class="cv-tt">${placa(c)}</span><span class="cv-mod">${c.frota?`<span class="cv-fro">Frota ${esc(c.frota)}</span>`:''}<b>${esc(c.modelo||'Carro')}</b><small>${fK(ultKm(c))} km</small></span><span class="cv-go sai">${SVG.sai}Saída</span></button>`;
     const linha=e=>{ const v=e.v; return `<li class="${e.k}"><span class="cv-tlh">${esc(hm(e.t))}</span><span class="cv-tli" aria-hidden="true">${e.k==='sai'?SVG.sai:SVG.vol}</span><span class="cv-tlt"><b>${e.k==='sai'?'Saída':'Volta'} · ${esc(plT(v.placa))}</b><small>${esc(v.motNome)} · ${e.k==='sai'?fK(v.kmS)+' km':fK(v.kmV)+' km · rodou '+fK(v.rodou)+' km'}</small></span></li>`; };
     return hero+aviso+`<div class="cv-sec"><h2>Fora agora <span>${fora.length}</span></h2>${fora.length?`<div class="cv-grid">${fora.map(tFora).join('')}</div>`:'<p class="cv-nada cv-nadab">Todos os carros estão na empresa.</p>'}</div>
       <div class="cv-sec"><h2>Na empresa <span>${dentro.length}</span></h2>${dentro.length?`<div class="cv-grid cv-gridp">${dentro.map(tDentro).join('')}</div>`:'<p class="cv-nada cv-nadab">Todos os carros estão fora.</p>'}</div>
       ${ev.length?`<section class="card cv-tl"><div class="cv-h2b"><h2>Movimentos de hoje</h2>${kmHoje?`<span class="cv-sub">${fK(kmHoje)} km rodados nas voltas de hoje</span>`:''}</div><ol>${ev.slice(0,12).map(linha).join('')}</ol></section>`:''}`; }
   function vFeito(M){ const d=M.d, sai=d.tipo==='saida';
-    return `<section class="cv-feito ${sai?'sai':'vol'}" role="status"><span class="cv-fok" aria-hidden="true">${SVG.ok}</span><h1>${sai?'Saída registrada':'Volta registrada'}</h1>${placa(d.placa,'g')}<p class="cv-fmod">${esc(d.mod)}</p>
+    return `<section class="cv-feito ${sai?'sai':'vol'}" role="status"><span class="cv-fok" aria-hidden="true">${SVG.ok}</span><h1>${sai?'Saída registrada':'Volta registrada'}</h1>${placa(d.placa,'g')}<p class="cv-fmod">${esc([d.frota?'Frota '+d.frota:'',d.mod].filter(Boolean).join(' · '))}</p>
       <dl class="cv-fdl"><div><dt>Motorista</dt><dd>${esc(d.mot)}</dd></div><div><dt>${sai?'Km na saída':'Km na volta'}</dt><dd>${fK(d.km)}</dd></div>${sai?`<div><dt>Hora</dt><dd>${esc(d.hora)}</dd></div>`:`<div><dt>Rodou</dt><dd>${fK(d.rodou)} km</dd></div><div><dt>Ficou fora</dt><dd>${esc(d.fora)}</dd></div>`}</dl>
-      ${d.alerta?`<p class="cv-falt">${esc(d.alerta)}</p>`:''}<button type="button" class="cv-bt1" data-act="cv-feito">Voltar para a portaria</button><p class="cv-fauto">Volta sozinho em alguns segundos</p></section>`; }
+      ${d.alerta?`<p class="cv-falt">${esc(d.alerta)}</p>`:''}${sai&&d.aceite?`<p class="cv-fac">${SVG.rel}O ${esc(d.aceite)} recebeu o aviso para confirmar a saída no celular dele. Até lá, o carro fica "aguardando aceite".</p>`:''}${!sai&&d.devol?`<p class="cv-fac">${SVG.rel}O ${esc(d.devol)} recebeu o aviso para confirmar a devolução (km, abastecimento, avaria e limpeza).</p>`:''}<button type="button" class="cv-bt1" data-act="cv-feito">Voltar para a portaria</button><p class="cv-fauto">Volta sozinho em alguns segundos</p></section>`; }
   function vFluxo(){ const c=carDe(C.sel), a=abertaDe(c.id), uk=ultKm(c), F=C.f, er=F.err||{}, kmv=kmNum(F.km);
     const errDe=id=>er.id===id?`<p class="cv-err" id="${id}-e">${esc(er.t)}</p>`:'';
-    const topo=`<div class="cv-flh ${a?'vol':'sai'}"><button type="button" class="cv-x" data-act="cv-volta-x" aria-label="Cancelar e voltar">‹ Portaria</button><p class="cv-eb">${a?'Registrar volta':'Registrar saída'}</p>${placa(c,'g')}<p class="cv-fmod">${esc(c.modelo||'Carro')}</p></div>`;
+    const topo=`<div class="cv-flh ${a?'vol':'sai'}"><button type="button" class="cv-x" data-act="cv-volta-x" aria-label="Cancelar e voltar">‹ Portaria</button><p class="cv-eb">${a?'Registrar volta':'Registrar saída'}</p>${placa(c,'g')}${c.frota?`<p class="cv-frog">Frota ${esc(c.frota)}</p>`:''}<p class="cv-fmod">${esc(c.modelo||'Carro')}</p></div>`;
     const kmBox=(lab,ph,hint)=>`<label class="cv-lb" for="cv-km">${lab}</label><div class="cv-kmw${er.id==='cv-km'?' bad':''}"><input id="cv-km" class="cv-kmi" inputmode="numeric" autocomplete="off" placeholder="${esc(ph)}" value="${esc(F.km)}" data-cvf="km"${er.id==='cv-km'?' aria-invalid="true" aria-describedby="cv-km-e"':''}><span>km</span></div>${hint?`<p class="cv-hint">${hint}</p>`:''}${errDe('cv-km')}`;
     const obs=ph=>`<label class="cv-lb" for="cv-obs">Observação <small>opcional</small></label><input id="cv-obs" class="cv-in" autocomplete="off" placeholder="${esc(ph)}" value="${esc(F.obs)}" data-cvf="obs" maxlength="300">`;
     if(a){ const rod=Number.isFinite(kmv)&&kmv>=a.kmS?kmv-a.kmS:null;
       return `<section class="card cv-fl">${topo}<div class="cv-flb"><div class="cv-who big"><span class="cv-av" aria-hidden="true">${esc(ini(a.motNome))}</span><span><b>${esc(a.motNome)}</b><small>saiu ${esc(quando(a.emS))} · ${fK(a.kmS)} km · há ${esc(dur(Date.now()-new Date(a.emS).getTime()))}</small></span></div>
         ${a.obsS?`<p class="cv-obs0">Na saída: ${esc(a.obsS)}</p>`:''}
+        ${a.aceite?`<p class="cv-obs0${a.aceite.avaria||a.aceite.limpo===false?' warn':''}">Na saída o motorista confirmou: ${a.aceite.limpo===false?'carro sujo':'carro limpo'}${a.aceite.avaria?' · avaria antes da saída: '+esc(a.aceite.avariaTxt||''):' · sem avaria'}</p>`:''}${aceitePend(a)?'<p class="cv-obs0 warn">O motorista ainda não deu o aceite da saída.</p>':''}
         ${kmBox('Km no painel agora',fK(a.kmS),'Na saída estava com <b>'+fK(a.kmS)+' km</b>')}
         <div class="cv-rod" id="cv-rod">${rod!=null?'<span>Rodou</span><b>'+fK(rod)+' km</b>':''}</div>
         ${obs('Ex.: chegou com o pneu baixo')}
@@ -195,9 +214,10 @@
       ${q.car||q.mot||q.st||q.per!=='7'?'<button type="button" class="lnk" data-act="cv-q-limpa">Limpar filtros</button>':''}<button type="button" class="btn sec" data-act="cv-csv">Planilha</button></div>`;
     const kpi=`<div class="cv-kpi"><div><b>${xs.length}</b><span>viagens</span></div><div><b>${fK(km)}</b><span>km rodados</span></div><div><b class="${fora.length?'info':''}">${fora.length}</b><span>carros fora agora</span></div><div><b class="${dif.length?'warn':''}">${dif.length}</b><span>com km diferente</span></div></div>`;
     const bar=(o,nm)=>Object.values(o).sort((a,b)=>b.km-a.km).map(x=>`<div class="cv-hb"><span>${nm(x)}</span><span class="cv-bar"><i style="width:${(x.km/mx(o)*100).toFixed(0)}%"></i></span><b>${fK(x.km)} km</b><small>${x.n} viage${x.n>1?'ns':'m'}</small></div>`).join('');
-    const lista=xs.length?`<div class="cv-tw"><table class="cv-tb"><thead><tr><th>Carro</th><th>Motorista</th><th>Saída</th><th class="dir">Km saída</th><th>Volta</th><th class="dir">Km volta</th><th class="dir">Rodou</th><th>Observação</th>${adm()?'<th></th>':''}</tr></thead><tbody>
+    const lista=xs.length?`<div class="cv-tw"><table class="cv-tb"><thead><tr><th>Carro</th><th>Motorista</th><th>Saída</th><th class="dir">Km saída</th><th>Volta</th><th class="dir">Km volta</th><th class="dir">Rodou</th><th>Aceite (saída)</th><th>Devolução</th><th>Observação</th>${adm()?'<th></th>':''}</tr></thead><tbody>
       ${xs.map(v=>`<tr class="${v.aberta?'fora':''}"><td>${placa(v.placa,'p')}</td><td>${esc(v.motNome||'')}</td><td>${esc(quando(v.emS))}<small>${esc(v.porSN||'')}</small></td><td class="dir">${fK(v.kmS)}${v.kmDif?`<small class="warn" title="Último km registrado: ${esc(fK(v.kmEsp))}">+${fK((+v.kmS||0)-(+v.kmEsp||0))} sem registro</small>`:''}</td>
-        <td>${v.aberta?'<span class="cv-tag info">Ainda fora</span>':esc(quando(v.emV))+'<small>'+esc(v.porVN||'')+'</small>'}</td><td class="dir">${v.aberta?'—':fK(v.kmV)}</td><td class="dir"><b>${v.aberta?'—':fK(v.rodou)}</b></td>
+        <td>${v.aberta?'<span class="cv-tag info">Ainda fora</span>':esc(quando(v.emV))+'<small>'+esc(v.porVN||'')+'</small>'}</td><td class="dir">${v.aberta?'—':fK(v.kmV)}</td><td class="dir"><b>${v.aberta?'—':fK(v.rodou)}</b></td><td>${v.aceite?`<span class="cv-tag ${v.aceite.avaria||v.aceite.limpo===false||v.aceite.estado==='avaria'?'warn':'ok'}">${esc(hm(v.aceite.em))}</span><small>${v.aceite.limpo===false?'sujo':v.aceite.limpo?'limpo':''}${v.aceite.avaria||v.aceite.estado==='avaria'?' · avaria: '+esc(v.aceite.avariaTxt||v.aceite.avaria||''):v.aceite.limpo!=null?' · sem avaria':''}</small>${fotosLinks(v.aceite.fotos)}`:aceitePend(v)?'<span class="cv-tag warn">Pendente</span>':'<small>sem login</small>'}</td>
+        <td>${v.devol?`<span class="cv-tag ${v.devol.avaria||!v.devol.kmOk||!v.devol.limpo?'warn':'ok'}">${esc(hm(v.devol.em))}</span><small>${v.devol.kmOk?'km confere':'km do motorista: '+fK(v.devol.kmMot)}${v.devol.abast?' · abasteceu'+(v.devol.litros?' '+esc(String(v.devol.litros).replace('.',','))+' L':'')+(v.devol.valor?' R$ '+esc((+v.devol.valor).toLocaleString('pt-BR',{minimumFractionDigits:2})):''):' · sem abastecimento'} · ${v.devol.limpo?'limpo':'sujo'}${v.devol.avaria?' · avaria: '+esc(v.devol.avariaTxt||''):''}</small>${fotosLinks(v.devol.fotos)}`:devolPend(v)?'<span class="cv-tag warn">Pendente</span>':v.comb?'<small>combustível: '+esc(combTxt(v.comb.nivel))+'</small>':'—'}</td>
         <td>${esc([v.obsS,v.obsV].filter(Boolean).join(' · '))}${v.corrigido?`<small>corrigido por ${esc(v.corrigido.por||'')}</small>`:''}</td>${adm()?`<td><button type="button" class="lnk" data-act="cv-ved" data-v="${esc(v._id)}">Corrigir</button></td>`:''}</tr>`).join('')}</tbody></table></div>`:'<p class="cv-nada">Nenhuma viagem com esses filtros.</p>';
     return `<header class="cv-top"><div><h1>Viagens dos carros</h1><p>Saídas e voltas registradas na portaria</p></div></header>${C.edV?vEdV():''}
       <section class="card">${filtros}${kpi}</section>
@@ -218,9 +238,9 @@
     if(kmV!=null){ up.kmV=kmV; up.rodou=kmV-kmS; if(v.aberta){ Object.assign(up,{aberta:false,emV:new Date().toISOString(),porV:S.uid||null,porVN:eu(),obsV:'Encerrada pelo administrador'}); } }
     try{ await P.db().doc('carrosv/'+v._id).update(up); if(kmV!=null||v.aberta){ const k=C.km[v.carro]; const nk=kmV!=null?kmV:kmS; if(!k||k.viagem===v._id) await P.db().doc('carrosk/'+v.carro).set({km:nk,em:new Date().toISOString(),viagem:v._id,placa:v.placa}); }
       C.edV=null; C.f.ed=null; P.toast('Viagem corrigida.'); }catch(e){ P.erro(e); } P.render(); }
-  function csv(){ const xs=filtradas(); const L=[['Placa','Modelo','Motorista','Saída','Km saída','Último km antes','Km sem registro','Volta','Km volta','Rodou','Porteiro saída','Porteiro volta','Observação']];
+  function csv(){ const xs=filtradas(); const L=[['Placa','Modelo','Motorista','Saída','Km saída','Último km antes','Km sem registro','Volta','Km volta','Rodou','Aceite do motorista','Limpo na saída','Avaria antes da saída','Devolução confirmada','Km do motorista na volta','Abasteceu','Litros','Valor abastecido','Avaria no trajeto','Limpo na volta','Porteiro saída','Porteiro volta','Observação']];
     const dt=iso=>iso?new Date(iso).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):'';
-    xs.forEach(v=>L.push([plT(v.placa),v.modelo||'',v.motNome||'',dt(v.emS),v.kmS,v.kmEsp==null?'':v.kmEsp,v.kmDif?(+v.kmS)-(+v.kmEsp):'',v.aberta?'ainda fora':dt(v.emV),v.aberta?'':v.kmV,v.aberta?'':v.rodou,v.porSN||'',v.porVN||'',[v.obsS,v.obsV].filter(Boolean).join(' · ')]));
+    xs.forEach(v=>L.push([plT(v.placa),v.modelo||'',v.motNome||'',dt(v.emS),v.kmS,v.kmEsp==null?'':v.kmEsp,v.kmDif?(+v.kmS)-(+v.kmEsp):'',v.aberta?'ainda fora':dt(v.emV),v.aberta?'':v.kmV,v.aberta?'':v.rodou,v.aceite?dt(v.aceite.em):aceitePend(v)?'pendente':'sem login',v.aceite?(v.aceite.limpo===false?'não':v.aceite.limpo?'sim':''):'',v.aceite?(v.aceite.avaria?(v.aceite.avariaTxt||'sim'):'não'):'',v.devol?dt(v.devol.em):devolPend(v)?'pendente':'',v.devol?(v.devol.kmOk?'confere':v.devol.kmMot):'',v.devol?(v.devol.abast?'sim':'não'):'',v.devol&&v.devol.litros!=null?String(v.devol.litros).replace('.',','):'',v.devol&&v.devol.valor!=null?String(v.devol.valor).replace('.',','):'',v.devol?(v.devol.avaria?(v.devol.avariaTxt||'sim'):'não'):'',v.devol?(v.devol.limpo?'sim':'não'):'',v.porSN||'',v.porVN||'',[v.obsS,v.obsV].filter(Boolean).join(' · ')]));
     const txt='﻿'+L.map(r=>r.map(c=>{ const s=String(c==null?'':c); return /[;"\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }).join(';')).join('\r\n');
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'})); a.download='viagens-carros-'+hoje()+'.csv'; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500); }
 
@@ -232,31 +252,39 @@
       corpo=`${ok?`<section class="card cv-ed"><h2>${E.id?'Editar carro':'Cadastrar carro'}</h2><div class="cv-g3">
           <label>Placa<input id="cv-c-pl" class="cv-in" autocomplete="off" maxlength="8" placeholder="ABC1D23" value="${esc(E.placa||'')}" style="text-transform:uppercase"></label>
           <label>Modelo<input id="cv-c-mo" class="cv-in" autocomplete="off" placeholder="Fiat Strada branca" value="${esc(E.modelo||'')}"></label>
-          <label>Km atual<input id="cv-c-km" class="cv-in" inputmode="numeric" autocomplete="off" placeholder="45230" value="${esc(E.km!=null?E.km:'')}"></label></div>
+          <label>Km atual<input id="cv-c-km" class="cv-in" inputmode="numeric" autocomplete="off" placeholder="45230" value="${esc(E.km!=null?E.km:'')}"></label>
+          <label>Nº de frota<input id="cv-c-fr" class="cv-in" autocomplete="off" maxlength="12" placeholder="12" value="${esc(E.frota||'')}"></label></div>
           ${E.err?`<p class="cv-err">${esc(E.err)}</p>`:''}
           <div class="cv-bts">${E.id?'<button type="button" class="btn sec" data-act="cv-c-x">Cancelar</button>':''}<button type="button" class="btn" data-act="cv-c-salva"${C.salv?' disabled':''}>${E.id?'Salvar':'Cadastrar carro'}</button></div></section>`:''}
         <section class="card"><div class="cv-h2b"><h2>Carros <span>${carros().length}</span></h2>${carros().length?`<button type="button" class="btn sec" data-act="cv-qr">Imprimir QR codes (PDF)</button>`:''}</div>
-        ${carros().length?carros().slice().sort((a,b)=>(a.ativo===false)-(b.ativo===false)||a.placa.localeCompare(b.placa)).map(c=>{ const a=abertaDe(c.id); return `<div class="cv-cr${c.ativo===false?' ina':''}">${placa(c)}<div class="cv-cari"><b>${esc(c.modelo||'')}</b><small>${fK(ultKm(c))} km · ${c.ativo===false?'desativado':a?'fora com '+esc(a.motNome):'na empresa'}</small></div>
+        ${carros().length?carros().slice().sort((a,b)=>(a.ativo===false)-(b.ativo===false)||a.placa.localeCompare(b.placa)).map(c=>{ const a=abertaDe(c.id); return `<div class="cv-cr${c.ativo===false?' ina':''}">${placa(c)}<div class="cv-cari"><b>${esc([c.frota?'Frota '+c.frota:'',c.modelo].filter(Boolean).join(' · '))}</b><small>${fK(ultKm(c))} km · ${c.ativo===false?'desativado':a?'fora com '+esc(a.motNome):'na empresa'}</small></div>
           ${ok?`<div class="cv-ac"><button type="button" class="lnk" data-act="cv-qr1" data-v="${esc(c.id)}">QR</button><button type="button" class="lnk" data-act="cv-c-ed" data-v="${esc(c.id)}">Editar</button><button type="button" class="lnk" data-act="cv-c-at" data-v="${esc(c.id)}">${c.ativo===false?'Reativar':'Desativar'}</button></div>`:''}</div>`; }).join(''):'<p class="cv-nada">Cadastre o primeiro carro acima.</p>'}</section>`; }
     else { const E=C.edM||{};
-      corpo=`${ok?`<section class="card cv-ed"><h2>${E.id?'Editar motorista':'Cadastrar motorista'}</h2><div class="cv-g2"><label>Nome<input id="cv-m-no" class="cv-in" autocomplete="off" placeholder="Nome e sobrenome" value="${esc(E.nome||'')}"></label></div>
+      corpo=`${ok?`<section class="card cv-ed"><h2>${E.id?'Editar motorista':'Cadastrar motorista'}</h2><div class="cv-g2"><label>Nome<input id="cv-m-no" class="cv-in" autocomplete="off" placeholder="Nome e sobrenome" value="${esc(E.nome||'')}"></label>
+          <div class="cv-lgn"><span class="cv-lgt">Login no painel <small>para o motorista dar o aceite e ver o histórico</small></span>
+          ${E.uid?`<div class="cv-lgs"><span class="cv-av" aria-hidden="true">${esc(ini(E.uidNome))}</span><b>${esc(E.uidNome||'')}</b><button type="button" class="lnk" data-act="cv-m-lx">Trocar</button></div>`
+            :`<input id="cv-m-lq" class="cv-in" autocomplete="off" placeholder="Digite o nome ou usuário do login" value="${esc(C.lq||'')}"><div class="cv-lgr" id="cv-m-lr">${lgRes()}</div>`}</div></div>
           ${E.err?`<p class="cv-err">${esc(E.err)}</p>`:''}<div class="cv-bts">${E.id?'<button type="button" class="btn sec" data-act="cv-m-x">Cancelar</button>':''}<button type="button" class="btn" data-act="cv-m-salva"${C.salv?' disabled':''}>${E.id?'Salvar':'Cadastrar motorista'}</button></div></section>`:''}
         <section class="card"><h2>Motoristas <span>${liberados().length} liberados · ${mots().length-liberados().length} bloqueados</span></h2>
-        ${mots().length?mots().map(m=>`<div class="cv-cr${m.ok===false?' ina':''}"><div class="cv-cari"><b>${esc(m.nome)}</b><small>${m.ok===false?'Bloqueado'+(m.bloqEm?' em '+esc(brD(diaDe(m.bloqEm))):''):'Liberado'}</small></div><span class="cv-tag ${m.ok===false?'crit':'ok'}">${m.ok===false?'Bloqueado':'Liberado'}</span>
+        ${mots().length?mots().map(m=>`<div class="cv-cr${m.ok===false?' ina':''}"><div class="cv-cari"><b>${esc(m.nome)}</b><small>${m.ok===false?'Bloqueado'+(m.bloqEm?' em '+esc(brD(diaDe(m.bloqEm))):''):'Liberado'} · ${m.uid?'login: '+esc(m.uidNome||''):'sem login (não dá aceite)'}${m.topico?` · avisos no app ntfy: <button type="button" class="lnk" data-act="cv-m-tp" data-v="${esc(m.topico)}" title="Copiar o tópico">${esc(m.topico)}</button>`:''}</small></div><span class="cv-tag ${m.ok===false?'crit':'ok'}">${m.ok===false?'Bloqueado':'Liberado'}</span>
           ${ok?`<div class="cv-ac"><button type="button" class="lnk" data-act="cv-m-ed" data-v="${esc(m.id)}">Editar</button><button type="button" class="lnk${m.ok===false?'':' cv-del'}" data-act="cv-m-bl" data-v="${esc(m.id)}">${m.ok===false?'Liberar':'Bloquear'}</button></div>`:''}</div>`).join(''):'<p class="cv-nada">Cadastre os motoristas que podem sair com os carros.</p>'}</section>`; }
     return `<header class="cv-top"><div><h1>Carros e motoristas</h1><p>Quem cadastra e libera é o administrador; a portaria só escolhe da lista</p></div></header>${abas}${corpo}`; }
-  async function salvaCarro(){ const pl=plN((document.getElementById('cv-c-pl')||{}).value), mo=String((document.getElementById('cv-c-mo')||{}).value||'').trim(), kmT=(document.getElementById('cv-c-km')||{}).value, km=String(kmT||'').trim()?kmNum(kmT):0;
-    const E=C.edC||{}; const err=t=>{ C.edC=Object.assign({},E,{placa:pl,modelo:mo,km:kmT,err:t}); P.render(); };
+  async function salvaCarro(){ const fr=String((document.getElementById('cv-c-fr')||{}).value||'').trim().slice(0,12), pl=plN((document.getElementById('cv-c-pl')||{}).value), mo=String((document.getElementById('cv-c-mo')||{}).value||'').trim(), kmT=(document.getElementById('cv-c-km')||{}).value, km=String(kmT||'').trim()?kmNum(kmT):0;
+    const E=C.edC||{}; const err=t=>{ C.edC=Object.assign({},E,{placa:pl,modelo:mo,km:kmT,frota:fr,err:t}); P.render(); };
     if(!PL_RE.test(pl)) return err('Placa inválida. Use o formato ABC1234 ou ABC1D23.'); if(!Number.isFinite(km)||km<0) return err('Km inválido.');
-    if(carros().some(c=>plN(c.placa)===pl&&c.id!==E.id)) return err('Já existe um carro com esta placa.');
+    if(carros().some(c=>plN(c.placa)===pl&&c.id!==E.id)) return err('Já existe um carro com esta placa.'); if(fr&&carros().some(c=>String(c.frota||'').toLowerCase()===fr.toLowerCase()&&c.id!==E.id)) return err('Já existe um carro com este número de frota.');
     const novo={carros:(C.cad.carros||[]).map(c=>Object.assign({},c)),mot:C.cad.mot||[]};
-    if(E.id){ const c=novo.carros.find(x=>x.id===E.id); if(c) Object.assign(c,{placa:pl,modelo:mo,km}); } else novo.carros.push({id:novoId('c'),placa:pl,modelo:mo,km,ativo:true,em:new Date().toISOString()});
+    if(E.id){ const c=novo.carros.find(x=>x.id===E.id); if(c) Object.assign(c,{placa:pl,modelo:mo,km,frota:fr}); } else novo.carros.push({id:novoId('c'),placa:pl,modelo:mo,km,frota:fr,ativo:true,em:new Date().toISOString()});
     if(await gravaCad(novo,E.id?'Carro salvo.':'Carro '+plT(pl)+' cadastrado. Imprima o QR code para colar no carro.')) C.edC=null; P.render(); }
   async function salvaMot(){ const no=String((document.getElementById('cv-m-no')||{}).value||'').trim().replace(/\s+/g,' '), E=C.edM||{}; const err=t=>{ C.edM=Object.assign({},E,{nome:no,err:t}); P.render(); };
     if(no.length<3) return err('Digite o nome do motorista.'); if(mots().some(m=>m.nome.toLowerCase()===no.toLowerCase()&&m.id!==E.id)) return err('Este motorista já está cadastrado.');
     const novo={carros:C.cad.carros||[],mot:(C.cad.mot||[]).map(m=>Object.assign({},m))};
-    if(E.id){ const m=novo.mot.find(x=>x.id===E.id); if(m) m.nome=no; } else novo.mot.push({id:novoId('m'),nome:no,ok:true,em:new Date().toISOString()});
-    if(await gravaCad(novo,E.id?'Motorista salvo.':no+' cadastrado e liberado.')) C.edM=null; P.render(); }
+    if(E.uid&&mots().some(m=>m.uid===E.uid&&m.id!==E.id)) return err('Este login já está ligado a outro motorista.');
+    const tp=()=>'colafix-carro-'+Math.random().toString(36).slice(2,8)+Math.random().toString(36).slice(2,8);
+    if(E.id){ const m=novo.mot.find(x=>x.id===E.id); if(m) Object.assign(m,{nome:no,uid:E.uid||null,uidNome:E.uid?E.uidNome||'':null,topico:m.topico||tp()}); } else novo.mot.push({id:novoId('m'),nome:no,ok:true,uid:E.uid||null,uidNome:E.uid?E.uidNome||'':null,topico:tp(),em:new Date().toISOString()});
+    if(await gravaCad(novo,E.id?'Motorista salvo.':no+' cadastrado e liberado.')){ C.edM=null; C.lq=''; C.lres=[]; } P.render(); }
+  function lgRes(){ const r=C.lres||[]; if(!C.lq||C.lq.length<2) return ''; if(!r.length) return '<p class="cv-nada">Nenhum login com esse nome. Crie o login em Equipe e cargos com o cargo "Motorista (carros)".</p>'; return r.map(u=>`<button type="button" class="cv-lgi" data-act="cv-m-lsel" data-v="${esc(u.id)}" data-n="${esc(u.name||u.email)}"><span class="cv-av" aria-hidden="true">${esc(ini(u.name||u.email))}</span><span><b>${esc(u.name||'')}</b><small>${esc(u.email||'')}</small></span></button>`).join(''); }
+  let _lgT=null; function lgBusca(q){ C.lq=q; clearTimeout(_lgT); if(q.trim().length<2){ C.lres=[]; const el=document.getElementById('cv-m-lr'); if(el) el.innerHTML=''; return; } _lgT=setTimeout(async()=>{ try{ C.lres=S.user&&S.user.search?(await S.user.search(q)).filter(u=>!u.isMe):[]; }catch(e){ C.lres=[]; } const el=document.getElementById('cv-m-lr'); if(el) el.innerHTML=lgRes(); },250); }
 
   /* ---------- QR codes em PDF (placa + QR, para colar no carro) ---------- */
   const urlDe=c=>location.origin+location.pathname+'?carro='+c.id;
@@ -279,36 +307,137 @@
       const q=window.qrcode(0,'M'); q.addData(urlDe(c)); q.make(); const n=q.getModuleCount(), qs=58, m=qs/n, qx=x+(W-qs)/2, qy=y+FH+7; pdf.setFillColor(0,0,0);
       for(let r=0;r<n;r++) for(let cc=0;cc<n;cc++) if(q.isDark(r,cc)) pdf.rect(qx+cc*m,qy+r*m,m+0.01,m+0.01,'F');
       pdf.setTextColor(25,35,42); pdf.setFont('helvetica','bold'); pdf.setFontSize(12); pdf.text((c.modelo||'Carro').slice(0,30),x+W/2,qy+qs+8.5,{align:'center'});
-      pdf.setFont('helvetica','normal'); pdf.setFontSize(9); pdf.setTextColor(95,105,112); pdf.text(plT(c.placa),x+W/2,qy+qs+13.5,{align:'center'});
+      pdf.setFont('helvetica','normal'); pdf.setFontSize(9); pdf.setTextColor(95,105,112); pdf.text([c.frota?'Frota '+c.frota:'',plT(c.placa)].filter(Boolean).join('  ·  '),x+W/2,qy+qs+13.5,{align:'center'});
       pdf.setDrawColor(225); pdf.setLineWidth(0.3); pdf.line(x+8,y+H-10.5,x+W-8,y+H-10.5);
       pdf.setFontSize(8); pdf.setTextColor(95,105,112); pdf.text('Aponte a câmera na portaria: saída e volta',x+W/2,y+H-5.5,{align:'center'}); });
     pdf.save('qr-carros-'+hoje()+'.pdf'); }
 
+  /* ---------- login do motorista (26/11; 2ª versão com o roteiro da empresa) ----------
+     Saída: a portaria lê o QR (placa e nº de frota), põe motorista e km → aviso no celular do vendedor → ele confirma que pegou
+     o carro, se estava limpo e se tinha avaria antes da saída (com foto, se tiver) e o termo.
+     Volta: a portaria lê o QR e põe o km → aviso → o motorista confirma o km de retorno e responde: teve abastecimento? teve
+     avaria no trajeto (com foto)? o carro está limpo?
+     Lê só as próprias viagens (carrosv where motUid == uid); grava só `aceite`/`devol` e as fotos em carrosf. */
+  C.meus=[]; C.ma={}; C.md={}; C.fotos={};
+  let lendoMot=false, _vistos=null;
+  function carregarMot(){ if(lendoMot) return; lendoMot=true;
+    P.inscrever('cv-meus',()=>P.db().collection('carrosv').where('motUid','==',S.uid).limit(300),s=>{ C.meus=s.docs.map(d=>Object.assign({_id:d.id},d.data())).filter(v=>!v.removido).sort((a,b)=>String(b.emS).localeCompare(String(a.emS))); C.lido.meus=true; notificaMot(); P.rerender(); }); }
+  const devolPend=v=>!!(v&&v.precisaAceite&&!v.aberta&&v.emV&&!v.devol&&!v.removido);
+  /* aviso no próprio aparelho quando chega pendência nova (o painel aberto ou em segundo plano) */
+  function notificaMot(){ const ids=C.meus.filter(v=>aceitePend(v)||devolPend(v)).map(v=>v._id+(v.emV?'v':'s')); if(_vistos===null){ _vistos=new Set(ids); return; }
+    const novos=C.meus.filter(v=>(aceitePend(v)||devolPend(v))&&!_vistos.has(v._id+(v.emV?'v':'s'))); ids.forEach(i=>_vistos.add(i)); if(!novos.length) return;
+    const v=novos[0], tit=devolPend(v)?'Confirme a devolução do '+plT(v.placa):'Confirme a saída com o '+plT(v.placa), txt=devolPend(v)?'A portaria registrou a volta com '+fK(v.kmV)+' km.':'A portaria registrou a sua saída com '+fK(v.kmS)+' km.';
+    try{ if('Notification' in window&&Notification.permission==='granted'&&navigator.serviceWorker){ navigator.serviceWorker.getRegistration().then(r=>{ if(r) r.showNotification(tit,{body:txt,icon:'icons/icon-192.png',badge:'icons/icon-192.png',tag:'cv-'+v._id,renotify:true}); else new Notification(tit,{body:txt}); }); } }catch(e){} try{ if(navigator.vibrate) navigator.vibrate([200,100,200]); }catch(e){} }
+  /* aviso pelo ntfy (app ntfy no celular da empresa, tópico do motorista): chega mesmo com o painel fechado */
+  async function avisaMot(m,tit,txt){ if(!m||!m.topico) return; try{ const ct=new AbortController(), t=setTimeout(()=>ct.abort(),8000);
+    await fetch('https://ntfy.sh/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic:m.topico,title:tit,message:txt,priority:4,tags:['red_car'],click:((window.claude&&window.claude.link)||location.origin+location.pathname)}),signal:ct.signal}); clearTimeout(t); }catch(e){ console.warn('[carros] aviso ntfy',e&&e.message); } }
+  const frotaTxt=c=>c&&c.frota?'Frota '+c.frota:'';
+  /* foto: reduz e guarda em carrosf/<id> (como as fotos dos chamados) */
+  function reduzFoto(file){ return new Promise((ok,no)=>{ const fr=new FileReader(); fr.onload=()=>{ const img=new Image(); img.onload=()=>{ const k=Math.min(1,1280/Math.max(img.width,img.height)), w=Math.round(img.width*k), h=Math.round(img.height*k);
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h; cv.getContext('2d').drawImage(img,0,0,w,h); let q=.7, d=cv.toDataURL('image/jpeg',q); while(d.length>650000&&q>.3){ q-=.12; d=cv.toDataURL('image/jpeg',q); } ok(d); }; img.onerror=()=>no(new Error('Não deu para abrir a foto.')); img.src=fr.result; }; fr.onerror=()=>no(fr.error); fr.readAsDataURL(file); }); }
+  async function guardaFotos(vid,tipo,ds){ const ids=[]; for(const d of ds){ const id=novoId('f'); await P.db().doc('carrosf/'+id).set({d,viagem:vid,tipo,em:new Date().toISOString(),por:S.uid||null}); C.fotos[id]=d; ids.push(id); } return ids; }
+  async function fotoDe(id){ if(id in C.fotos) return C.fotos[id]; C.fotos[id]=null; try{ const g=await P.db().doc('carrosf/'+id).get(); C.fotos[id]=g.exists?g.data().d:''; }catch(e){ C.fotos[id]=''; } P.rerender(); return C.fotos[id]; }
+  function verFoto(id){ const d=C.fotos[id]; if(!d){ fotoDe(id).then(x=>{ if(x) verFoto(id); }); return; } const ov=document.createElement('div'); ov.className='cv-fov'; ov.innerHTML=`<img src="${d}" alt="Foto da avaria"><button type="button" aria-label="Fechar">✕</button>`; ov.addEventListener('click',()=>ov.remove()); document.body.appendChild(ov); }
+  const fotosLinks=ids=>(ids||[]).length?`<span class="cv-fl2">${ids.map((id,i)=>`<button type="button" class="lnk" data-act="cv-foto" data-v="${esc(id)}">foto ${i+1}</button>`).join(' ')}</span>`:'';
+  const simNao=(grp,val,sim,nao,inv)=>`<div class="cv-sn" role="radiogroup">${[[true,sim],[false,nao]].map(([b,t])=>`<button type="button" role="radio" aria-checked="${val===b}" class="cv-snb${val===b?' on '+((b!==!!inv)?'bom':'ruim'):''}" data-act="cv-sn" data-v="${grp}|${b?1:0}">${t}</button>`).join('')}</div>`;
+  function blocoFotos(st,id){ const fs=st.fotos||[]; return `<div class="cv-fts">${fs.map((d,i)=>`<span class="cv-ft"><img src="${d}" alt="Foto ${i+1}"><button type="button" data-act="cv-ftx" data-v="${id}|${i}" aria-label="Tirar a foto ${i+1}">✕</button></span>`).join('')}
+      ${fs.length<3?`<label class="cv-ftadd"><input type="file" accept="image/*" capture="environment" data-cvfoto="${id}" hidden><span>📷</span><b>${fs.length?'Mais uma foto':'Tirar foto'}</b></label>`:''}</div>`; }
+  function vMotorista(){ const so=soloDe('motorista','motorista'); try{ document.body.classList.toggle('cv-solo',so); }catch(e){}
+    const corpo=vMotCorpo(); return so?`<div class="cv-app">${appBar('Motorista')}<main class="cv-appc">${corpo}</main></div>`:corpo; }
+  function vMotCorpo(){ if(!C.lido.meus) return '<section class="card"><div class="empty">Carregando as suas viagens…</div></section>';
+    const xs=C.meus, h=hoje(), cp=h.slice(0,7), mes=xs.filter(v=>(v.diaS||'').slice(0,7)===cp), kmMes=mes.reduce((a,v)=>a+(+v.rodou||0),0);
+    const pend=xs.filter(aceitePend), dev=xs.filter(devolPend), comigo=xs.filter(v=>v.aberta&&v.aceite);
+    const nm=(eu()||'').split(' ')[0], np=('Notification' in window)?Notification.permission:'x';
+    const hero=`<section class="cv-hero so cv-mh"><div class="cv-hh"><div><p class="cv-eb">Olá${nm?', '+esc(nm):''}</p><h1>${pend.length?'Confirme a saída':dev.length?'Confirme a devolução':comigo.length?'Você está com o carro':'Suas viagens'}</h1></div></div>
+      <div class="cv-cnt"><div><b>${mes.length}</b><span>viagens no mês</span></div><div><b>${fK(kmMes)}</b><span>km no mês</span></div><div><b>${xs.length}</b><span>no total</span></div></div></section>
+      ${np==='default'?`<button type="button" class="cv-notif" data-act="cv-notif">${SVG.rel}<span><b>Ativar avisos neste celular</b><small>Para saber na hora quando a portaria registrar a saída ou a volta</small></span></button>`:''}`;
+    const cab=(v,t,cl)=>`<div class="cv-flh ${cl}"><p class="cv-eb">${t}</p>${placa(v.placa,'g')}<p class="cv-fmod">${esc([v.modelo,v.frota?'Frota '+v.frota:''].filter(Boolean).join(' · '))}</p></div>`;
+    const cAceite=v=>{ const M=C.ma[v._id]||(C.ma[v._id]={}); return `<section class="card cv-fl cv-ace" id="cv-ace-${esc(v._id)}">${cab(v,'A portaria registrou a sua saída','sai')}<div class="cv-flb">
+      <dl class="cv-fdl"><div><dt>Km na saída</dt><dd>${fK(v.kmS)}</dd></div><div><dt>Saída</dt><dd>${esc(quando(v.emS))}</dd></div><div><dt>Porteiro</dt><dd>${esc((v.porSN||'').split(' ').slice(0,2).join(' '))}</dd></div></dl>
+      <p class="cv-q">O carro estava limpo?</p>${simNao('limpo',M.limpo,'Sim, limpo','Não, estava sujo')}
+      <p class="cv-q">Tinha alguma avaria antes da saída?</p>${simNao('avaria',M.avaria,'Sim, tinha','Não tinha',true)}
+      ${M.avaria?`<label class="cv-lb" for="cv-ma-av">O que você notou?</label><textarea id="cv-ma-av" class="cv-in cv-ta" data-cvmv="${esc(v._id)}" maxlength="400" placeholder="Ex.: risco na porta direita, retrovisor quebrado">${esc(M.avariaTxt||'')}</textarea>
+        <p class="cv-lb">Foto da avaria <small>se puder</small></p>${blocoFotos(M,v._id)}`:''}
+      <label class="cv-termo"><input type="checkbox" data-act="cv-ma-t" data-v="${esc(v._id)}"${M.termo?' checked':''}><span>${esc(TERMO)}</span></label>
+      ${M.err?`<p class="cv-err" role="alert">${esc(M.err)}</p>`:''}
+      <button type="button" class="cv-bt1 sai cv-wide" data-act="cv-ma-ok" data-v="${esc(v._id)}"${C.salv?' disabled':''}>${C.salv?'Salvando…':'Confirmo que peguei o carro'}</button></div></section>`; };
+    const cDevol=v=>{ const D=C.md[v._id]||(C.md[v._id]={}); return `<section class="card cv-fl cv-ace" id="cv-dev-${esc(v._id)}">${cab(v,'A portaria registrou a volta','vol')}<div class="cv-flb">
+      <p class="cv-q">O km de retorno está certo?</p><div class="cv-kmc"><b>${fK(v.kmV)} km</b><small>registrado pela portaria ${esc(quando(v.emV))} · rodou ${fK(v.rodou)} km</small></div>
+      ${simNao('kmOk',D.kmOk,'Sim, confere','Não, está diferente')}
+      ${D.kmOk===false?`<label class="cv-lb" for="cv-md-km">Km que está no painel do carro</label><div class="cv-kmw"><input id="cv-md-km" class="cv-kmi" inputmode="numeric" autocomplete="off" data-cvmd="${esc(v._id)}|kmMot" value="${esc(D.kmMot||'')}" placeholder="${esc(fK(v.kmV))}"><span>km</span></div>`:''}
+      <p class="cv-q">Teve abastecimento?</p>${simNao('abast',D.abast,'Sim','Não')}
+      ${D.abast?`<div class="cv-g2b"><label class="cv-lb">Litros <small>opcional</small><input class="cv-in" inputmode="decimal" data-cvmd="${esc(v._id)}|litros" value="${esc(D.litros||'')}" placeholder="30"></label><label class="cv-lb">Valor (R$) <small>opcional</small><input class="cv-in" inputmode="decimal" data-cvmd="${esc(v._id)}|valor" value="${esc(D.valor||'')}" placeholder="180,00"></label></div>`:''}
+      <p class="cv-q">Teve alguma avaria no trajeto?</p>${simNao('avaria',D.avaria,'Sim, teve','Não teve',true)}
+      ${D.avaria?`<label class="cv-lb" for="cv-md-av">O que aconteceu?</label><textarea id="cv-md-av" class="cv-in cv-ta" data-cvmd="${esc(v._id)}|avariaTxt" maxlength="400" placeholder="Ex.: bati o para-choque no estacionamento">${esc(D.avariaTxt||'')}</textarea>
+        <p class="cv-lb">Foto da avaria <small>se puder</small></p>${blocoFotos(D,'d'+v._id)}`:''}
+      <p class="cv-q">O carro está limpo?</p>${simNao('limpo',D.limpo,'Sim, limpo','Não, está sujo')}
+      ${D.err?`<p class="cv-err" role="alert">${esc(D.err)}</p>`:''}
+      <button type="button" class="cv-bt1 vol cv-wide" data-act="cv-md-ok" data-v="${esc(v._id)}"${C.salv?' disabled':''}>${C.salv?'Salvando…':'Confirmar devolução'}</button></div></section>`; };
+    const cComigo=v=>`<section class="card cv-com"><div class="cv-tt">${placa(v.placa)}<span class="cv-chip">${SVG.rel}há ${esc(dur(Date.now()-new Date(v.emS).getTime()))}</span></div>
+      <p class="cv-p2">${esc([v.modelo,v.frota?'Frota '+v.frota:''].filter(Boolean).join(' · '))} · saiu ${esc(quando(v.emS))} com ${fK(v.kmS)} km · aceite às ${esc(hm(v.aceite.em))}</p>
+      <p class="cv-hint">Na volta, a portaria lê o QR e registra o km. Depois você confirma a devolução aqui.</p></section>`;
+    const st=v=>aceitePend(v)?'<span class="cv-tag warn">Falta o aceite</span>':devolPend(v)?'<span class="cv-tag warn">Falta a devolução</span>':v.aberta?'<span class="cv-tag info">Em uso</span>':'<span class="cv-tag ok">Concluída</span>';
+    const hist=xs.length?`<section class="card cv-tl cv-hist"><h2>Histórico</h2><ul>${xs.slice(0,60).map(v=>`<li>${placa(v.placa,'p')}<span><b>${esc(brD(v.diaS||diaDe(v.emS)))} · ${v.aberta?'em uso':fK(v.rodou)+' km'}</b><small>saída ${esc(hm(v.emS))} · ${fK(v.kmS)} km${v.emV?' — volta '+esc(hm(v.emV))+' · '+fK(v.kmV)+' km':''}${v.devol&&v.devol.abast?' · abasteceu':''}</small></span>${st(v)}</li>`).join('')}</ul></section>`
+      :'<section class="card cv-vz"><h2>Nenhuma viagem ainda</h2><p>Quando a portaria registrar uma saída com você, ela aparece aqui para você confirmar.</p></section>';
+    return hero+pend.map(cAceite).join('')+dev.map(cDevol).join('')+comigo.map(cComigo).join('')+hist; }
+  const vazioNum=t=>{ const x=String(t||'').trim().replace(/\./g,'').replace(',','.'); return x&&Number.isFinite(+x)?+x:null; };
+  async function aceitar(id){ const v=C.meus.find(x=>x._id===id); if(!v||C.salv) return; const M=C.ma[id]||(C.ma[id]={}); const err=t=>{ M.err=t; P.render(); };
+    if(M.limpo==null) return err('Responda se o carro estava limpo.'); if(M.avaria==null) return err('Responda se tinha alguma avaria antes da saída.');
+    if(M.avaria&&String(M.avariaTxt||'').trim().length<3) return err('Escreva qual era a avaria.'); if(!M.termo) return err('Marque a confirmação de que pegou o carro.');
+    C.salv=true; P.render();
+    try{ const fotos=M.avaria&&(M.fotos||[]).length?await guardaFotos(id,'saida',M.fotos):[];
+      const ac={em:new Date().toISOString(),pegou:true,limpo:!!M.limpo,avaria:!!M.avaria,avariaTxt:M.avaria?String(M.avariaTxt).trim().slice(0,400):'',fotos,termo:true,termoTxt:TERMO,por:S.uid||null};
+      await P.db().doc('carrosv/'+id).update({aceite:ac}); v.aceite=ac; delete C.ma[id]; P.toast('Saída confirmada. Boa viagem!'); }catch(e){ P.erro(e); } finally{ C.salv=false; P.render(); } }
+  async function devolver(id){ const v=C.meus.find(x=>x._id===id); if(!v||C.salv) return; const D=C.md[id]||(C.md[id]={}); const err=t=>{ D.err=t; P.render(); };
+    if(D.kmOk==null) return err('Confirme o km de retorno.'); const km=D.kmOk?null:kmNum(D.kmMot); if(D.kmOk===false&&(!Number.isFinite(km)||km<=0)) return err('Digite o km que está no painel do carro.');
+    if(D.abast==null) return err('Responda se teve abastecimento.'); if(D.avaria==null) return err('Responda se teve alguma avaria no trajeto.');
+    if(D.avaria&&String(D.avariaTxt||'').trim().length<3) return err('Escreva o que aconteceu.'); if(D.limpo==null) return err('Responda se o carro está limpo.');
+    C.salv=true; P.render();
+    try{ const fotos=D.avaria&&(D.fotos||[]).length?await guardaFotos(id,'volta',D.fotos):[];
+      const dv={em:new Date().toISOString(),kmOk:!!D.kmOk,kmMot:D.kmOk?null:km,abast:!!D.abast,litros:D.abast?vazioNum(D.litros):null,valor:D.abast?vazioNum(D.valor):null,avaria:!!D.avaria,avariaTxt:D.avaria?String(D.avariaTxt).trim().slice(0,400):'',fotos,limpo:!!D.limpo,por:S.uid||null};
+      await P.db().doc('carrosv/'+id).update({devol:dv}); v.devol=dv; delete C.md[id]; P.toast('Devolução confirmada. Obrigado!'); }catch(e){ P.erro(e); } finally{ C.salv=false; P.render(); } }
+  document.addEventListener('change',async ev=>{ const t=ev.target; if(!t||!t.dataset||!t.dataset.cvfoto) return; const k=t.dataset.cvfoto, st=k[0]==='d'?(C.md[k.slice(1)]||(C.md[k.slice(1)]={})):(C.ma[k]||(C.ma[k]={})); const f=t.files&&t.files[0]; if(!f) return;
+    try{ const d=await reduzFoto(f); st.fotos=(st.fotos||[]).concat([d]).slice(0,3); }catch(e){ P.toast(e.message||'Não deu para usar a foto.'); } P.render(); });
+
   /* ---------- módulos e cargo ---------- */
   P.registrarModulo({ id:'portaria', nome:'Portaria · carros', ic:'portaria', telas:{ portaria:{nome:'Portaria',mob:'Portaria',render:vPortaria} }, iniciar:carregar });
   P.registrarModulo({ id:'carros', nome:'Carros', ic:'carro', telas:{ carviag:{nome:'Viagens',render:vViagens}, carcad:{nome:'Carros e motoristas',render:vCad} }, iniciar:carregar });
+  P.registrarModulo({ id:'motorista', nome:'Motorista · carros', ic:'carro', telas:{ motorista:{nome:'Minhas viagens',mob:'Viagens',render:vMotorista} }, iniciar:carregarMot });
+  P.registrarPerfil('motorista',{ nome:'Motorista (carros)', mods:['motorista'], pos:6, desc:'Para o celular do motorista: confirma a saída do carro (aceite, estado do carro e termo de responsabilidade), marca o combustível na volta e vê o histórico das próprias viagens.' });
   P.registrarPerfil('portaria',{ nome:'Portaria (carros)', mods:['portaria'], pos:5, desc:'Só a tela da portaria: escaneia o QR do carro e registra a saída e a volta com o motorista e o km. Não vê nada da fábrica.' });
   /* porteiro entra direto na portaria; ?carro= abre o carro */
   { let foi=false; const t=setInterval(()=>{ try{ const A=S.acs; if(!A||!A.pronto) return; clearInterval(t); const d=A.doc||{};
-      if(!foi&&!A.dono&&d.perfil==='portaria'&&S.view!=='portaria'&&P.viewOk('portaria')){ foi=true; P.go('portaria'); } abrirDaUrl(); }catch(e){ clearInterval(t); } },400); }
+      if(!foi&&!A.dono&&d.perfil==='portaria'&&S.view!=='portaria'&&P.viewOk('portaria')){ foi=true; P.go('portaria'); }
+      if(!foi&&!A.dono&&d.perfil==='motorista'&&S.view!=='motorista'&&P.viewOk('motorista')){ foi=true; P.go('motorista'); } abrirDaUrl(); }catch(e){ clearInterval(t); } },400); }
   P.registrarAviso(()=>{ if(!lido()||!adm()) return []; const xs=[], ag=Date.now();
     const velhos=C.fora.filter(v=>ag-new Date(v.emS).getTime()>14*3600e3); if(velhos.length) xs.push({nivel:'warn',rotulo:'Carros',titulo:velhos.length+(velhos.length>1?' carros fora há mais de 14 horas':' carro fora há mais de 14 horas'),texto:velhos.map(v=>plT(v.placa)+' com '+v.motNome).join(', '),go:'carviag'});
     const dif=C.viag.filter(v=>v.kmDif&&!v.removido&&(v.diaS||'')>=addD(hoje(),-6)); if(dif.length) xs.push({nivel:'warn',rotulo:'Carros',titulo:dif.length+(dif.length>1?' saídas':' saída')+' com km diferente do último registro',texto:'Nos últimos 7 dias: '+dif.slice(0,3).map(v=>plT(v.placa)+' +'+fK((+v.kmS)-(+v.kmEsp))+' km').join(', '),go:'carviag'});
+    const dp=C.viag.filter(v=>devolPend(v)&&ag-new Date(v.emV).getTime()>2*3600e3); if(dp.length) xs.push({nivel:'warn',rotulo:'Carros',titulo:dp.length+(dp.length>1?' devoluções sem confirmação do motorista':' devolução sem confirmação do motorista'),texto:dp.map(v=>plT(v.placa)+' com '+v.motNome).join(', '),go:'carviag'});
+    const pb=C.viag.filter(v=>v.devol&&(v.devol.avaria||!v.devol.kmOk)&&(v.diaS||'')>=addD(hoje(),-2)); if(pb.length) xs.push({nivel:'warn',rotulo:'Carros',titulo:pb.length+(pb.length>1?' devoluções com avaria ou km diferente':' devolução com avaria ou km diferente'),texto:pb.map(v=>plT(v.placa)+': '+(v.devol.avaria?'avaria':'')+(v.devol.avaria&&!v.devol.kmOk?' e ':'')+(!v.devol.kmOk?'km '+fK(v.devol.kmMot):'')).join(' · '),go:'carviag'});
+    const sa=C.fora.filter(v=>aceitePend(v)&&ag-new Date(v.emS).getTime()>30*60e3); if(sa.length) xs.push({nivel:'warn',rotulo:'Carros',titulo:sa.length+(sa.length>1?' saídas sem aceite do motorista':' saída sem aceite do motorista'),texto:sa.map(v=>plT(v.placa)+' com '+v.motNome).join(', '),go:'carviag'});
     return xs; });
+  P.registrarAviso(()=>{ if(!C.lido.meus) return []; const p=C.meus.filter(aceitePend), d=C.meus.filter(devolPend); return [].concat(p.length?[{nivel:'warn',rotulo:'Carro',titulo:'Confirme a saída com o '+plT(p[0].placa),texto:'A portaria registrou a sua saída. Toque para confirmar.',go:'motorista'}]:[]).concat(d.length?[{nivel:'warn',rotulo:'Carro',titulo:'Confirme a devolução do '+plT(d[0].placa),texto:'Confira o km e responda as perguntas da volta.',go:'motorista'}]:[]); });
 
   /* ---------- eventos ---------- */
-  document.addEventListener('input',ev=>{ const t=ev.target; if(!t||!t.dataset) return; const k=t.dataset.cvf; if(!k) return; C.f[k]=t.value; if(C.f.err&&C.f.err.id===t.id){ C.f.err=null; const e=document.getElementById(t.id+'-e'); if(e) e.remove(); t.removeAttribute('aria-invalid'); const w=t.closest('.cv-kmw'); if(w) w.classList.remove('bad'); }
+  document.addEventListener('input',ev=>{ const t=ev.target; if(!t||!t.dataset) return; if(t.id==='cv-m-lq'){ lgBusca(t.value); return; } if(t.dataset.cvmv){ (C.ma[t.dataset.cvmv]||(C.ma[t.dataset.cvmv]={})).avariaTxt=t.value; return; } if(t.dataset.cvmd){ const [id,k]=t.dataset.cvmd.split('|'); (C.md[id]||(C.md[id]={}))[k]=t.value; return; } const k=t.dataset.cvf; if(!k) return; C.f[k]=t.value; if(C.f.err&&C.f.err.id===t.id){ C.f.err=null; const e=document.getElementById(t.id+'-e'); if(e) e.remove(); t.removeAttribute('aria-invalid'); const w=t.closest('.cv-kmw'); if(w) w.classList.remove('bad'); }
     if(k==='km'){ C.f.conf=false; const a=C.sel&&abertaDe(C.sel), r=document.getElementById('cv-rod'); if(a&&r){ const n=kmNum(t.value); r.innerHTML=Number.isFinite(n)&&n>=a.kmS?'<span>Rodou</span><b>'+fK(n-a.kmS)+' km</b>':''; } } });
   document.addEventListener('change',ev=>{ const t=ev.target; if(!t) return;
     if(t.dataset&&t.dataset.cvf){ C.f[t.dataset.cvf]=t.value; if(t.dataset.cvf==='mot'&&C.f.err&&C.f.err.id==='cv-mot'){ C.f.err=null; P.render(); } return; }
     const m={'cv-q-per':'per','cv-q-de':'de','cv-q-ate':'ate','cv-q-car':'car','cv-q-mot':'mot','cv-q-st':'st'}[t.id]; if(m){ C.q[m]=t.value; P.render(); } });
   document.addEventListener('keydown',ev=>{ if(ev.key!=='Enter') return; const t=ev.target; if(!t||!t.dataset||!t.dataset.cvf||t.tagName==='SELECT') return; ev.preventDefault(); const a=C.sel&&abertaDe(C.sel); if(a) volta(); else saida(); });
-  document.addEventListener('click',async ev=>{ const b=ev.target.closest&&ev.target.closest('[data-act^="cv-"]'); if(!b) return; const a=b.dataset.act, v=b.dataset.v; ev.preventDefault();
+  document.addEventListener('click',async ev=>{ const b=ev.target.closest&&ev.target.closest('[data-act^="cv-"]'); if(!b) return; const a=b.dataset.act, v=b.dataset.v; if(a==='cv-ma-t'){ const M=C.ma[v]||(C.ma[v]={}); M.termo=!!b.checked; M.err=''; const e=b.closest('.cv-ace')&&b.closest('.cv-ace').querySelector('.cv-err[role="alert"]'); if(e) e.remove(); return; } ev.preventDefault();
     if(a==='cv-mot'){ C.f.mot=v; if(C.f.err&&C.f.err.id==='cv-mot') C.f.err=null; P.render(); return; }
-    if(a==='cv-feito'){ C.msg=null; P.render(); return; }
+    if(a==='cv-feito'){ C.msg=null; _autoCam=true; P.render(); return; }
+    if(a==='cv-sn'){ const sec=b.closest('.cv-ace'); if(!sec) return; const [g,val]=String(v).split('|'), dev=sec.id.startsWith('cv-dev-'), id=sec.id.replace(/^cv-(ace|dev)-/,''), st=dev?(C.md[id]||(C.md[id]={})):(C.ma[id]||(C.ma[id]={})); st[g]=val==='1'; st.err=''; P.render(); return; }
+    if(a==='cv-ma-ok') return aceitar(v); if(a==='cv-md-ok') return devolver(v);
+    if(a==='cv-ftx'){ const [k,i]=String(v).split('|'), st=k[0]==='d'?C.md[k.slice(1)]:C.ma[k]; if(st&&st.fotos){ st.fotos.splice(+i,1); P.render(); } return; }
+    if(a==='cv-foto') return verFoto(v);
+    if(a==='cv-m-tp'){ try{ await navigator.clipboard.writeText(v); P.toast('Tópico copiado: '+v+'. No celular do motorista, abra o app ntfy, toque em + e cole.'); }catch(e){ P.toast('Tópico: '+v); } return; }
+    if(a==='cv-notif'){ try{ await Notification.requestPermission(); }catch(e){} P.render(); return; }
+    if(a==='cv-sair'){ if(Date.now()-_sairConf>4000){ _sairConf=Date.now(); P.render(); setTimeout(()=>P.rerender(),4100); return; } camDesliga(); document.body.classList.remove('cv-solo'); const x=document.createElement('button'); x.dataset.act='sair-conta'; x.hidden=true; document.body.appendChild(x); x.click(); x.remove(); return; }
     if(a==='cv-cam') return camLiga(); if(a==='cv-camx'){ camDesliga(); P.render(); return; }
     if(a==='cv-abre'){ camDesliga(); return abrir(v); }
-    if(a==='cv-volta-x'){ C.sel=null; C.f={mot:'',km:'',obs:'',conf:false}; P.render(); return; }
+    if(a==='cv-volta-x'){ _autoCam=true; C.sel=null; C.f={mot:'',km:'',obs:'',conf:false}; P.render(); return; }
     if(a==='cv-saida'){ if(!pode()) return P.toast('Seu acesso é só para ver.'); return saida(); }
     if(a==='cv-volta'){ if(!pode()) return P.toast('Seu acesso é só para ver.'); return volta(); }
     if(a==='cv-q-limpa'){ C.q={per:'7',de:'',ate:'',car:'',mot:'',st:''}; P.render(); return; }
@@ -319,15 +448,17 @@
     if(a==='cv-vsalva') return salvaEdV();
     if(a==='cv-vdel'){ const E=C.f.ed||{}; if(!E.del){ C.f.ed=Object.assign({},E,{del:true}); P.render(); return; } try{ await P.db().doc('carrosv/'+C.edV).update({removido:true,aberta:false,removidoPor:eu(),removidoEm:new Date().toISOString()}); C.edV=null; C.f.ed=null; P.toast('Viagem apagada.'); }catch(e){ P.erro(e); } P.render(); return; }
     if(a==='cv-c-salva') return salvaCarro(); if(a==='cv-c-x'){ C.edC=null; P.render(); return; }
-    if(a==='cv-c-ed'){ const c=carDe(v); if(c){ C.edC={id:c.id,placa:c.placa,modelo:c.modelo,km:c.km}; P.render(); window.scrollTo({top:0,behavior:'smooth'}); } return; }
+    if(a==='cv-c-ed'){ const c=carDe(v); if(c){ C.edC={id:c.id,placa:c.placa,modelo:c.modelo,km:c.km,frota:c.frota||''}; P.render(); window.scrollTo({top:0,behavior:'smooth'}); } return; }
     if(a==='cv-c-at'){ const novo={carros:C.cad.carros.map(c=>c.id===v?Object.assign({},c,{ativo:c.ativo===false}):c),mot:C.cad.mot}; const c=novo.carros.find(x=>x.id===v); await gravaCad(novo,c&&c.ativo?'Carro reativado.':'Carro desativado: não aparece mais na portaria.'); return; }
-    if(a==='cv-m-salva') return salvaMot(); if(a==='cv-m-x'){ C.edM=null; P.render(); return; }
-    if(a==='cv-m-ed'){ const m=motDe(v); if(m){ C.edM={id:m.id,nome:m.nome}; P.render(); window.scrollTo({top:0,behavior:'smooth'}); } return; }
+    if(a==='cv-m-salva'){ const no=document.getElementById('cv-m-no'); if(no&&C.edM) C.edM.nome=no.value; return salvaMot(); } if(a==='cv-m-x'){ C.edM=null; C.lq=''; C.lres=[]; P.render(); return; }
+    if(a==='cv-m-lsel'){ const no=document.getElementById('cv-m-no'); C.edM=Object.assign({},C.edM||{},{nome:no?no.value:(C.edM||{}).nome,uid:v,uidNome:b.dataset.n||''}); C.lq=''; C.lres=[]; P.render(); return; }
+    if(a==='cv-m-lx'){ const no=document.getElementById('cv-m-no'); C.edM=Object.assign({},C.edM||{},{nome:no?no.value:(C.edM||{}).nome,uid:null,uidNome:''}); P.render(); return; }
+    if(a==='cv-m-ed'){ const m=motDe(v); if(m){ C.edM={id:m.id,nome:m.nome,uid:m.uid||null,uidNome:m.uidNome||''}; P.render(); window.scrollTo({top:0,behavior:'smooth'}); } return; }
     if(a==='cv-m-bl'){ const ag=new Date().toISOString(); const novo={carros:C.cad.carros,mot:C.cad.mot.map(m=>m.id===v?Object.assign({},m,m.ok===false?{ok:true,libEm:ag,libPor:eu()}:{ok:false,bloqEm:ag,bloqPor:eu()}):m)}; const m=novo.mot.find(x=>x.id===v);
       await gravaCad(novo,m&&m.ok===false?m.nome+' bloqueado: não aparece mais na portaria.':m.nome+' liberado.'); return; }
     if(a==='cv-qr') return qrPdf(ativos()); if(a==='cv-qr1'){ const c=carDe(v); if(c) qrPdf([c]); return; } });
   /* sai da tela da portaria: desliga a câmera */
-  setInterval(()=>{ if(CAM.stream&&P.S.view!=='portaria'){ camDesliga(); } },1000);
+  setInterval(()=>{ if(CAM.stream&&P.S.view!=='portaria'){ camDesliga(); } if(P.S.view!=='portaria'&&P.S.view!=='motorista'&&document.body.classList.contains('cv-solo')) document.body.classList.remove('cv-solo'); },1000);
 
   document.head.insertAdjacentHTML('beforeend',`<style id="cv-css">
   .cv-top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:14px}.cv-top h1{margin:0;font-size:clamp(24px,3vw,30px);line-height:1.1}.cv-top p{margin:4px 0 0;color:var(--muted)}
@@ -368,7 +499,7 @@
   .cv-tb td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top}.cv-tb td small{display:block;color:var(--muted);font-size:12px}.cv-tb td small.warn{color:var(--warn-ink,var(--warn));font-weight:600}.cv-tb .dir{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.cv-tb tr.fora{background:color-mix(in srgb,var(--teal) 5%,transparent)}
   .cv-tag{font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap}.cv-tag.ok{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok-ink,var(--ok))}.cv-tag.crit{background:color-mix(in srgb,var(--crit) 16%,transparent);color:var(--crit-ink,var(--crit))}.cv-tag.info{background:color-mix(in srgb,var(--teal) 14%,transparent);color:var(--teal)}
   .cv-abas{display:flex;gap:6px;margin-bottom:14px}.cv-aba{font:inherit;font-weight:600;padding:9px 16px;border-radius:999px;border:1px solid var(--line);background:transparent;color:inherit;cursor:pointer;min-height:42px}.cv-aba.on{background:var(--nav,#163c52);color:#fff;border-color:transparent}.cv-aba span{opacity:.7;font-weight:500}
-  .cv-ed{margin-bottom:14px}.cv-g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.cv-g2{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;max-width:480px}.cv-g3 label,.cv-g2 label{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:14px}
+  .cv-ed{margin-bottom:14px}.cv-g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}.cv-g2{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;max-width:480px}.cv-g3 label,.cv-g2 label{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:14px}
   .cv-h2b{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}.cv-h2b h2{margin:0}
   .cv-cr{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);flex-wrap:wrap}.cv-cr.ina{opacity:.6}.cv-ac{display:flex;gap:14px}.cv-del{color:var(--crit-ink,var(--crit))!important}
   .cv-vz p{color:var(--muted)}
@@ -437,6 +568,58 @@
   .cv-fdl{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;width:100%;margin:8px 0 4px}.cv-fdl div{background:color-mix(in srgb,var(--line) 35%,transparent);border-radius:12px;padding:10px}.cv-fdl dt{font-size:12.5px;color:var(--muted)}.cv-fdl dd{margin:2px 0 0;font-weight:700;font-size:18px;font-variant-numeric:tabular-nums}
   .cv-falt{margin:0;padding:8px 12px;border-radius:10px;background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn-ink,var(--warn));font-weight:600}
   .cv-feito .cv-bt1{flex:none;width:100%;margin-top:8px}.cv-fauto{margin:0;font-size:12.5px;color:var(--muted)}
+  body.cv-solo .side,body.cv-solo header.top,body.cv-solo .bottomnav,body.cv-solo nav.tabs,body.cv-solo .mob-top,body.cv-solo .crumbs{display:none!important}
+  body.cv-solo .content{padding:0!important;max-width:none!important}body.cv-solo .main{margin:0!important}
+  .cv-app{min-height:100vh;min-height:100dvh;background:var(--ground)}
+  .cv-bar{position:sticky;top:0;z-index:20;box-sizing:border-box;min-height:54px;height:auto;display:flex;align-items:center;gap:10px;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top));background:var(--nav,#163c52);color:#fff}
+  .cv-bar img{height:22px;width:auto;display:block}.cv-bart{font-weight:700;font-size:15px;opacity:.92;border-left:1px solid rgba(255,255,255,.28);padding-left:10px}
+  .cv-clk{margin-left:auto;font-weight:700;font-size:18px;font-variant-numeric:tabular-nums}
+  .cv-sair{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;padding:4px 10px 4px 4px;border-radius:999px;background:rgba(255,255,255,.13);min-height:36px}
+  .cv-sair .cv-av{width:28px;height:28px;font-size:12px;background:#fff;color:var(--nav,#163c52)}.cv-sair:focus-visible{outline:2px solid #fff}
+  .cv-appc{max-width:560px;margin:0 auto;padding:12px 12px calc(24px + env(safe-area-inset-bottom))}
+  .cv-hero.so{padding:14px;border-radius:18px;margin-bottom:14px}.cv-hero.so .cv-hh{margin-bottom:12px}.cv-hero.so .cv-cnt{width:100%}.cv-hero.so .cv-cnt div{flex:1;min-width:0}
+  .cv-hero.so .cv-vw{aspect-ratio:1/1;max-width:none}.cv-hero.so .cv-cam p{font-weight:600}
+  body.cv-solo .cv-fl{margin:0 0 14px}body.cv-solo .cv-feito{margin:0 0 14px}body.cv-solo .cv-grid,body.cv-solo .cv-gridp{grid-template-columns:minmax(0,1fr)}
+  body.cv-solo .cv-tile:not(.fora){flex-direction:row;align-items:center;flex-wrap:wrap}body.cv-solo .cv-tile:not(.fora) .cv-mod{flex:1}body.cv-solo .cv-tile:not(.fora) .cv-go{margin-top:0;padding:0 16px}
+  body.cv-solo .cv-mots{grid-template-columns:minmax(0,1fr)}
+  .cv-acp{display:block;font-size:13px;font-weight:700;padding:6px 10px;border-radius:10px;background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn-ink,var(--warn));text-align:center}
+  .cv-acok{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--ok-ink,var(--ok))}.cv-acok svg{width:16px;height:16px}
+  .cv-fac{display:flex;gap:8px;align-items:flex-start;margin:0;padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--teal) 10%,transparent);color:var(--teal);font-weight:600;text-align:left}.cv-fac svg{width:20px;height:20px;flex:none;margin-top:1px}
+  .cv-obs0.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn-ink,var(--warn));font-weight:600}
+  .cv-tag.warn{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn-ink,var(--warn))}
+  .cv-lgn{display:flex;flex-direction:column;gap:6px}.cv-lgt{font-weight:600;font-size:14px}.cv-lgt small{display:block;font-weight:400;color:var(--muted)}
+  .cv-lgs{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:12px}.cv-lgs b{flex:1}
+  .cv-lgr{display:flex;flex-direction:column;gap:4px}.cv-lgi{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;border:1px solid var(--line)}.cv-lgi:hover{border-color:var(--teal)}.cv-lgi span:last-child{display:flex;flex-direction:column}.cv-lgi small{color:var(--muted);font-size:12px}
+  .cv-mh h1{font-size:clamp(24px,6vw,30px)}
+  .cv-est{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .cv-eo{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 10px;border-radius:16px;border:2px solid var(--line);text-align:center;min-height:92px;justify-content:center}
+  .cv-eo svg{width:28px;height:28px;color:var(--ok-ink,var(--ok))}.cv-exc{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:color-mix(in srgb,var(--warn) 25%,transparent);color:var(--warn-ink,var(--warn))}
+  .cv-eo b{font-size:16px}.cv-eo.on.ok{border-color:#17694a;background:color-mix(in srgb,#17694a 10%,transparent)}.cv-eo.on.av{border-color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}.cv-eo:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+  .cv-ta{min-height:90px;padding:12px 14px;resize:vertical;font-size:16px}
+  .cv-termo{display:flex;gap:12px;align-items:flex-start;margin:16px 0 0;padding:14px;border-radius:14px;background:color-mix(in srgb,var(--line) 35%,transparent);cursor:pointer;font-size:15px;line-height:1.45}
+  .cv-termo input{width:24px;height:24px;flex:none;margin:0;accent-color:#17694a}
+  .cv-wide{width:100%;margin-top:16px}
+  .cv-com{margin-bottom:14px}.cv-p2{margin:10px 0 0;color:var(--muted);font-size:14px}
+  .cv-comb{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+  .cv-cb{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 4px;border-radius:12px;border:2px solid var(--line);min-height:84px}
+  .cv-cb b{font-size:13px}.cv-cb.on{border-color:var(--teal);background:color-mix(in srgb,var(--teal) 10%,transparent)}.cv-cb:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+  .cv-cbg{width:16px;height:40px;border-radius:4px;border:2px solid currentColor;display:flex;align-items:flex-end;overflow:hidden;color:var(--muted)}.cv-cbg i{display:block;width:100%;background:var(--teal)}.cv-cb:first-child .cv-cbg i{background:var(--warn)}
+  .cv-hist ul{list-style:none;margin:6px 0 0;padding:0}.cv-hist li{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}.cv-hist li:first-child{border-top:0}.cv-hist li>span:nth-child(2){flex:1;display:flex;flex-direction:column;min-width:0}.cv-hist small{color:var(--muted);font-size:12.5px}
+  .cv-q{font-weight:700;font-size:16px;margin:18px 0 8px}.cv-flb .cv-q:first-child{margin-top:0}
+  .cv-sn{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .cv-snb{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;text-align:center;min-height:54px;padding:8px 10px;border-radius:14px;border:2px solid var(--line);font-weight:700;font-size:15px}
+  .cv-snb:focus-visible{outline:3px solid var(--teal);outline-offset:2px}.cv-snb.on.bom{border-color:#17694a;background:color-mix(in srgb,#17694a 11%,transparent);color:#17694a}.cv-snb.on.ruim{border-color:var(--warn);background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn-ink,var(--warn))}
+  .cv-kmc{display:flex;flex-direction:column;padding:12px 14px;border-radius:14px;background:color-mix(in srgb,var(--line) 35%,transparent);margin-bottom:8px}.cv-kmc b{font-size:26px;font-variant-numeric:tabular-nums}.cv-kmc small{color:var(--muted)}
+  .cv-g2b{display:grid;grid-template-columns:1fr 1fr;gap:10px}.cv-g2b .cv-lb{display:grid;grid-template-columns:auto 1fr;align-items:baseline;column-gap:6px;row-gap:6px;margin-top:10px}.cv-g2b .cv-lb input{grid-column:1/-1}
+  .cv-fts{display:flex;flex-wrap:wrap;gap:8px}.cv-ft{position:relative;width:86px;height:86px;border-radius:12px;overflow:hidden;border:1px solid var(--line)}.cv-ft img{width:100%;height:100%;object-fit:cover}
+  .cv-ft button{all:unset;cursor:pointer;position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;display:grid;place-items:center;font-size:12px}
+  .cv-ftadd{width:86px;height:86px;border-radius:12px;border:2px dashed var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;text-align:center}.cv-ftadd span{font-size:22px}.cv-ftadd b{font-size:12px}
+  .cv-notif{all:unset;box-sizing:border-box;cursor:pointer;width:100%;display:flex;gap:12px;align-items:center;padding:12px 14px;margin-bottom:14px;border-radius:14px;border:2px solid var(--teal);background:color-mix(in srgb,var(--teal) 8%,transparent)}
+  .cv-notif svg{width:26px;height:26px;color:var(--teal);flex:none}.cv-notif span{display:flex;flex-direction:column}.cv-notif small{color:var(--muted);font-size:13px}
+  .cv-fov{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);display:grid;place-items:center;padding:16px}.cv-fov img{max-width:100%;max-height:90vh;border-radius:10px}.cv-fov button{all:unset;cursor:pointer;position:absolute;top:14px;right:14px;width:40px;height:40px;border-radius:50%;background:#fff;color:#111;display:grid;place-items:center;font-weight:700}
+  .cv-fro{font-size:12px;font-weight:800;padding:2px 8px;border-radius:6px;background:var(--nav,#163c52);color:#fff;white-space:nowrap;align-self:flex-start}.cv-tt .cv-fro{align-self:center}
+  .cv-frog{margin:0;font-weight:800;font-size:15px;padding:3px 12px;border-radius:999px;background:rgba(255,255,255,.16)}
+  .cv-fl2{display:block;font-size:12px}.cv-fl2 .lnk{font-size:12px}
   @media(prefers-reduced-motion:no-preference){.cv-feito .cv-fok{animation:cvOk .35s ease-out}@keyframes cvOk{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}}
   @media(max-width:760px){.cv-hero{padding:18px 16px 16px;border-radius:18px}.cv-cnt{width:100%}.cv-cnt div{flex:1;min-width:0}.cv-grid,.cv-gridp{grid-template-columns:minmax(0,1fr)}
     .cv-tile:not(.fora){flex-direction:row;align-items:center;flex-wrap:wrap}.cv-tile:not(.fora) .cv-mod{flex:1}.cv-tile:not(.fora) .cv-go{margin-top:0;padding:0 16px}

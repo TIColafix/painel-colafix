@@ -519,8 +519,13 @@
     m.onclick = e => { const k = e.target.dataset.m; if (!k) return; m.remove(); if (k === 'senha') trocarSenha(); else if (k === 'google') contaGoogle(); else if (k === 'instalar') instalar(); else sair(); };
     document.body.appendChild(m); });
 
+  /* endereço do painel (26/11/2026, "está mandando para o endereço errado, antigo"): usa o endereço onde o painel está aberto
+     (https, fora do computador de teste); o `link` do config.js só vale de reserva. Vai no cartão "Acesso criado", nos QR codes
+     de chamado, do rancho e dos equipamentos e nos avisos. */
+  const LINK_AQUI = (() => { try { if (location.protocol !== 'https:' || /^(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(location.hostname)) return '';
+    return location.origin + location.pathname.replace(/[^/]*$/, ''); } catch (e) { return ''; } })();
   window.claude = {
-    online: true, link: CFG.link || '',
+    online: true, link: LINK_AQUI || CFG.link || '',
     use: async nome => { await pronto;
       if (nome === 'db') return DB; if (nome === 'user') return USER; if (nome === 'assets') return ASSETS; if (nome === 'downloads') return DOWNLOADS; return null; },
     assetBytes: async id => { await pronto; return ASSETS.bytes(id); },

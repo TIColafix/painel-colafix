@@ -5,14 +5,15 @@ const H=require('./harness'); const res=[]; const ok=(n,c,d)=>{ res.push({n,ok:!
 (async()=>{ const {d}=H.seed(); const D=d.docs;
  d.users['portaria@painel-colafix.app']={uid:'uPORT',pass:'por123',nome:'Seu Zé Porteiro'}; D['perfis/uPORT']={nome:'Seu Zé Porteiro',usuario:'portaria'}; D['acessos/uPORT']={perfil:'portaria',mods:['portaria'],locais:[],ativo:true};
  d.users['fernando@painel-colafix.app']={uid:'uFER',pass:'fer123',nome:'Fernando Frota'}; D['perfis/uFER']={nome:'Fernando Frota',usuario:'fernando'}; D['acessos/uFER']={perfil:'outro',mods:['frota','carros'],locais:[],ativo:true};
+ d.users['carlosb@painel-colafix.app']={uid:'uMOT',pass:'mot123',nome:'Carlos Bento'}; D['perfis/uMOT']={nome:'Carlos Bento',usuario:'carlosb'}; D['acessos/uMOT']={perfil:'motorista',mods:['motorista'],locais:[],ativo:true};
  const srv=p=>p.evaluate(()=>JSON.parse(localStorage.getItem('__srv')).docs);
  /* ---------- administrador ---------- */
  const A=await H.abrir({viewport:{width:1366,height:900}}); const pa=A.page; const erros=[]; pa.on('pageerror',e=>erros.push(e.message));
  await H.preparar(pa,d); await pa.goto(H.BASE); await H.entrar(pa,'fernando','fer123'); await H.dorme(2500);
  await pa.evaluate(()=>__T.go('carcad')); await H.dorme(800);
- const cad=async(pl,mo,km)=>{ await pa.fill('#cv-c-pl',pl); await pa.fill('#cv-c-mo',mo); await pa.fill('#cv-c-km',km); await pa.click('[data-act="cv-c-salva"]'); await H.dorme(500); };
+ const cad=async(pl,mo,km,fr)=>{ await pa.fill('#cv-c-pl',pl); await pa.fill('#cv-c-mo',mo); await pa.fill('#cv-c-km',km); await pa.fill('#cv-c-fr',fr||''); await pa.click('[data-act="cv-c-salva"]'); await H.dorme(500); };
  await cad('AB12','Fiat Strada','100'); ok('Placa inválida é recusada', await pa.evaluate(()=>/Placa inválida/.test(document.body.innerText)));
- await cad('abc1d23','Fiat Strada branca','45230'); await cad('QWE-4567','VW Saveiro','38904'); await cad('ABC1D23','Outro','1');
+ await cad('abc1d23','Fiat Strada branca','45230','12'); await cad('QWE-4567','VW Saveiro','38904','7'); await cad('ABC1D23','Outro','1');
  ok('Placa repetida é recusada', await pa.evaluate(()=>/Já existe um carro com esta placa/.test(document.body.innerText)));
  await pa.click('[data-act="cv-c-x"]').catch(()=>{}); await pa.evaluate(()=>{ __carros.edC=null; }); await H.dorme(200);
  let s=await srv(pa); let cs=(s['carros/cad']||{}).carros||[];
@@ -20,10 +21,13 @@ const H=require('./harness'); const res=[]; const ok=(n,c,d)=>{ res.push({n,ok:!
  const pl=await pa.evaluate(()=>{ const p=document.querySelector('.cv-pl'); return p?{t:p.innerText.replace(/\s+/g,' ').trim(),band:getComputedStyle(p.querySelector('.cv-plb')).backgroundColor,logo:getComputedStyle(p.querySelector('.cv-plb i')).backgroundImage}:null; });
  ok('Placa no padrão Mercosul: faixa azul "BRASIL", "BR" e a logo Colafix no lugar da bandeira', pl&&/BRASIL/.test(pl.t)&&/BR ABC1D23/.test(pl.t)&&pl.band==='rgb(31, 61, 153)'&&/logo-colafix-escuro/.test(pl.logo), JSON.stringify(pl));
  await pa.click('[data-act="cv-aba"][data-v="mot"]'); await H.dorme(300);
- for(const n of ['Carlos Bento','Joana Prado']){ await pa.fill('#cv-m-no',n); await pa.click('[data-act="cv-m-salva"]'); await H.dorme(400); }
+ await pa.fill('#cv-m-no','Carlos Bento'); await pa.fill('#cv-m-lq','carlosb'); await H.dorme(700);
+ ok('Busca o login do motorista no cadastro', await pa.evaluate(()=>!!document.querySelector('[data-act="cv-m-lsel"][data-v="uMOT"]')));
+ await pa.click('[data-act="cv-m-lsel"][data-v="uMOT"]'); await H.dorme(200); await pa.click('[data-act="cv-m-salva"]'); await H.dorme(400);
+ await pa.fill('#cv-m-no','Joana Prado'); await pa.click('[data-act="cv-m-salva"]'); await H.dorme(400);
  const jid=await pa.evaluate(()=>__carros.cad.mot.find(m=>m.nome==='Joana Prado').id); await pa.click(`[data-act="cv-m-bl"][data-v="${jid}"]`); await H.dorme(500);
  s=await srv(pa); const ms=s['carros/cad'].mot;
- ok('Motoristas cadastrados; Joana bloqueada', ms.length===2&&ms.find(m=>m.nome==='Carlos Bento').ok===true&&ms.find(m=>m.nome==='Joana Prado').ok===false&&/Bloqueado/.test(await pa.evaluate(()=>document.body.innerText)));
+ ok('Motoristas cadastrados; Joana bloqueada', ms.length===2&&ms.find(m=>m.nome==='Carlos Bento').ok===true&&ms.find(m=>m.nome==='Carlos Bento').uid==='uMOT'&&ms.find(m=>m.nome==='Joana Prado').ok===false&&/Bloqueado/.test(await pa.evaluate(()=>document.body.innerText)));
  await pa.click('[data-act="cv-aba"][data-v="carros"]'); await H.dorme(300);
  const [dl]=await Promise.all([pa.waitForEvent('download',{timeout:10000}).catch(()=>null),pa.click('[data-act="cv-qr"]')]);
  ok('"Imprimir QR codes (PDF)" baixa qr-carros-AAAA-MM-DD.pdf', dl&&/^qr-carros-\d{4}-\d{2}-\d{2}\.pdf$/.test(dl.suggestedFilename()), dl&&dl.suggestedFilename());
@@ -33,7 +37,9 @@ const H=require('./harness'); const res=[]; const ok=(n,c,d)=>{ res.push({n,ok:!
  const B=await H.abrir({viewport:{width:390,height:844}}); const pb=B.page; pb.on('pageerror',e=>erros.push(e.message));
  await H.preparar(pb,{users:d.users,docs:await srv(pa)}); await pb.goto(H.BASE); await H.entrar(pb,'portaria','por123'); await H.dorme(2500);
  const v0=await pb.evaluate(()=>({v:__T.S().view,t:document.body.innerText,nav:[...document.querySelectorAll('[data-go]')].map(b=>b.dataset.go)}));
- ok('Porteiro entra direto na Portaria e vê os carros na empresa', v0.v==='portaria'&&/Portaria · carros/.test(v0.t)&&/Na empresa/.test(v0.t)&&/ABC1D23/.test(v0.t), v0.v);
+ ok('Porteiro entra direto na Portaria e vê os carros na empresa', v0.v==='portaria'&&/Portaria/.test(v0.t)&&/Na empresa/.test(v0.t)&&/ABC1D23/.test(v0.t), v0.v);
+ const so=await pb.evaluate(()=>{ const vis=e=>!!(e&&e.offsetParent!==null&&getComputedStyle(e).display!=='none'); return {solo:document.body.classList.contains('cv-solo'),bar:vis(document.querySelector('.cv-bar')),top:vis(document.querySelector('header.top')),side:vis(document.querySelector('.side')),nav:vis(document.querySelector('.bottomnav')),sair:/Sair/.test((document.querySelector('.cv-bar')||{}).innerText||''),cam:__carros.cam}; });
+ ok('Modo celular: tela inteira só da portaria (barra própria com logo, hora e Sair; sem menu nem barra do painel) e tenta ligar a câmera sozinha', so.solo&&so.bar&&!so.top&&!so.side&&!so.nav&&so.sair&&(so.cam.on||!!so.cam.erro), JSON.stringify(so));
  ok('Porteiro não vê o cadastro nem as viagens', !v0.nav.includes('carcad')&&!v0.nav.includes('carviag'), v0.nav.join(','));
  /* QR lido = endereço com ?carro= */
  await pb.goto(H.BASE+'?carro='+cid); await H.dorme(3000);
@@ -50,12 +56,37 @@ const H=require('./harness'); const res=[]; const ok=(n,c,d)=>{ res.push({n,ok:!
  const tf=await pb.evaluate(()=>(document.querySelector('.cv-feito')||{}).innerText||'');
  ok('Tela de confirmação da saída (placa, motorista, km, km sem registro)', /Saída registrada/.test(tf)&&/ABC1D23/.test(tf)&&/Carlos Bento/.test(tf)&&/45\.250/.test(tf)&&/20 km sem registro/.test(tf), tf.replace(/\n/g,' | '));
  if(process.env.SHOT) await pb.screenshot({path:'/home/claude/scripts/cv-feito.png',fullPage:true});
+ ok('Saída com motorista de login fica aguardando aceite', vs[0].motUid==='uMOT'&&vs[0].precisaAceite===true&&vs[0].aceite==null&&/O Carlos recebeu o aviso para confirmar a saída/.test(tf));
  await pb.click('[data-act="cv-feito"]'); await H.dorme(300);
+ ok('Na portaria o carro mostra "Aguardando aceite do motorista"', await pb.evaluate(()=>/Aguardando aceite do motorista/.test(document.body.innerText)));
+ /* ---------- motorista ---------- */
+ const M=await H.abrir({viewport:{width:390,height:844}}); const pm=M.page; pm.on('pageerror',e=>erros.push(e.message));
+ await H.preparar(pm,{users:d.users,docs:await srv(pb)}); await pm.goto(H.BASE); await H.entrar(pm,'carlosb','mot123'); await H.dorme(3000);
+ const m0=await pm.evaluate(()=>({v:__T.S().view,solo:document.body.classList.contains('cv-solo'),t:document.body.innerText}));
+ ok('Motorista entra direto em Minhas viagens (tela inteira) com a saída para confirmar', m0.v==='motorista'&&m0.solo&&/Confirme a saída/.test(m0.t)&&/ABC1D23/.test(m0.t)&&/45\.250/.test(m0.t)&&/Seu Zé/.test(m0.t), m0.t.slice(0,300).replace(/\n/g,' | '));
+ const vid=await pm.evaluate(()=>__carros.meus[0]._id); const sec='#cv-ace-'+vid+' ';
+ ok('Aviso para ativar as notificações no celular do motorista', await pm.evaluate(()=>!!document.querySelector('[data-act="cv-notif"]')||!('Notification' in window)||Notification.permission!=='default'));
+ await pm.click('[data-act="cv-ma-ok"]'); await H.dorme(200); ok('Sem responder se estava limpo não aceita', await pm.evaluate(()=>/Responda se o carro estava limpo/.test(document.body.innerText)));
+ await pm.click(sec+'[data-act="cv-sn"][data-v="limpo|1"]'); await H.dorme(150); await pm.click('[data-act="cv-ma-ok"]'); await H.dorme(200);
+ ok('Pergunta da avaria antes da saída é obrigatória', await pm.evaluate(()=>/Responda se tinha alguma avaria antes da saída/.test(document.body.innerText)));
+ await pm.click(sec+'[data-act="cv-sn"][data-v="avaria|1"]'); await H.dorme(200); await pm.click('[data-act="cv-ma-ok"]'); await H.dorme(200);
+ ok('Com avaria pede a descrição e mostra "Tirar foto"', await pm.evaluate(()=>/Escreva qual era a avaria/.test(document.body.innerText)&&/Tirar foto/.test(document.body.innerText)));
+ await pm.fill('#cv-ma-av','Risco na porta direita'); await pm.setInputFiles(sec+'input[data-cvfoto]','/tmp/avaria.jpg'); await H.dorme(900);
+ ok('A foto da avaria aparece antes de confirmar', await pm.evaluate(()=>document.querySelectorAll('.cv-ft img').length===1));
+ await pm.click('[data-act="cv-ma-ok"]'); await H.dorme(200); ok('Sem confirmar que pegou o carro não aceita', await pm.evaluate(()=>/Marque a confirmação de que pegou o carro/.test(document.body.innerText)));
+ await pm.click(sec+'[data-act="cv-ma-t"]'); await H.dorme(100);
+ if(process.env.SHOT) await pm.screenshot({path:'/home/claude/scripts/cv-mot1.png',fullPage:true});
+ await pm.click('[data-act="cv-ma-ok"]'); await H.dorme(900);
+ let sm=await srv(pm); const ac=sm['carrosv/'+vid].aceite||{};
+ ok('Aceite gravado: pegou, limpo, avaria com texto e foto, termo', ac.pegou&&ac.limpo===true&&ac.avaria===true&&ac.avariaTxt==='Risco na porta direita'&&ac.termo===true&&(ac.fotos||[]).length===1&&!!sm['carrosf/'+ac.fotos[0]]&&sm['carrosf/'+ac.fotos[0]].tipo==='saida', JSON.stringify(ac).slice(0,250));
+ ok('Depois do aceite: "Você está com o carro" e histórico', await pm.evaluate(()=>/Você está com o carro/.test(document.body.innerText)&&/Histórico/.test(document.body.innerText)&&/em uso/.test(document.body.innerText)));
+ /* a portaria recebe o aceite */
+ await pb.evaluate(x=>{ const o=JSON.parse(localStorage.getItem('__srv')); o.docs=x; localStorage.setItem('__srv',JSON.stringify(o)); },sm); await pb.reload(); await H.dorme(3500);
  const t1=await pb.evaluate(()=>document.body.innerText);
  ok('Depois da confirmação o carro aparece em "Fora agora" com o motorista', /Fora agora\s*1/i.test(t1)&&/Registrar volta/.test(t1)&&/Carlos Bento/.test(t1), t1.slice(0,300).replace(/\n/g,' | '));
  await pb.click(`[data-act="cv-abre"][data-v="${cid}"]`); await H.dorme(400);
  const fv=await pb.evaluate(()=>(document.querySelector('.cv-fl')||{}).innerText||'');
- ok('Tocar no carro fora abre a volta (saiu com, km da saída)', /Registrar volta/.test(fv)&&/Carlos Bento/.test(fv)&&/45\.250/.test(fv), fv.replace(/\n/g,' | ').slice(0,200));
+ ok('Tocar no carro fora abre a volta (saiu com, km da saída, frota e o que o motorista confirmou)', /Registrar volta/.test(fv)&&/Carlos Bento/.test(fv)&&/45\.250/.test(fv)&&/Frota 12/.test(fv)&&/carro limpo · avaria antes da saída: Risco na porta direita/.test(fv), fv.replace(/\n/g,' | ').slice(0,200));
  await pb.fill('#cv-km','45240'); await pb.click('[data-act="cv-volta"]'); await H.dorme(300);
  ok('Km da volta menor que o da saída é recusado', await pb.evaluate(()=>/não pode ser menor que o da saída/.test(document.body.innerText)));
  await pb.fill('#cv-km','45358'); await pb.dispatchEvent('#cv-km','input'); await H.dorme(200);
@@ -67,17 +98,32 @@ const H=require('./harness'); const res=[]; const ok=(n,c,d)=>{ res.push({n,ok:!
  ok('Tela de confirmação da volta (rodou 108 km)', await pb.evaluate(()=>{ const t=(document.querySelector('.cv-feito')||{}).innerText||''; return /Volta registrada/.test(t)&&/108 km/.test(t)&&/Ficou fora/.test(t); }));
  await pb.click('[data-act="cv-feito"]'); await H.dorme(300);
  await pb.evaluate(()=>{ __carros.msg=null; window.scrollTo(0,0); }); await H.dorme(300);
+ /* ---------- motorista confirma a devolução ---------- */
+ await pm.evaluate(x=>{ const o=JSON.parse(localStorage.getItem('__srv')); o.docs=x; localStorage.setItem('__srv',JSON.stringify(o)); },await srv(pb)); await pm.reload(); await H.dorme(3500);
+ const dsec='#cv-dev-'+vid+' '; const md=await pm.evaluate(()=>document.body.innerText);
+ ok('Motorista vê "Confirme a devolução" com o km de retorno da portaria', /Confirme a devolução/.test(md)&&/45\.358 km/.test(md)&&/Teve abastecimento\?/.test(md)&&/Teve alguma avaria no trajeto\?/.test(md)&&/O carro está limpo\?/.test(md), md.slice(0,300).replace(/\n/g,' | '));
+ await pm.click('[data-act="cv-md-ok"]'); await H.dorme(200); ok('Sem confirmar o km não conclui', await pm.evaluate(()=>/Confirme o km de retorno/.test(document.body.innerText)));
+ await pm.click(dsec+'[data-act="cv-sn"][data-v="kmOk|0"]'); await H.dorme(200); await pm.fill('#cv-md-km','45360');
+ await pm.click(dsec+'[data-act="cv-sn"][data-v="abast|1"]'); await H.dorme(200); await pm.fill(dsec+'input[data-cvmd$="|litros"]','30'); await pm.fill(dsec+'input[data-cvmd$="|valor"]','180,50');
+ await pm.click(dsec+'[data-act="cv-sn"][data-v="avaria|0"]'); await H.dorme(150); await pm.click('[data-act="cv-md-ok"]'); await H.dorme(200);
+ ok('Pergunta se está limpo é obrigatória', await pm.evaluate(()=>/Responda se o carro está limpo/.test(document.body.innerText)));
+ await pm.click(dsec+'[data-act="cv-sn"][data-v="limpo|0"]'); await H.dorme(150);
+ if(process.env.SHOT) await pm.screenshot({path:'/home/claude/scripts/cv-mot2.png',fullPage:true});
+ await pm.click('[data-act="cv-md-ok"]'); await H.dorme(800);
+ sm=await srv(pm); const dv=sm['carrosv/'+vid].devol||{};
+ ok('Devolução gravada: km diferente (45.360), abasteceu 30 L R$ 180,50, sem avaria, sujo', dv.kmOk===false&&dv.kmMot===45360&&dv.abast===true&&dv.litros===30&&dv.valor===180.5&&dv.avaria===false&&dv.limpo===false, JSON.stringify(dv).slice(0,250));
+ ok('Depois da devolução a viagem aparece como concluída', await pm.evaluate(()=>/Concluída/.test(document.body.innerText)&&!/Confirme a devolução/.test(document.body.innerText)));
  const lg=await pb.evaluate(()=>document.documentElement.scrollWidth); ok('No celular a portaria não passa da largura', lg<=392, lg);
  if(process.env.SHOT){ await pb.evaluate(()=>{ __T.go('portaria'); }); await H.dorme(400); await pb.screenshot({path:'/home/claude/scripts/cv-port.png',fullPage:true}); await pb.click(`[data-act="cv-abre"][data-v="${cid}"]`); await H.dorme(300); await pb.screenshot({path:'/home/claude/scripts/cv-saida.png',fullPage:true}); await pb.setViewportSize({width:1280,height:860}); await pb.click('[data-act="cv-volta-x"]'); await H.dorme(500); await pb.screenshot({path:'/home/claude/scripts/cv-desk.png'}); await pb.click(`[data-act="cv-abre"][data-v="${cid}"]`); await H.dorme(400); await pb.screenshot({path:'/home/claude/scripts/cv-desk2.png'}); }
  /* ---------- adm vê as viagens ---------- */
- const A2=await H.abrir({viewport:{width:1366,height:900}}); const pa2=A2.page; pa2.on('pageerror',e=>erros.push(e.message)); await H.preparar(pa2,{users:d.users,docs:await srv(pb)}); await pa2.goto(H.BASE); await H.entrar(pa2,'fernando','fer123'); await H.dorme(2500);
+ const A2=await H.abrir({viewport:{width:1366,height:900}}); const pa2=A2.page; pa2.on('pageerror',e=>erros.push(e.message)); await H.preparar(pa2,{users:d.users,docs:await srv(pm)}); await pa2.goto(H.BASE); await H.entrar(pa2,'fernando','fer123'); await H.dorme(2500);
  await pa2.evaluate(()=>__T.go('carviag')); await H.dorme(1200);
  const tv=await pa2.evaluate(()=>document.body.innerText);
- ok('Viagens: 1 viagem, 108 km rodados, 1 com km diferente, km por carro e por motorista', /1\s*viagens/i.test(tv.replace(/\n/g,' '))&&/108\s*km rodados/i.test(tv.replace(/\n/g,' '))&&/1\s*com km diferente/i.test(tv.replace(/\n/g,' '))&&/Km por motorista/.test(tv)&&/Carlos Bento/.test(tv)&&/\+20 sem registro/.test(tv), tv.replace(/\n/g,' | ').slice(0,400));
+ ok('Viagens: 1 viagem, 108 km rodados, 1 com km diferente, km por carro e por motorista', /1\s*viagens/i.test(tv.replace(/\n/g,' '))&&/108\s*km rodados/i.test(tv.replace(/\n/g,' '))&&/1\s*com km diferente/i.test(tv.replace(/\n/g,' '))&&/Km por motorista/.test(tv)&&/Carlos Bento/.test(tv)&&/\+20 sem registro/.test(tv)&&/km do motorista: 45\.360/.test(tv)&&/abasteceu 30 L R\$ 180,50/.test(tv)&&/avaria: Risco na porta direita/.test(tv), tv.replace(/\n/g,' | ').slice(0,400));
  if(process.env.SHOT) await pa2.screenshot({path:'/home/claude/scripts/cv-viag.png',fullPage:true});
  const [dc]=await Promise.all([pa2.waitForEvent('download',{timeout:8000}).catch(()=>null),pa2.click('[data-act="cv-csv"]')]);
  let csv=''; if(dc){ const fp='/tmp/viag.csv'; await dc.saveAs(fp); csv=require('fs').readFileSync(fp,'utf8'); }
  ok('Planilha das viagens', dc&&/^viagens-carros-/.test(dc.suggestedFilename())&&/Placa;Modelo;Motorista/.test(csv)&&/ABC1D23;Fiat Strada branca;Carlos Bento/.test(csv)&&/;108;/.test(csv), csv.slice(0,200));
  ok('Sem erro de script', !erros.length, erros.join(' | '));
- await A.browser.close(); await B.browser.close(); await A2.browser.close();
+ await A.browser.close(); await B.browser.close(); await A2.browser.close(); await M.browser.close();
  const fl=res.filter(x=>!x.ok); console.log(fl.length?fl.length+' FALHOU':'tudo PASSOU'); process.exit(fl.length?1:0); })().catch(e=>{ console.error(e); process.exit(1); });

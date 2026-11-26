@@ -31,8 +31,8 @@ service cloud.firestore {
 
     // Tudo o que é operacional (ordens, entregas, paradas, ranchos, almox, premix, chamados, config...)
     match /{col}/{id} {
-      allow read: if le() && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'api', 'apibots', 'erros', 'pedsenha']);
-      allow write: if grava() && !bloq(col) && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'api', 'apibots', 'erros', 'pedsenha'])
+      allow read: if le() && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'api', 'apibots', 'erros', 'pedsenha']);
+      allow write: if grava() && !bloq(col) && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'api', 'apibots', 'erros', 'pedsenha'])
         && !(col == 'config' && id == 'geral'); // config/geral tem regra própria (logo abaixo)
     }
 
@@ -70,8 +70,8 @@ service cloud.firestore {
       allow delete: if dono();
     }
     match /{col}/{id}/{resto=**} {
-      allow read: if le() && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'api', 'apibots', 'erros', 'pedsenha']);
-      allow write: if grava() && !bloq(col) && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'api', 'apibots', 'erros', 'pedsenha'])
+      allow read: if le() && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'api', 'apibots', 'erros', 'pedsenha']);
+      allow write: if grava() && !bloq(col) && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'api', 'apibots', 'erros', 'pedsenha'])
         && !(col == 'config' && id == 'geral'); // o ** também pega o próprio documento (config/geral não tem subcoleções)
     }
 
@@ -211,6 +211,12 @@ service cloud.firestore {
     // Calendário de feriados (RH + produção): todos os liberados leem (regra geral); o RH também grava.
     // Presença do dia pelo Face ID (resumo SEM CPF, 22/10): o RH (ou a administradora) grava; lê quem tem o RH ou a Visão do gestor
     // Frota (11/11/2026): caminhões, motoristas (nomes), abastecimentos, tanque de diesel e manutenções. Só a dona e quem tem o módulo Frota.
+    // Carros · portaria (26/11/2026): a portaria registra saída e volta; só o adm (módulo carros) muda carros e motoristas
+    function carrosOk() { return dono() || (liberado() && (acs().get('mods', []).hasAny(['carros', 'portaria']) || acs().get('extras', []).hasAny(['carros', 'portaria']))); }
+    function carrosAdm() { return dono() || (liberado() && !soVer() && (acs().get('mods', []).hasAny(['carros']) || acs().get('extras', []).hasAny(['carros']))); }
+    match /carros/{id} { allow read: if carrosOk(); allow write: if carrosAdm(); }
+    match /carrosv/{id} { allow read: if carrosOk(); allow create, update: if carrosOk() && (dono() || !soVer()); allow delete: if false; }
+    match /carrosk/{id} { allow read: if carrosOk(); allow write: if carrosOk() && (dono() || !soVer()); }
     function frotaOk() { return dono() || (liberado() && (acs().get('mods', []).hasAny(['frota']) || acs().get('extras', []).hasAny(['frota']))); }
     match /frota/{resto=**} {
       allow read: if frotaOk();

@@ -23,7 +23,8 @@
   window.__bordo=B; B.sinc=()=>sincroniza();
   const ETAPAS=[['mix','Mix'],['fat','Faturado'],['carr','Carregado'],['fim','Finalizado']], ETN=Object.fromEntries(ETAPAS);
   const LIM_PAD={mix:60,fat:30,carr:60,fim:30};
-  const VEICS=[['CAMIONETE','Camionete'],['HR','HR'],['TOCO','Toco'],['TRUCK','Truck'],['BITRUCK','Bitruck'],['CARRETA','Carreta'],['CARRETA_GRANELEIRA','Carreta graneleira']];
+  const VEICS=[['CAMIONETE','Camionete'],['HR','HR'],['TOCO','Toco'],['TRUCK','Truck'],['BITRUCK','Bitruck'],['CARRETA','Carreta'],['CARRETA_GRANELEIRA','Carreta graneleira'],['CARRETA_SIDER','Carreta sider']];
+  const PAR={mix:'fat',fat:'mix',carr:'fim',fim:'carr'}; const juntos=()=>{ try{ return !(B.cfg&&B.cfg.juntos===false); }catch(e){ return true; } };
   const MOTIVOS=['Demora no pátio','Falta de material','Documento / nota com problema','Veículo não serve para a carga','Cliente cancelou','Outro'];
   const SOL_ST=[['recebido','Recebido','Chegou e ninguém olhou ainda'],['avaliacao','Em avaliação','Conferindo saldo, crédito e veículo'],['liberado','Agendamento liberado','Dia e horário confirmados: já está nos Agendamentos e na TV']];
   const veicN=k=>(VEICS.find(v=>v[0]===k)||[k,k||''])[1];
@@ -145,13 +146,16 @@
     finally{ if(B.f) B.f.salvando=false; P.render(); } }
   async function marcar(id,k){ const e=entDe(id); if(!e||e.des||e.removido) return; if(!pode()) return P.toast('Seu acesso é só para ver.');
     const et=Object.assign({},e.et||{}), por=Object.assign({},e.etPor||{}), on=!et[k];
-    if(!on&&!confirm('Desmarcar "'+ETN[k]+'" de '+e.mot+'?')) return;
-    const agora=new Date().toISOString(); et[k]=on?agora:null; por[k]=on?eu():null;
+    if(!on&&!confirm('Desmarcar "'+ETN[k]+'"'+(PAR[k]&&juntos()&&(e.et||{})[PAR[k]]===(e.et||{})[k]?' e "'+ETN[PAR[k]]+'"':'')+' de '+e.mot+'?')) return;
+    const agora=new Date().toISOString(), velho=et[k]; et[k]=on?agora:null; por[k]=on?eu():null;
+    /* 27/11/2026 · como no programa antigo: Mix e Faturado saem juntos, Carregado e Finalizado também (um toque marca os dois) */
+    const pk=PAR[k], mk=[k]; if(pk&&juntos()){ if(on&&!et[pk]){ et[pk]=agora; por[pk]=eu(); mk.push(pk); } else if(!on&&et[pk]&&et[pk]===velho){ et[pk]=null; por[pk]=null; mk.push(pk); } }
+    const nomeMk=mk.length>1?ETAPAS.filter(([x])=>mk.includes(x)).map(([,n])=>n).join(' e '):ETN[k];
     try{ await P.db().collection('bordo').doc(id).update({et,etPor:por}); e.et=et; e.etPor=por;
-      if(on&&(k==='fat'||k==='fim')){ const ags=(e.agIds||[]).map(agDe).filter(Boolean); const lst=ags.length?ags:await agsDosPeds(e.peds||[]);
+      for(const k of mk.filter(x=>on&&(x==='fat'||x==='fim'))){ const ags=(e.agIds||[]).map(agDe).filter(Boolean); const lst=ags.length?ags:await agsDosPeds(e.peds||[]);
         for(const x of lst){ try{ if(k==='fat'&&!x.fat) await gravaAg(x,{fat:agora},'Faturado às '+hm(agora)+' (diário de bordo)');
           if(k==='fim'&&x.aberto) await gravaAg(x,{status:'carregado',aberto:false,fechadoEm:agora,carregadoEm:agora,carregadoDia:hoje()},'Carregado às '+hm(agora)+' (diário de bordo nº '+e.ord+')'); }catch(er){ console.warn('[bordo] agendamento',er); } } }
-      P.toast(on?ETN[k]+' às '+hm(agora)+' · '+e.mot:ETN[k]+' desmarcado.'); if(escritorio()) sincroniza(); }
+      P.toast(on?nomeMk+' às '+hm(agora)+' · '+e.mot:nomeMk+(mk.length>1?' desmarcados.':' desmarcado.')); if(escritorio()) sincroniza(); }
     catch(er){ P.erro(er); } P.render(); }
   async function desistir(id){ const e=entDe(id), D=B.ov&&B.ov.des; if(!e||!D) return; if(!D.motivo){ D.err='Escolha o motivo.'; P.render(); return; }
     try{ const des={em:new Date().toISOString(),motivo:D.motivo,obs:String(D.obs||'').trim().slice(0,200),por:eu()}; await P.db().collection('bordo').doc(id).update({des}); e.des=des; B.ov=null; P.toast(e.mot+' marcado como desistente.'); }
@@ -239,7 +243,7 @@
         <td class="bd-num bd-pt${st.atr?' atr':''}">${e.des?'saiu '+esc(hm(e.des.em)):esc(dur(pm))}</td>
         <td class="bd-acts">${pode()&&st.k==='pend'?`<button type="button" class="bd-lk" data-act="bd-des" data-v="${esc(e._id)}">Desistiu</button>`:''}${pode()?`<button type="button" class="bd-lk" data-act="bd-ed" data-v="${esc(e._id)}">Corrigir</button>`:''}</td></tr>`; };
     const tab=vs.length?`<div class="bd-tw"><table class="bd-tab"><thead><tr><th>#</th><th>Motorista · cliente</th><th>Placa · veículo</th><th>Chegada</th><th>Agenda</th><th>Tipo</th>${ETAPAS.map(([,n])=>`<th>${n}</th>`).join('')}<th class="r">No pátio</th><th><span class="sr">Ações</span></th></tr></thead><tbody>${rows.map(linha).join('')||'<tr><td colspan="13" class="bd-vz">Nada neste filtro.</td></tr>'}</tbody></table></div>
-      <p class="bd-leg">Toque na etapa para marcar a hora. Laranja: esperando agora, com o tempo · vermelho: passou do tempo combinado (${ETAPAS.map(([k,n])=>n.toLowerCase()+' '+lim(k)+' min').join(', ')}) · verde: finalizado · cinza: desistente.</p>`
+      <p class="bd-leg">Toque na etapa para marcar a hora${juntos()?' (Mix e Faturado marcam juntos; Carregado e Finalizado também)':''}. Laranja: esperando agora, com o tempo · vermelho: passou do tempo combinado (${ETAPAS.map(([k,n])=>n.toLowerCase()+' '+lim(k)+' min').join(', ')}) · verde: finalizado · cinza: desistente.</p>`
       :`<div class="bd-vz2"><b>${live?'Nenhum caminhão chegou ainda hoje.':'Nenhum caminhão neste dia.'}</b><span>${live?'A portaria registra a chegada pelo celular, ou use "+ Registrar chegada".':''}</span></div>`;
     return topoDia(d)+kp+`<section class="card bd-card"><div class="bd-bar"><h2>Fila ${live?'de hoje':'do dia'}</h2>${ch('todos','Todos',vs.length)}${ch('patio','No pátio',K.pat.length)}${ch('fim','Finalizados',K.fim.length)}${ch('des','Desistentes',K.des.length)}
       <label class="bd-busca"><span class="sr">Buscar</span><input id="bd-q" type="search" placeholder="Motorista, cliente, placa ou pedido" value="${esc(B.q||'')}"></label></div>${tab}</section>`+ovHtml(); }
@@ -363,6 +367,7 @@
     return `<header class="bd-top"><div><p class="bd-eb">Solicitações · diário de bordo</p><h1>Ajustes</h1></div></header><!--tabs-->
       <section class="card"><h2>Tempo máximo de cada etapa</h2><p class="bd-sub">Passou desse tempo esperando a etapa, a linha fica vermelha na TV e no diário, e quem cuida da etapa recebe o aviso (se tiver tópico).</p>
       <div class="bd-ajg">${ETAPAS.map(([k,n])=>`<label class="bd-lb">${n} (minutos)<input id="bd-a-l-${k}" class="bd-in" type="number" min="5" max="600" value="${esc(String(L[k]||LIM_PAD[k]))}"></label><label class="bd-lb">Aviso do ${n.toLowerCase()} (tópico do ntfy)<input id="bd-a-t-${k}" class="bd-in" maxlength="60" value="${esc(T[k]||'')}" placeholder="ex.: colafix-${k}"></label>`).join('')}</div>
+      <label class="bd-ck" style="display:flex;gap:8px;align-items:center;margin:0 0 12px"><input type="checkbox" id="bd-a-jt" ${juntos()?'checked':''}> Um toque marca Mix e Faturado juntos (e Carregado e Finalizado juntos)</label>
       <label class="bd-lb" style="max-width:260px">TV: trocar de aba a cada (segundos)<input id="bd-a-tv" class="bd-in" type="number" min="10" max="600" value="${esc(String(B.cfg.tvSeg||30))}"></label>
       ${pode()?'<div class="bd-libb"><button type="button" class="bd-b1" data-act="bd-a-salva">Salvar ajustes</button></div>':''}<p class="bd-hint">Para receber o aviso: instale o app ntfy no celular, toque em + e assine o tópico escrito aqui.</p></section>`; }
 
@@ -436,7 +441,8 @@
       B.cfg.reps=lst; P.toast(novoLink?'Link novo criado. Mande para '+r.nome+'.':r.ativo===false?'Link de '+r.nome+' desligado.':'Link de '+r.nome+' ligado.'); }catch(e){ P.erro(e); } P.render(); }
   async function salvaAjustes(){ const lim_={}, tops={}; ETAPAS.forEach(([k])=>{ const n=+((document.getElementById('bd-a-l-'+k)||{}).value); lim_[k]=n>=5?Math.round(n):LIM_PAD[k]; tops[k]=String((document.getElementById('bd-a-t-'+k)||{}).value||'').trim().replace(/[^A-Za-z0-9_-]/g,''); });
     const tv=Math.max(10,+((document.getElementById('bd-a-tv')||{}).value)||30);
-    try{ await P.db().doc('config/bordo').set({lim:lim_,tops,tvSeg:tv},{merge:true}); Object.assign(B.cfg,{lim:lim_,tops,tvSeg:tv}); P.toast('Ajustes salvos.'); }catch(e){ P.erro(e); } P.render(); }
+    const jt=!!(document.getElementById('bd-a-jt')||{checked:true}).checked;
+    try{ await P.db().doc('config/bordo').set({lim:lim_,tops,tvSeg:tv,juntos:jt},{merge:true}); Object.assign(B.cfg,{lim:lim_,tops,tvSeg:tv,juntos:jt}); P.toast('Ajustes salvos.'); }catch(e){ P.erro(e); } P.render(); }
 
   /* ---------- tela: Relatório do mês ---------- */
   async function lerMes(m){ B.rel.lendo=true; B.rel.d=null; P.render(); const a=m+'-01', z=m+'-31';
@@ -580,6 +586,7 @@
   document.addEventListener('fullscreenchange',()=>{ if(!document.fullscreenElement&&B.tv.cheia){ B.tv.cheia=false; P.render(); } });
 
   P.registrarModulo({ id:'bordo', nome:'Diário de bordo', ic:'caminhao', telas:{ bordo:{nome:'Diário de bordo',mob:'Diário',render:vDiario}, bordosol:{nome:'Solicitações de agendamento',mob:'Solicitações',render:vSol}, bordotv:{nome:'TV do diário',mob:'TV',render:vTV}, bordorel:{nome:'Relatório do mês',mob:'Relatório',render:vRel} }, iniciar });
+  P.registrarPerfil('faturamento',{ nome:'Faturamento e expedição', mods:['bordo','agend'], pos:5, desc:'Para o pessoal do faturamento/expedição: diário de bordo (registrar chegada, marcar Mix/Faturado e Carregado/Finalizado, desistentes), solicitações dos representantes, agendamentos, TV e relatório do mês.' });
   P.registrarPerfil('tvbordo',{ nome:'TV do diário de bordo', mods:['bordo'], soVer:true, pos:5, desc:'Para a TV ou o monitor da expedição: mostra o diário de bordo e os agendados em tela inteira, trocando de aba sozinho. Só acompanha, não grava nada.' });
   { let foi=false; const t=setInterval(()=>{ try{ const A=S.acs; if(!A||!A.pronto) return; clearInterval(t); const d=A.doc||{};
       if(!foi&&((!A.dono&&d.perfil==='tvbordo')||(A.dono&&/[?&]tv=bordo\b/.test(location.search)))&&P.viewOk('bordotv')){ foi=true; P.go('bordotv'); } }catch(e){ clearInterval(t); } },400); }

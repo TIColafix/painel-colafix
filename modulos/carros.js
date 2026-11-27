@@ -838,5 +838,6 @@ Eu, {NOME}, CPF {CPF}, declaro que estou ciente e de acordo com as regras abaixo
   .cv-escb span{display:flex;flex-direction:column}.cv-escb small{color:var(--muted);font-size:13px}.cv-escb:disabled{opacity:.5;cursor:default}.cv-escb:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
   .cv-ftpain{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:110px;border:2px dashed #143F54;border-radius:14px;cursor:pointer;color:#143F54;text-align:center;padding:10px}.cv-ftpain span{font-size:28px}.cv-ftpain b{font-size:16px}.cv-ftpain small{color:var(--muted);font-size:13px}
   .cv-ftp{width:100%;height:180px}.cv-ftp img{object-fit:contain;background:#000}
+  .cv-com .cv-bt1{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px}.cv-com .cv-bt1 svg{width:20px;height:20px;flex:none}
   </style>`);
 })();

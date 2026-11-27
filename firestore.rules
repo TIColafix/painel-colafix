@@ -21,7 +21,7 @@ service cloud.firestore {
       return logado() && provedor() != 'anonymous' && exists(caminhoAcs())
         && acs().get('ativo', true) != false && acs().get('apagado', false) != true;
     }
-    function soVer() { return acs().get('perfil', '') in ['ver', 'tv', 'cal', 'silosver', 'consulta', 'tvtodas', 'rh', 'producao', 'auditor', 'tvman', 'diretor']; } // consultas, TVs e diretores (25/11/2026) não gravam
+    function soVer() { return acs().get('perfil', '') in ['ver', 'tv', 'cal', 'silosver', 'consulta', 'tvtodas', 'rh', 'producao', 'auditor', 'tvman', 'diretor', 'tvbordo']; } // consultas, TVs e diretores (25/11/2026) não gravam
     function le() { return dono() || liberado(); }
     function grava() { return dono() || (liberado() && !soVer()); }
     // Ajuste por pessoa (Equipe e cargos → Ajustar acesso): coleções em que ela não pode gravar (ex.: módulo "só ver").
@@ -31,8 +31,8 @@ service cloud.firestore {
 
     // Tudo o que é operacional (ordens, entregas, paradas, ranchos, almox, premix, chamados, config...)
     match /{col}/{id} {
-      allow read: if le() && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'carrosf', 'carrosp', 'carrost', 'api', 'apibots', 'erros', 'pedsenha']);
-      allow write: if grava() && !bloq(col) && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'carrosf', 'carrosp', 'carrost', 'api', 'apibots', 'erros', 'pedsenha'])
+      allow read: if le() && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'carrosf', 'carrosp', 'carrost', 'bordosol', 'bordorep', 'rhatestrec', 'rhatestarq', 'api', 'apibots', 'erros', 'pedsenha']);
+      allow write: if grava() && !bloq(col) && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'carrosf', 'carrosp', 'carrost', 'bordosol', 'bordorep', 'rhatestrec', 'rhatestarq', 'api', 'apibots', 'erros', 'pedsenha'])
         && !(col == 'config' && id == 'geral'); // config/geral tem regra própria (logo abaixo)
     }
 
@@ -70,8 +70,8 @@ service cloud.firestore {
       allow delete: if dono();
     }
     match /{col}/{id}/{resto=**} {
-      allow read: if le() && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'carrosf', 'carrosp', 'carrost', 'api', 'apibots', 'erros', 'pedsenha']);
-      allow write: if grava() && !bloq(col) && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'carrosf', 'carrosp', 'carrost', 'api', 'apibots', 'erros', 'pedsenha'])
+      allow read: if le() && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'carrosf', 'carrosp', 'carrost', 'bordosol', 'bordorep', 'rhatestrec', 'rhatestarq', 'api', 'apibots', 'erros', 'pedsenha']);
+      allow write: if grava() && !bloq(col) && !(col in ['acessos', 'pedidos', 'perfis', 'silomov', 'crachas', 'rh', 'presenca', 'gxquadro', 'melhorias', 'horaextra', 'frota', 'carros', 'carrosv', 'carrosk', 'carrosf', 'carrosp', 'carrost', 'bordosol', 'bordorep', 'rhatestrec', 'rhatestarq', 'api', 'apibots', 'erros', 'pedsenha'])
         && !(col == 'config' && id == 'geral'); // o ** também pega o próprio documento (config/geral não tem subcoleções)
     }
 
@@ -222,18 +222,56 @@ service cloud.firestore {
       allow create: if carrosOk() && (dono() || !soVer());
       allow update: if (carrosOk() && (dono() || !soVer()))
         || (carrosMot() && resource.data.motUid == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aceite', 'devol', 'comb']));
-      allow delete: if false; }
+      allow delete: if dono(); }  // só a dona apaga (limpeza dos testes)
     // CPF e nome do motorista (26/11): só o adm grava; leem o adm e o próprio motorista
     match /carrosp/{id} { allow read: if carrosAdm() || (carrosMot() && resource.data.uid == request.auth.uid); allow write: if carrosAdm(); }
     // termo de ciência aceito: o motorista cria o próprio (não muda depois); o adm lê
     match /carrost/{id} { allow read: if carrosAdm() || (carrosMot() && resource.data.uid == request.auth.uid);
-      allow create: if carrosMot() && request.resource.data.uid == request.auth.uid; allow update, delete: if false; }
+      allow create: if carrosMot() && request.resource.data.uid == request.auth.uid; allow update: if false; allow delete: if dono(); }
     // fotos das avarias (motorista na saída/volta): quem tirou lê e cria; portaria e adm leem
     match /carrosf/{id} {
       allow read: if carrosOk() || (carrosMot() && resource.data.por == request.auth.uid);
       allow create: if (carrosOk() || carrosMot()) && request.resource.data.por == request.auth.uid && request.resource.data.d is string && request.resource.data.d.size() < 900000;
-      allow update, delete: if false; }
+      allow update: if false; allow delete: if dono(); }
     match /carrosk/{id} { allow read: if carrosOk(); allow write: if carrosOk() && (dono() || !soVer()); }
+    // Atestado pelo link (27/11/2026, atestado.html): o funcionário, sem login, só CRIA o envio e as fotos (não lê nada);
+    // o RH (rhOk) lê, marca como registrado/recusado e apaga as fotos depois de guardar o documento.
+    match /rhatestrec/{id} {
+      allow create: if id.matches('a-[a-z0-9]{8,30}')
+        && request.resource.data.keys().hasOnly(['mat', 'nome', 'tipo', 'ini', 'dias', 'hIni', 'hFim', 'obs', 'tel', 'n', 'em', 'st'])
+        && request.resource.data.st == 'novo' && request.resource.data.tipo in ['atestado', 'comparecimento', 'acompanhante']
+        && request.resource.data.mat is string && request.resource.data.mat.size() >= 1 && request.resource.data.mat.size() <= 12
+        && request.resource.data.nome is string && request.resource.data.nome.size() >= 3 && request.resource.data.nome.size() <= 80
+        && request.resource.data.obs is string && request.resource.data.obs.size() <= 200
+        && request.resource.data.n is int && request.resource.data.n >= 1 && request.resource.data.n <= 3;
+      allow read, update, delete: if rhOk();
+    }
+    match /rhatestarq/{id} {
+      allow create: if id.matches('a-[a-z0-9]{8,30}-[0-2]')
+        && request.resource.data.keys().hasOnly(['rec', 'd', 'mime', 'nome', 'em'])
+        && request.resource.data.d is string && request.resource.data.d.size() < 760000
+        && request.resource.data.mime in ['image/jpeg', 'application/pdf'];
+      allow read, delete: if rhOk();
+    }
+    // Diário de bordo e solicitações de agendamento (27/11/2026): bordo/ e bordofalta/ seguem a regra geral.
+    // Link do representante (rep.html, sem login): bordorep/<token> diz se o link está ligado; com ele o representante
+    // lê só as próprias solicitações (tok = token dele), cria uma nova (status recebido) e só pede reagendar/cancelar
+    // (campo acao) ou cancela a que ainda não foi liberada. O painel (quem grava) faz o resto.
+    function repTok(t) { return t is string && t.size() >= 20 && exists(/databases/$(database)/documents/bordorep/$(t))
+      && get(/databases/$(database)/documents/bordorep/$(t)).data.ativo == true; }
+    match /bordorep/{tok} { allow get: if true; allow list: if le(); allow write: if grava(); }
+    match /bordosol/{id} {
+      allow read: if le() || repTok(resource.data.get('tok', ''));
+      allow create: if grava() || (repTok(request.resource.data.get('tok', ''))
+        && request.resource.data.keys().hasOnly(['peds', 'cli', 'repId', 'repNome', 'tok', 'origem', 'recebido', 'prazoConf', 'prazoCarr', 'quer', 'veic', 'obs', 'st', 'aberto', 'hist', 'acao'])
+        && request.resource.data.origem == 'link' && request.resource.data.st == 'recebido' && request.resource.data.aberto == true
+        && request.resource.data.repId == get(/databases/$(database)/documents/bordorep/$(request.resource.data.tok)).data.repId
+        && request.resource.data.peds is list && request.resource.data.peds.size() > 0 && request.resource.data.peds.size() <= 20);
+      allow update: if grava() || (repTok(resource.data.get('tok', '')) && request.resource.data.get('tok', '') == resource.data.get('tok', '')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['acao', 'hist', 'st', 'aberto', 'alterado'])
+        && (request.resource.data.st == resource.data.st || (request.resource.data.st == 'cancelado' && request.resource.data.aberto == false && resource.data.st in ['recebido', 'avaliacao'])));
+      allow delete: if dono();
+    }
     function frotaOk() { return dono() || (liberado() && (acs().get('mods', []).hasAny(['frota']) || acs().get('extras', []).hasAny(['frota']))); }
     match /frota/{resto=**} {
       allow read: if frotaOk();

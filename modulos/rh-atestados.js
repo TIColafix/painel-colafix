@@ -14,7 +14,7 @@
   const TIPOS=[['atestado','Atestado médico','dias',true,'teal'],['comparecimento','Declaração de comparecimento','horas',true,'pet'],['acompanhante','Acompanhamento de familiar','dias',true,'cinza'],
     ['legal','Falta legal (casamento, luto, doação…)','dias',true,'cinza'],['justificada','Falta justificada (sem documento)','dias',true,'warn'],['injustificada','Falta sem justificativa','dias',false,'crit']];
   const TIPO=k=>TIPOS.find(t=>t[0]===k)||TIPOS[0];
-  const A={xs:[],lido:false,sub:false,f:null,cx:null,salv:false,fil:{per:'mes',mes:'',de:'',ate:'',tipo:'',setor:'',q:''}};
+  const A={xs:[],lido:false,sub:false,f:null,cx:null,salv:false,rec:[],recLido:false,lk:false,abrindo:'',fil:{per:'mes',mes:'',de:'',ate:'',tipo:'',setor:'',q:''}};
   let C=null;
   const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
   const dig=s=>String(s||'').replace(/\D/g,'');
@@ -66,7 +66,7 @@
         <td>${x.arq&&x.arq.url?`<a class="lnk" href="${e(x.arq.url)}" target="_blank" rel="noopener">Ver documento</a>`:'<small>sem arquivo</small>'}</td>
         <td class="rat-acs"><button class="lnk" data-act="rat-ed" data-id="${e(x._id)}">Editar</button><button class="lnk rat-del" data-act="rat-del" data-id="${e(x._id)}">${A.cx===x._id?'Confirmar: apagar':'Apagar'}</button></td></tr>`; };
     return `<section class="card rat"><div class="rat-tb">${c.semTitulo?'<div></div>':'<div><h2 style="margin:0">Atestados e faltas</h2><div class="sub" style="margin:2px 0 0">Entra sozinho no fechamento da folha, na presença e no almoço.</div></div>'}
-        <span class="rat-sp"></span>${window.RHRel?RHRel.botoes('rat-pdf','rat-xls'):''}<button class="btn" data-act="rat-novo">${c.P.ic?c.P.ic('mais',16,2.4):''}Registrar</button></div>
+        <span class="rat-sp"></span>${window.RHRel?RHRel.botoes('rat-pdf','rat-xls'):''}<button class="btn sec" data-act="rat-rlink" aria-expanded="${A.lk}">Link para os funcionários</button><button class="btn" data-act="rat-novo">${c.P.ic?c.P.ic('mais',16,2.4):''}Registrar</button></div>${A.lk?linkHtml(c):''}${recHtml(c)}
       <div class="rr-fil">${sel('per','Período',[['mes','Mês'],['90','Últimos 90 dias'],['ano','Este ano'],['datas','Escolher datas']])}
         ${f.per==='mes'?`<label><span>Mês</span><span class="rat-mes"><button class="btn sec rh-sm" data-act="rat-mes" data-v="-1" aria-label="Mês anterior">‹</button><b>${e(mesNome(m))}</b><button class="btn sec rh-sm" data-act="rat-mes" data-v="1" aria-label="Próximo mês">›</button></span></label>`:''}
         ${f.per==='datas'?`<label><span>De</span><input class="txt" type="date" data-rat-f="de" value="${e(f.de)}"></label><label><span>Até</span><input class="txt" type="date" data-rat-f="ate" value="${e(f.ate)}"></label>`:''}
@@ -109,7 +109,42 @@
     try{ if(F.file&&c.guardar){ const ext=(F.file.name.match(/\.[a-z0-9]+$/i)||['.jpg'])[0], nome=(F.ini+' '+t[1].split(' (')[0]+' - '+d.nome).replace(/[\\/:*?"<>|]+/g,'-')+ext;
         try{ d.arq=await c.guardar('Atestados/'+F.ini.slice(0,7),nome,F.file); }catch(e){ P.toast('O registro foi guardado, mas o arquivo não subiu: '+(e&&e.message||e)); } }
       await P.db().doc(COL+'/'+nid).set(d); const i=A.xs.findIndex(x=>x._id===nid); if(i>=0) A.xs[i]=Object.assign({_id:nid},d); else A.xs.unshift(Object.assign({_id:nid},d));
-      A.f=null; P.toast(t[1]+' de '+d.nome+' guardado.'); }catch(e){ P.erro(e); } finally{ A.salv=false; } P.render(); }
+      const rec=F.rec; A.f=null; P.toast(t[1]+' de '+d.nome+' guardado.');
+      if(rec){ try{ await P.db().doc('rhatestrec/'+rec.id).update({st:'registrado',atestId:nid,regEm:agora,regPor:c.eu()}); A.rec=A.rec.filter(r=>r._id!==rec.id); await apagaArqs(P,rec); }catch(e){ console.warn('[RH] atestado do link',e); } }
+    }catch(e){ P.erro(e); } finally{ A.salv=false; } P.render(); }
+  /* ---------- atestados enviados pelo link (atestado.html, 27/11/2026) ---------- */
+  const linkAt=()=>{ let b=(window.claude&&window.claude.link)||(location.origin+location.pathname.replace(/[^/]*$/,'')); if(!/\/$/.test(b)) b+='/'; return b+'atestado.html'; };
+  function assinaRec(P){ if(A.recSub) return; A.recSub=true; P.inscrever('rh-atrec',()=>P.db().collection('rhatestrec').where('st','==','novo').limit(100),s=>{ A.rec=s.docs.map(d=>Object.assign({_id:d.id},d.data())).sort((a,b)=>String(a.em).localeCompare(String(b.em))); A.recLido=true; P.rerender(); }); }
+  { const t=setInterval(()=>{ try{ const P=window.Painel; if(!P||!P.S||!P.S.acs||!P.S.acs.pronto||!P.db()) return; clearInterval(t); if(P.viewOk('rhatest')||P.viewOk('rhfunc')) assinaRec(P); }catch(e){ clearInterval(t); } },800);
+    const t2=setInterval(()=>{ const P=window.Painel; if(!P||!P.registrarAviso) return; clearInterval(t2);
+      P.registrarAviso(()=>A.rec.length?[{nivel:'warn',rotulo:'RH',titulo:A.rec.length+(A.rec.length>1?' atestados enviados pelo link':' atestado enviado pelo link'),texto:A.rec.slice(0,3).map(r=>r.nome+' ('+br(r.ini)+')').join(', ')+' · conferir e registrar',go:'rhatest'}]:[]); },500); }
+  function funcDoRec(c,r){ const fs=(c.R.func||[]).filter(f=>f&&!f.removido), m=String(r.mat||'').trim();
+    return (m&&fs.find(f=>String(f.matricula||'').trim()===m))||fs.find(f=>norm(f.nome)===norm(r.nome))||null; }
+  function recHtml(c){ if(!A.rec.length) return ''; const e=c.esc;
+    return `<div class="rat-rec" aria-label="Recebidos pelo link"><div class="rat-rech"><b>Recebidos pelo link · ${A.rec.length}</b><small>Confira o documento e registre. Depois de registrar, o arquivo vai para a pasta dos atestados.</small></div>
+      ${A.rec.map(r=>{ const f=funcDoRec(c,r), t=TIPO(r.tipo), porMat=f&&String(f.matricula||'').trim()===String(r.mat).trim();
+        return `<div class="rat-ri"><div class="rat-rit"><b>${e(f?c.titulo(f.nome):r.nome)}</b><small>Matrícula ${e(r.mat)}${f?(porMat?' · '+e([f.setor,f.funcao].filter(Boolean).join(' · ')):' · achado pelo nome (a matrícula não está no cadastro)'):' · <span class="rat-rno">não achei no cadastro: escolha a pessoa ao registrar</span>'}${r.tel?' · '+e(r.tel):''}</small>
+          <small><span class="rat-tp ${t[4]}">${e(t[1])}</span> ${e(t[2]==='horas'?br(r.ini)+' · '+r.hIni+' às '+r.hFim:br(r.ini)+' · '+r.dias+' dia'+(r.dias>1?'s':''))} · enviado ${e(new Date(r.em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))}${r.obs?' · “'+e(r.obs)+'”':''}</small></div>
+          <div class="rat-ria">${Array.from({length:Math.max(1,+r.n||1)},(_,i)=>`<button class="btn sec rh-sm" data-act="rat-rver" data-id="${e(r._id)}" data-i="${i}">${A.abrindo===r._id+'-'+i?'Abrindo…':(+r.n>1?'Ver '+(i+1):'Ver documento')}</button>`).join('')}<button class="btn rh-sm" data-act="rat-rreg" data-id="${e(r._id)}">Registrar</button><button class="lnk rat-del" data-act="rat-rrec" data-id="${e(r._id)}">Recusar</button></div></div>`; }).join('')}</div>`; }
+  function qrSvg(txt){ if(typeof window.qrcode!=='function') return ''; const q=window.qrcode(0,'M'); q.addData(txt); q.make(); const n=q.getModuleCount(); let d='';
+    for(let y=0;y<n;y++) for(let x=0;x<n;x++) if(q.isDark(y,x)) d+='M'+x+' '+y+'h1v1h-1z'; return `<svg viewBox="-2 -2 ${n+4} ${n+4}" width="150" height="150" role="img" aria-label="QR code do link"><rect x="-2" y="-2" width="${n+4}" height="${n+4}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`; }
+  function linkHtml(c){ const e=c.esc, L=linkAt();
+    return `<div class="rat-lk"><div class="rat-lkq">${qrSvg(L)}</div><div class="rat-lkt"><b>Link para o funcionário mandar o atestado</b><small>Sem senha: ele põe a matrícula e o nome, o tipo, as datas e tira a foto. Chega aqui em "Recebidos pelo link". Cole o QR no mural ou mande o link no grupo.</small>
+      <code>${e(L)}</code><div class="rat-ria"><button class="btn sec rh-sm" data-act="rat-rcopia">Copiar link</button><a class="btn sec rh-sm" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent('Para mandar atestado ou declaração para o RH da Colafix, use este link: '+L)}">Mandar no WhatsApp</a><button class="btn sec rh-sm" data-act="rat-rqr">Imprimir cartaz</button></div></div></div>`; }
+  async function arqsDe(P,r){ const out=[]; for(let i=0;i<Math.max(1,+r.n||1);i++){ const g=await P.db().doc('rhatestarq/'+r._id+'-'+i).get(); if(g.exists) out.push(g.data()); } return out; }
+  async function apagaArqs(P,r){ for(let i=0;i<Math.max(1,+r.n||1);i++){ try{ await P.db().doc('rhatestarq/'+(r.id||r._id)+'-'+i).delete(); }catch(e){} } }
+  const blobDe=d=>{ const [h,b]=String(d).split(','), mime=(h.match(/data:([^;]+)/)||[])[1]||'application/octet-stream', bin=atob(b), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return new Blob([u],{type:mime}); };
+  async function arquivoDoRec(P,r){ const xs=await arqsDe(P,r); if(!xs.length) return null; const base=(r.ini+' envio '+String(r.nome||'')).replace(/[\\/:*?"<>|]+/g,'-');
+    if(xs[0].mime==='application/pdf') return new File([blobDe(xs[0].d)],base+'.pdf',{type:'application/pdf'});
+    const J=window.jspdf&&window.jspdf.jsPDF; if(J&&xs.length>1){ try{ const pdf=new J({unit:'mm',format:'a4'}); for(let i=0;i<xs.length;i++){ if(i) pdf.addPage(); const im=await new Promise((ok,er)=>{ const m=new Image(); m.onload=()=>ok(m); m.onerror=er; m.src=xs[i].d; }); const k=Math.min(190/im.width,277/im.height); pdf.addImage(xs[i].d,'JPEG',10,10,im.width*k,im.height*k); }
+      return new File([pdf.output('blob')],base+'.pdf',{type:'application/pdf'}); }catch(e){ console.warn('[RH] juntar fotos',e); } }
+    return new File([blobDe(xs[0].d)],base+'.jpg',{type:'image/jpeg'}); }
+  async function recAcao(c,a,id,i){ const P=c.P, r=A.rec.find(x=>x._id===id); if(!r) return;
+    if(a==='ver'){ A.abrindo=id+'-'+i; P.render(); try{ const g=await P.db().doc('rhatestarq/'+id+'-'+i).get(); if(!g.exists) return P.toast('O arquivo não foi encontrado.'); const u=URL.createObjectURL(blobDe(g.data().d)); const w=window.open(u,'_blank','noopener'); if(!w){ const l=document.createElement('a'); l.href=u; l.target='_blank'; l.rel='noopener'; document.body.appendChild(l); l.click(); l.remove(); } setTimeout(()=>URL.revokeObjectURL(u),60000); }catch(e){ P.erro(e); } finally{ A.abrindo=''; P.render(); } return; }
+    if(a==='rec'){ const m=prompt('Recusar o envio de '+r.nome+'? Motivo (opcional, fica guardado):',''); if(m===null) return;
+      try{ await P.db().doc('rhatestrec/'+id).update({st:'recusado',motivo:String(m).trim().slice(0,160),regEm:new Date().toISOString(),regPor:c.eu()}); A.rec=A.rec.filter(x=>x._id!==id); await apagaArqs(P,r); P.toast('Envio recusado.'); }catch(e){ P.erro(e); } P.render(); return; }
+    if(a==='reg'){ const f=funcDoRec(c,r); P.toast('Juntando o documento…'); let file=null; try{ file=await arquivoDoRec(P,r); }catch(e){ console.warn(e); }
+      A.f={funcId:f?f._id:'',nome:f?c.titulo(f.nome):r.nome,tipo:r.tipo||'atestado',ini:r.ini,dias:r.dias||1,hIni:r.hIni||'',hFim:r.hFim||'',abona:TIPO(r.tipo)[3],mot:r.obs||'',file,rec:{id:r._id,n:r.n}}; P.render(); } }
   /* ---------- relatório no padrão (RHRel) ---------- */
   const linhaExp=(c,D,x)=>{ const fu=(c.R.func||[]).find(y=>y._id===x.funcId); return [c.titulo(x.nome||''),(fu&&fu.setor)||x.setor||'',TIPO(x.tipo)[1],br(x.ini),TIPO(x.tipo)[2]==='horas'?'':br(fimDe(x)),TIPO(x.tipo)[2]==='horas'?'':D.dentro(x),TIPO(x.tipo)[2]==='horas'?horasDe(x):'',x.abona===false||x.tipo==='injustificada'?'não':'sim',x.mot||'',x.arq&&x.arq.url?'sim':'não',x.por||'']; };
   async function pdf(c){ if(!window.RHRel) return c.P.toast('O gerador de relatórios ainda não carregou.'); const D=dados(c);
@@ -133,7 +168,10 @@
   document.addEventListener('keydown',ev=>{ if(!A.f||!C) return; if(ev.key==='Escape'){ A.f=null; C.P.render(); } if(ev.key==='Enter'&&ev.target&&ev.target.id==='rat-pn'){ const b=document.querySelector('[data-act="rat-pick"]'); if(b){ ev.preventDefault(); b.click(); } } });
   document.addEventListener('click',async ev=>{ const fu=ev.target.closest&&ev.target.closest('[data-rat-fundo]'); if(fu&&ev.target===fu&&C){ A.f=null; C.P.render(); return; }
     const b=ev.target.closest&&ev.target.closest('[data-act^="rat-"]'); if(!b||!C) return; const a=b.dataset.act, P=C.P; le();
-    if(a==='rat-novo'){ novo(C,b.dataset.id||''); return; } if(a==='rat-fx'){ A.f=null; P.render(); return; }
+    if(a==='rat-novo'){ novo(C,b.dataset.id||''); return; }
+    if(a==='rat-rlink'){ A.lk=!A.lk; P.render(); return; } if(a==='rat-rcopia'){ const L=linkAt(); try{ await navigator.clipboard.writeText(L); }catch(e){} window.__ratLink=L; P.toast('Link copiado.'); return; }
+    if(a==='rat-rqr'){ const w=window.open('','_blank'); if(w){ w.document.write('<!doctype html><title>Atestado pelo celular</title><body style="font-family:sans-serif;text-align:center;padding:40px"><h1 style="font-size:40px;margin:0 0 10px">Atestado pelo celular</h1><p style="font-size:22px;margin:0 0 30px">Aponte a câmera, preencha e tire a foto do atestado.<br>Vai direto para o RH.</p><div style="width:360px;margin:0 auto">'+qrSvg(linkAt()).replace('width="150" height="150"','width="360" height="360"')+'</div><p style="font-size:16px;color:#555;margin-top:24px">'+linkAt()+'</p><p style="font-size:18px">Colafix · RH</p><script>setTimeout(()=>print(),400)<\/script></body>'); w.document.close(); } return; }
+    if(a==='rat-rver'){ recAcao(C,'ver',b.dataset.id,+b.dataset.i||0); return; } if(a==='rat-rreg'){ recAcao(C,'reg',b.dataset.id); return; } if(a==='rat-rrec'){ recAcao(C,'rec',b.dataset.id); return; } if(a==='rat-fx'){ A.f=null; P.render(); return; }
     if(a==='rat-pdf'){ pdf(C); return; } if(a==='rat-xls'){ xls(C); return; }
     if(a==='rat-limpa'){ Object.assign(A.fil,{tipo:'',setor:'',q:''}); P.render(); return; }
     if(a==='rat-mes'){ A.fil.mes=mesMais(A.fil.mes||P.hojeStr().slice(0,7),+b.dataset.v); P.render(); return; }
@@ -164,5 +202,9 @@
 .rat-sug{display:flex;flex-direction:column;gap:4px;margin-top:-6px}.rat-sug button{display:flex;flex-direction:column;align-items:flex-start;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:7px 10px;cursor:pointer;font:inherit;color:inherit}.rat-sug button:hover{border-color:var(--teal)}.rat-sug small{color:var(--muted);font-size:12px}
 .rat-sel{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;color:var(--ink,inherit);font-size:15px}.rat-sel small{color:var(--muted)}
 .rat-ac{display:flex;gap:8px;justify-content:flex-end}
+.rat-rec{border:1.5px solid var(--warn);border-radius:14px;padding:12px 14px;margin:10px 0 4px;background:color-mix(in srgb,var(--warn) 7%,var(--surface))}.rat-rech{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}.rat-rech small{color:var(--muted);font-size:12.5px}
+.rat-ri{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line)}.rat-ri:first-of-type{border-top:0}.rat-rit{display:flex;flex-direction:column;gap:3px;min-width:240px;flex:1}.rat-rit small{color:var(--muted);font-size:12.5px}.rat-rno{color:var(--crit-ink,var(--crit));font-weight:600}
+.rat-ria{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.rat-lk{display:flex;gap:16px;align-items:center;flex-wrap:wrap;border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:10px 0 0;background:var(--ground)}.rat-lkq svg{display:block;border-radius:8px}.rat-lkt{display:flex;flex-direction:column;gap:6px;flex:1;min-width:240px}.rat-lkt small{color:var(--muted);font-size:13px}.rat-lkt code{font-size:13px;word-break:break-all;background:var(--surface);border-radius:8px;padding:6px 8px}
 </style>`);
 })();

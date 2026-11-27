@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#163c52">
+<meta name="robots" content="noindex">
+<link rel="icon" href="icons/favicon-192.png?v=5" sizes="192x192"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=3">
+<title>Colafix · Enviar atestado</title>
+<!-- Link do atestado (27/11/2026, pedido do RH: "um link para os funcionários fazerem o upload do atestado"). Sem login:
+     o funcionário põe a matrícula e o nome, o tipo, as datas e a foto/PDF. Só CRIA o envio (rhatestrec + rhatestarq);
+     não lê nada do painel. O RH confere em Atestados e faltas › "Recebidos pelo link" e registra (modulos/rh-atestados.js).
+     Não pede CID (dado de saúde, LGPD). -->
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#eef2f4;color:#1d2b33;-webkit-text-size-adjust:100%}
+[hidden]{display:none!important}
+.top{background:#163c52;color:#fff;padding:calc(16px + env(safe-area-inset-top)) 18px 18px}.top img{height:24px;display:block}.top h1{margin:14px 0 2px;font-size:24px}.top p{margin:0;font-size:14px;opacity:.8}
+main{padding:16px 16px 40px;max-width:560px;margin:0 auto}
+.lb{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700;color:#5d6e77;margin:0 0 14px}.lb small{font-weight:400}
+.in{font:inherit;font-size:16px;color:#1d2b33;min-height:48px;padding:0 12px;border-radius:12px;border:1.5px solid #c9d4da;background:#fff;width:100%}
+.in:focus{outline:3px solid rgba(22,60,82,.25);outline-offset:1px}.in[aria-invalid=true]{border-color:#c0392b}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+fieldset{border:0;padding:0;margin:0 0 14px}legend{font-size:13px;font-weight:700;color:#5d6e77;margin-bottom:6px;padding:0}
+.tps{display:flex;flex-direction:column;gap:8px}.tps button{font:inherit;font-size:16px;text-align:left;min-height:52px;padding:0 14px;border-radius:12px;border:1.5px solid #c9d4da;background:#fff;color:#1d2b33;cursor:pointer;display:flex;align-items:center;gap:12px}
+.tps button i{width:18px;height:18px;border-radius:50%;border:1.5px solid #9fb1bb;flex-shrink:0}.tps button[aria-pressed=true]{border-color:#163c52;background:#e3ecf1;color:#163c52;font-weight:700}.tps button[aria-pressed=true] i{border:6px solid #163c52}
+.fotos{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 8px}.foto{position:relative;width:96px;height:120px;border-radius:10px;overflow:hidden;background:#fff;border:1px solid #c9d4da;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#163c52;text-align:center;padding:6px}
+.foto img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}.foto button{position:absolute;top:4px;right:4px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:16px;cursor:pointer;z-index:1}
+.add{display:flex;align-items:center;justify-content:center;gap:10px;min-height:56px;border:2px dashed #163c52;border-radius:12px;background:#fff;color:#163c52;font-weight:700;font-size:16px;cursor:pointer}
+.hint{font-size:12.5px;color:#5d6e77;font-weight:400;margin:4px 0 0}
+.nota{font-size:13px;line-height:1.45;color:#33464f;background:#e3ecf1;border-radius:12px;padding:10px 12px;margin:0 0 14px}
+.b1{width:100%;font:inherit;font-size:18px;font-weight:700;min-height:56px;border:0;border-radius:14px;background:#163c52;color:#fff;cursor:pointer}.b1:disabled{opacity:.6}
+.err{color:#b0391f;font-weight:700;font-size:14px;margin:0 0 12px}
+.ok{background:#fff;border-radius:18px;padding:24px 18px;text-align:center}.ok .ck{width:72px;height:72px;border-radius:50%;background:#e3f1ea;color:#17694a;font-size:40px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px}.ok h2{margin:0 0 6px;font-size:22px}.ok p{color:#5d6e77;margin:0 0 16px}.ok b{color:#1d2b33}
+.lk{font:inherit;font-size:15px;background:none;border:0;color:#163c52;text-decoration:underline;cursor:pointer;padding:8px}
+</style>
+</head>
+<body>
+<div class="top" role="banner"><img src="icons/logo-colafix-escuro.png" alt="Colafix"><h1>Enviar atestado</h1><p>Mande a foto do atestado ou da declaração para o RH.</p></div>
+<main id="app"><p>Abrindo…</p></main>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="config.js"></script>
+<script>
+(function(){ 'use strict';
+  const CFG=window.PAINEL_CONFIG||{}; firebase.initializeApp(CFG.firebase); const auth=firebase.auth();
+  const BANCO=CFG.banco||'(default)'; let fs; if(BANCO==='(default)') fs=firebase.firestore(); else { const app=firebase.app(); const exp=app.container.getProvider('firestore').getImmediate({identifier:BANCO}); fs=new firebase.firestore.Firestore(app,exp); }
+  try{ fs.settings({ignoreUndefinedProperties:true,merge:true}); }catch(e){}
+  const $=id=>document.getElementById(id), app=$('app');
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const LS={get:k=>{ try{ return localStorage.getItem(k)||''; }catch(e){ return ''; } },set:(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} }};
+  const pz=n=>String(n).padStart(2,'0'), hoje=()=>{ const d=new Date(); return d.getFullYear()+'-'+pz(d.getMonth()+1)+'-'+pz(d.getDate()); };
+  const br=d=>d?d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(0,4):'';
+  const TIPOS=[['atestado','Atestado médico','dias'],['comparecimento','Declaração de comparecimento (horas)','horas'],['acompanhante','Acompanhamento de familiar','dias']];
+  const F={mat:LS.get('colafix.at.mat'),nome:LS.get('colafix.at.nome'),tipo:'atestado',ini:hoje(),dias:'1',hIni:'',hFim:'',obs:'',tel:LS.get('colafix.at.tel'),arqs:[]};
+  let err='', errId='', env=false, feito=null;
+  async function entrar(){ try{ if(!auth.currentUser) await auth.signInAnonymously(); }catch(e){ console.info('sem conta anônima',e&&e.code); } }
+  const lerArq=f=>new Promise((ok,er)=>{ const r=new FileReader(); r.onload=()=>ok(r.result); r.onerror=er; r.readAsDataURL(f); });
+  async function reduz(file){ const url=await lerArq(file); const img=await new Promise((ok,er)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=er; i.src=url; });
+    let w=img.width,h=img.height; const mx=1700; if(Math.max(w,h)>mx){ const k=mx/Math.max(w,h); w=Math.round(w*k); h=Math.round(h*k); }
+    const cv=document.createElement('canvas'); cv.width=w; cv.height=h; const cx=cv.getContext('2d'); cx.fillStyle='#fff'; cx.fillRect(0,0,w,h); cx.drawImage(img,0,0,w,h);
+    let q=.8, d=cv.toDataURL('image/jpeg',q); while(d.length>700000&&q>.3){ q-=.1; d=cv.toDataURL('image/jpeg',q); } if(d.length>700000){ const c2=document.createElement('canvas'); c2.width=Math.round(w*.7); c2.height=Math.round(h*.7); c2.getContext('2d').drawImage(cv,0,0,c2.width,c2.height); d=c2.toDataURL('image/jpeg',.6); } return d; }
+  function campo(id,rot,tipo,v,ex){ return '<label class="lb"><span>'+rot+'</span><input id="'+id+'" class="in" type="'+(tipo||'text')+'" value="'+esc(v)+'"'+(errId===id?' aria-invalid="true"':'')+' '+(ex||'')+'></label>'; }
+  function desenha(){ if(feito){ app.innerHTML='<div class="ok" role="status"><div class="ck" aria-hidden="true">✓</div><h2>Atestado enviado</h2><p>O RH recebeu o seu '+esc(TIPOS.find(t=>t[0]===feito.tipo)[1].split(' (')[0].toLowerCase())+' de <b>'+esc(br(feito.ini))+'</b>. Guarde o papel original: o RH pode pedir.</p><p>Protocolo <b>'+esc(feito.id.slice(-6).toUpperCase())+'</b></p><button type="button" class="lk" data-a="outro">Enviar outro</button></div>'; return; }
+    const t=TIPOS.find(x=>x[0]===F.tipo);
+    app.innerHTML='<form id="fa" novalidate autocomplete="on">'+
+      '<div class="g2">'+campo('mat','Matrícula','text',F.mat,'inputmode="numeric" maxlength="12" autocomplete="off"')+campo('tel','Telefone <small>opcional</small>','tel',F.tel,'maxlength="20" autocomplete="tel"')+'</div>'+
+      campo('nome','Nome completo','text',F.nome,'maxlength="80" autocomplete="name"')+
+      '<fieldset><legend>O que você vai mandar?</legend><div class="tps">'+TIPOS.map(x=>'<button type="button" data-a="tipo" data-v="'+x[0]+'" aria-pressed="'+(F.tipo===x[0])+'"><i aria-hidden="true"></i>'+esc(x[1])+'</button>').join('')+'</div></fieldset>'+
+      (t[2]==='horas'?'<div class="g2">'+campo('ini','Dia','date',F.ini)+'<span></span></div><div class="g2">'+campo('hIni','Das','time',F.hIni)+campo('hFim','Até','time',F.hFim)+'</div>'
+        :'<div class="g2">'+campo('ini','Primeiro dia','date',F.ini)+campo('dias','Quantos dias','number',F.dias,'min="1" max="365" inputmode="numeric"')+'</div>')+
+      '<div class="lb">Foto do documento <small>(até 3 fotos, ou um PDF)</small><div class="fotos">'+F.arqs.map((a,i)=>'<div class="foto">'+(a.mime==='application/pdf'?'PDF<br>'+esc(a.nome.slice(0,30)):'<img src="'+a.d+'" alt="Foto '+(i+1)+'">')+'<button type="button" data-a="fx" data-v="'+i+'" aria-label="Tirar">×</button></div>').join('')+'</div>'+
+        (F.arqs.length<3?'<label class="add">📷 '+(F.arqs.length?'Mais uma foto':'Tirar foto ou escolher arquivo')+'<input id="arq" type="file" accept="image/*,application/pdf" hidden></label>':'')+'<p class="hint">Foto bem iluminada, com o documento inteiro aparecendo.</p></div>'+
+      '<label class="lb">Observação <small>opcional · não precisa do CID</small><input id="obs" class="in" maxlength="200" value="'+esc(F.obs)+'" placeholder="Ex.: consulta do meu filho"></label>'+
+      '<p class="nota">O documento vai só para o RH da Colafix. Entregue o papel original quando o RH pedir.</p>'+
+      (err?'<p class="err" role="alert">'+esc(err)+'</p>':'')+'<button type="submit" class="b1"'+(env?' disabled':'')+'>'+(env?'Enviando…':'Enviar para o RH')+'</button></form>';
+    if(errId&&$(errId)) $(errId).focus(); }
+  function le(){ ['mat','tel','nome','ini','dias','hIni','hFim','obs'].forEach(k=>{ const e=$(k); if(e) F[k]=e.value; }); }
+  async function enviar(){ le(); err=''; errId=''; const t=TIPOS.find(x=>x[0]===F.tipo), mat=String(F.mat||'').trim().replace(/\s+/g,''), nome=String(F.nome||'').trim().replace(/\s+/g,' ');
+    if(!/^[0-9A-Za-z.\-]{1,12}$/.test(mat)){ err='Escreva a sua matrícula.'; errId='mat'; }
+    else if(nome.length<5||!/\s/.test(nome)){ err='Escreva o seu nome completo.'; errId='nome'; }
+    else if(!/^\d{4}-\d{2}-\d{2}$/.test(F.ini||'')){ err='Escolha o dia.'; errId='ini'; }
+    else if(t[2]==='horas'&&!(F.hIni&&F.hFim&&F.hFim>F.hIni)){ err='Diga das que horas até que horas.'; errId='hIni'; }
+    else if(t[2]==='dias'&&!(+F.dias>=1&&+F.dias<=365)){ err='Quantos dias de afastamento?'; errId='dias'; }
+    else if(!F.arqs.length){ err='Tire a foto do documento.'; }
+    if(err){ desenha(); return; }
+    env=true; desenha(); LS.set('colafix.at.mat',mat); LS.set('colafix.at.nome',nome); LS.set('colafix.at.tel',String(F.tel||'').trim());
+    try{ await entrar(); const id='a-'+Date.now().toString(36)+Math.random().toString(36).slice(2,8), agora=new Date().toISOString();
+      for(let i=0;i<F.arqs.length;i++){ const a=F.arqs[i]; await fs.collection('rhatestarq').doc(id+'-'+i).set({rec:id,d:a.d,mime:a.mime,nome:String(a.nome||'').slice(0,80),em:agora}); }
+      const d={mat,nome:nome.slice(0,80),tipo:F.tipo,ini:F.ini,dias:t[2]==='dias'?Math.round(+F.dias):1,hIni:t[2]==='horas'?F.hIni:'',hFim:t[2]==='horas'?F.hFim:'',obs:String(F.obs||'').trim().slice(0,200),tel:String(F.tel||'').trim().slice(0,20),n:F.arqs.length,em:agora,st:'novo'};
+      await fs.collection('rhatestrec').doc(id).set(d); feito={id,tipo:F.tipo,ini:F.ini}; F.arqs=[]; F.obs=''; F.tipo='atestado'; F.ini=hoje(); F.dias='1'; F.hIni=''; F.hFim=''; }
+    catch(e){ console.warn(e); err=e&&/permission/.test(e.code||'')?'O envio foi recusado. Avise o RH (as regras do painel precisam ser publicadas).':'Não deu para enviar ('+((e&&e.code)||'sem internet?')+'). Tente de novo.'; }
+    env=false; desenha(); }
+  document.addEventListener('click',ev=>{ const b=ev.target.closest('[data-a]'); if(!b) return; const a=b.dataset.a; if(a==='tipo'){ le(); F.tipo=b.dataset.v; desenha(); } if(a==='fx'){ le(); F.arqs.splice(+b.dataset.v,1); desenha(); } if(a==='outro'){ feito=null; desenha(); } });
+  document.addEventListener('change',async ev=>{ const t=ev.target; if(t.id!=='arq'||!t.files||!t.files[0]) return; le(); const f=t.files[0]; err='';
+    try{ if(f.type==='application/pdf'){ if(F.arqs.length){ err='Mande só o PDF, sem fotos junto.'; } else if(f.size>520000){ err='O PDF é grande demais. Tire uma foto do documento.'; } else F.arqs=[{d:await lerArq(f),mime:'application/pdf',nome:f.name}]; }
+      else if(/^image\//.test(f.type)){ if(F.arqs.some(a=>a.mime==='application/pdf')){ err='Já tem um PDF. Tire o PDF para mandar fotos.'; } else F.arqs.push({d:await reduz(f),mime:'image/jpeg',nome:f.name||'foto.jpg'}); }
+      else err='Escolha uma foto ou um PDF.'; }catch(e){ err='Não consegui ler o arquivo. Tente tirar a foto de novo.'; }
+    desenha(); });
+  document.addEventListener('submit',ev=>{ if(ev.target.id==='fa'){ ev.preventDefault(); enviar(); } });
+  entrar(); desenha();
+})();
+</script>
+</body>
+</html>

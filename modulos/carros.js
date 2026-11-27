@@ -171,7 +171,7 @@ Eu, {NOME}, CPF {CPF}, declaro que estou ciente e de acordo com as regras abaixo
      logo, relógio, quem está e Sair; a câmera liga sozinha na tela inicial (como o celular do almox). A dona vê com ?portaria=1. */
   const soloDe=(tela,perfil)=>{ try{ const A=S.acs; if(!A||!A.pronto||S.view!==tela) return false; if(A.dono) return new RegExp('[?&]'+perfil+'=1').test(location.search); return (A.doc||{}).perfil===perfil; }catch(e){ return false; } };
   const solo=()=>soloDe('portaria','portaria');
-  function appBar(tit){ const nm=eu(), ag=new Date(); return `<div class="cv-bar" role="banner"><img src="${LOGO_ESC}" alt="Colafix"><span class="cv-bart">${esc(tit)}</span><span class="cv-clk" data-rtv-clk>${String(ag.getHours()).padStart(2,'0')}:${String(ag.getMinutes()).padStart(2,'0')}</span>
+  function appBar(tit){ const nm=eu(), ag=new Date(), sw=P.viewOk('bdport')?`<nav class="cv-sw" aria-label="Portaria"><button type="button" data-go="portaria" aria-pressed="${S.view==='portaria'}">Carros</button><button type="button" data-go="bdport" aria-pressed="${S.view==='bdport'}">Caminhões</button></nav>`:''; return `<div class="cv-bar" role="banner"><img src="${LOGO_ESC}" alt="Colafix"><span class="cv-bart">${esc(tit)}</span>${sw}<span class="cv-clk" data-rtv-clk>${String(ag.getHours()).padStart(2,'0')}:${String(ag.getMinutes()).padStart(2,'0')}</span>
       <button type="button" class="cv-sair" data-act="cv-sair" aria-label="Sair da conta ${esc(nm)}"><span class="cv-av" aria-hidden="true">${esc(ini(nm))}</span><span>${Date.now()-_sairConf<4000?'Toque de novo para sair':'Sair'}</span></button></div>`; }
   let _autoCam=true, _sairConf=0;
   function vPortaria(){ const so=solo(); try{ document.body.classList.toggle('cv-solo',so); }catch(e){}
@@ -305,7 +305,19 @@ Eu, {NOME}, CPF {CPF}, declaro que estou ciente e de acordo com as regras abaixo
           <p class="cv-hint">Cada motorista aceita uma vez no celular dele, antes de confirmar a primeira saída. {NOME} e {CPF} viram os dados do motorista. Ao salvar uma nova versão, todos precisam aceitar de novo.</p>
           ${C.edT?`<textarea id="cv-t-tx" class="cv-in cv-ta cv-tta">${esc(C.edT.texto)}</textarea>${C.edT.err?`<p class="cv-err">${esc(C.edT.err)}</p>`:''}<div class="cv-bts"><button type="button" class="btn sec" data-act="cv-t-x">Cancelar</button><button type="button" class="btn" data-act="cv-t-salva">Salvar nova versão</button></div>`
             :`<pre class="cv-tpre">${esc(termoAtual().texto)}</pre>`}</section>`; }
-    return `<header class="cv-top"><div><h1>Carros e motoristas</h1><p>Quem cadastra e libera é o administrador; a portaria só escolhe da lista</p></div></header>${abas}${corpo}`; }
+    return `<header class="cv-top"><div><h1>Carros e motoristas</h1><p>Quem cadastra e libera é o administrador; a portaria só escolhe da lista</p></div></header>${abas}${corpo}${P.dono()?vLimpar():''}`; }
+  /* período de teste (26/11, "vou fazer um teste, tenho como apagar depois?"): só a dona apaga de verdade */
+  function vLimpar(){ const L=C.limpa||{}; const nv=C.viag.length+C.fora.filter(v=>!C.viag.some(x=>x._id===v._id)).length;
+    return `<section class="card cv-ed cv-lim"><h2>Apagar dados de teste <span>só a administradora vê</span></h2>
+      <p class="cv-hint">Para depois dos testes. <b>Viagens e registros</b> apaga as saídas e voltas, aceites, devoluções, fotos, último km e termos aceitos (${nv} viage${nv===1?'m':'ns'} agora); os carros, os motoristas e o texto do termo ficam. <b>Tudo dos carros</b> apaga também os carros, os motoristas e os CPFs. Não dá para desfazer.</p>
+      ${L.tipo?`<p class="cv-lb">Para confirmar, digite APAGAR</p><div class="cv-limr"><input id="cv-lim-tx" class="cv-in" autocomplete="off" placeholder="APAGAR"><button type="button" class="btn cv-bdel" data-act="cv-lim-ok">${L.tipo==='tudo'?'Apagar tudo dos carros':'Apagar viagens e registros'}</button><button type="button" class="btn sec" data-act="cv-lim-x">Cancelar</button></div>${L.err?`<p class="cv-err">${esc(L.err)}</p>`:''}${L.prog?`<p class="cv-hint">${esc(L.prog)}</p>`:''}`
+        :`<div class="cv-bts" style="justify-content:flex-start"><button type="button" class="btn sec" data-act="cv-lim" data-v="viagens">Apagar viagens e registros</button><button type="button" class="btn sec cv-del" data-act="cv-lim" data-v="tudo">Apagar tudo dos carros</button></div>`}</section>`; }
+  async function limpar(){ const L=C.limpa||{}; if(String((document.getElementById('cv-lim-tx')||{}).value||'').trim().toUpperCase()!=='APAGAR'){ L.err='Digite APAGAR para confirmar.'; P.render(); return; }
+    const cols=['carrosv','carrosf','carrosk','carrost'].concat(L.tipo==='tudo'?['carrosp']:[]); let n=0;
+    try{ for(const c of cols){ L.prog='Apagando '+c+'…'; P.render(); const q=await P.db().collection(c).limit(1000).get(); for(const d of q.docs){ await P.db().doc(c+'/'+d.id).delete(); n++; } }
+      if(L.tipo==='tudo'){ await P.db().doc('carros/cad').set({carros:[],mot:[],termo:C.cad.termo||null,em:new Date().toISOString(),por:S.uid||null}); C.cad={carros:[],mot:[],termo:C.cad.termo||null}; C.priv={}; }
+      C.viag=[]; C.fora=[]; C.km={}; C.termos=[]; C.limpa=null; P.toast(n+' registro'+(n===1?'':'s')+' de teste apagado'+(n===1?'':'s')+'.'); }
+    catch(e){ L.err='Parou no meio: '+((e&&e.message)||e)+'. Tente de novo.'; L.prog=''; P.erro(e); } P.render(); }
   async function salvaCarro(){ const fr=String((document.getElementById('cv-c-fr')||{}).value||'').trim().slice(0,12), pl=plN((document.getElementById('cv-c-pl')||{}).value), mo=String((document.getElementById('cv-c-mo')||{}).value||'').trim(), kmT=(document.getElementById('cv-c-km')||{}).value, km=String(kmT||'').trim()?kmNum(kmT):0;
     const E=C.edC||{}; const err=t=>{ C.edC=Object.assign({},E,{placa:pl,modelo:mo,km:kmT,frota:fr,err:t}); P.render(); };
     if(!PL_RE.test(pl)) return err('Placa inválida. Use o formato ABC1234 ou ABC1D23.'); if(!Number.isFinite(km)||km<0) return err('Km inválido.');
@@ -455,11 +467,12 @@ Eu, {NOME}, CPF {CPF}, declaro que estou ciente e de acordo com as regras abaixo
     try{ const d=await reduzFoto(f); st.fotos=(st.fotos||[]).concat([d]).slice(0,3); }catch(e){ P.toast(e.message||'Não deu para usar a foto.'); } P.render(); });
 
   /* ---------- módulos e cargo ---------- */
-  P.registrarModulo({ id:'portaria', nome:'Portaria · carros', ic:'portaria', telas:{ portaria:{nome:'Portaria',mob:'Portaria',render:vPortaria} }, iniciar:carregar });
+  P.cvBar=appBar; /* a tela Caminhões (modulos/bordo.js, 27/11) usa a mesma barra no celular da portaria */
+  P.registrarModulo({ id:'portaria', nome:'Portaria · carros', ic:'portaria', telas:{ portaria:{nome:'Portaria',mob:'Portaria',render:vPortaria}, bdport:{nome:'Caminhões',mob:'Caminhões',render:()=>P.bordoPort?P.bordoPort():'<section class="card"><div class="empty">Carregando…</div></section>'} }, iniciar:carregar });
   P.registrarModulo({ id:'carros', nome:'Carros', ic:'carro', telas:{ carviag:{nome:'Viagens',render:vViagens}, carcad:{nome:'Carros e motoristas',render:vCad} }, iniciar:carregar });
   P.registrarModulo({ id:'motorista', nome:'Motorista · carros', ic:'carro', telas:{ motorista:{nome:'Minhas viagens',mob:'Viagens',render:vMotorista} }, iniciar:carregarMot });
   P.registrarPerfil('motorista',{ nome:'Motorista (carros)', mods:['motorista'], pos:6, desc:'Para o celular do motorista: confirma a saída do carro (aceite, estado do carro e termo de responsabilidade), marca o combustível na volta e vê o histórico das próprias viagens.' });
-  P.registrarPerfil('portaria',{ nome:'Portaria (carros)', mods:['portaria'], pos:5, desc:'Só a tela da portaria: escaneia o QR do carro e registra a saída e a volta com o motorista e o km. Não vê nada da fábrica.' });
+  P.registrarPerfil('portaria',{ nome:'Portaria (carros e caminhões)', mods:['portaria'], pos:5, desc:'Só as telas da portaria: escaneia o QR do carro e registra a saída e a volta com o motorista e o km; registra a chegada dos caminhões no diário de bordo (pedidos e representante). Não vê nada da fábrica.' });
   /* porteiro entra direto na portaria; ?carro= abre o carro */
   { let foi=false; const t=setInterval(()=>{ try{ const A=S.acs; if(!A||!A.pronto) return; clearInterval(t); const d=A.doc||{};
       if(!foi&&!A.dono&&d.perfil==='portaria'&&S.view!=='portaria'&&P.viewOk('portaria')){ foi=true; P.go('portaria'); }
@@ -505,6 +518,7 @@ Eu, {NOME}, CPF {CPF}, declaro que estou ciente e de acordo com as regras abaixo
     if(a==='cv-c-salva') return salvaCarro(); if(a==='cv-c-x'){ C.edC=null; P.render(); return; }
     if(a==='cv-c-ed'){ const c=carDe(v); if(c){ C.edC={id:c.id,placa:c.placa,modelo:c.modelo,km:c.km,frota:c.frota||''}; P.render(); window.scrollTo({top:0,behavior:'smooth'}); } return; }
     if(a==='cv-c-at'){ const novo={carros:C.cad.carros.map(c=>c.id===v?Object.assign({},c,{ativo:c.ativo===false}):c),mot:C.cad.mot}; const c=novo.carros.find(x=>x.id===v); await gravaCad(novo,c&&c.ativo?'Carro reativado.':'Carro desativado: não aparece mais na portaria.'); return; }
+    if(a==='cv-lim'){ if(!P.dono()) return; C.limpa={tipo:v}; P.render(); setTimeout(()=>{ const i=document.getElementById('cv-lim-tx'); if(i) i.focus(); },40); return; } if(a==='cv-lim-x'){ C.limpa=null; P.render(); return; } if(a==='cv-lim-ok'){ if(!P.dono()) return; return limpar(); }
     if(a==='cv-t-ed'){ C.edT={texto:termoAtual().texto}; P.render(); return; } if(a==='cv-t-x'){ C.edT=null; P.render(); return; }
     if(a==='cv-t-salva'){ const tx=String((document.getElementById('cv-t-tx')||{}).value||'').trim(); if(tx.length<40){ C.edT={texto:tx,err:'O termo está muito curto.'}; P.render(); return; } const t={texto:tx,versao:termoAtual().versao+1,em:new Date().toISOString(),por:eu()};
       if(await gravaCad({carros:C.cad.carros,mot:C.cad.mot,termo:t},'Termo salvo (versão '+t.versao+'). Os motoristas vão aceitar de novo no próximo acesso.')) C.edT=null; P.render(); return; }
@@ -516,7 +530,7 @@ Eu, {NOME}, CPF {CPF}, declaro que estou ciente e de acordo com as regras abaixo
       await gravaCad(novo,m&&m.ok===false?m.nome+' bloqueado: não aparece mais na portaria.':m.nome+' liberado.'); return; }
     if(a==='cv-qr') return qrPdf(ativos()); if(a==='cv-qr1'){ const c=carDe(v); if(c) qrPdf([c]); return; } });
   /* sai da tela da portaria: desliga a câmera */
-  setInterval(()=>{ if(CAM.stream&&P.S.view!=='portaria'){ camDesliga(); } if(P.S.view!=='portaria'&&P.S.view!=='motorista'&&document.body.classList.contains('cv-solo')) document.body.classList.remove('cv-solo'); },1000);
+  setInterval(()=>{ if(CAM.stream&&P.S.view!=='portaria'){ camDesliga(); } if(P.S.view!=='portaria'&&P.S.view!=='motorista'&&P.S.view!=='bdport'&&document.body.classList.contains('cv-solo')) document.body.classList.remove('cv-solo'); },1000);
 
   document.head.insertAdjacentHTML('beforeend',`<style id="cv-css">
   .cv-top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:14px}.cv-top h1{margin:0;font-size:clamp(24px,3vw,30px);line-height:1.1}.cv-top p{margin:4px 0 0;color:var(--muted)}
@@ -563,6 +577,9 @@ Eu, {NOME}, CPF {CPF}, declaro que estou ciente e de acordo com as regras abaixo
   .cv-vz p{color:var(--muted)}
   @media(max-width:760px){.cv-pl{--h:38px}.cv-pl.p{--h:28px}.cv-pl.g{--h:70px}.cv-cols{grid-template-columns:minmax(0,1fr)}.cv-g3{grid-template-columns:minmax(0,1fr)}.cv-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}.cv-bts .btn{flex:1}.cv-fil .btn{margin-left:0}
     .cv-hb{grid-template-columns:minmax(0,1fr) auto}.cv-hb .cv-bar{grid-column:1/-1;grid-row:2}.cv-hb small{display:none}}
+  
+  .cv-bar:has(.cv-sw) .cv-bart{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;padding:0}@media (max-width:440px){.cv-bar:has(.cv-sw) .cv-clk{display:none}}
+  .cv-sw{display:flex;gap:4px;background:rgba(255,255,255,.12);border-radius:999px;padding:3px;margin-left:6px}.cv-sw button{font:inherit;font-size:13px;font-weight:700;border:0;border-radius:999px;padding:6px 11px;background:transparent;color:#fff;cursor:pointer}.cv-sw button[aria-pressed=true]{background:#fff;color:#143F54}
   </style>`);
   /* layout da portaria, 2ª versão (26/11) */
   document.head.insertAdjacentHTML('beforeend',`<style id="cv-css2">
@@ -680,6 +697,7 @@ Eu, {NOME}, CPF {CPF}, declaro que estou ciente e de acordo com as regras abaixo
   .cv-fl2{display:block;font-size:12px}.cv-fl2 .lnk{font-size:12px}
   .cv-tpre{white-space:pre-wrap;font:inherit;font-size:14px;line-height:1.55;margin:0;padding:12px 14px;border-radius:12px;background:color-mix(in srgb,var(--line) 30%,transparent);max-height:320px;overflow:auto}
   .cv-tpm{max-height:none}.cv-tta{min-height:300px;font-size:14px;line-height:1.5}.cv-tth{margin:2px 0 0;font-size:24px;color:#fff}.cv-wn{color:var(--warn-ink,var(--warn));font-weight:600}
+  .cv-lim{border:1.5px dashed color-mix(in srgb,var(--crit) 45%,var(--line))}.cv-limr{display:flex;gap:8px;flex-wrap:wrap}.cv-limr .cv-in{max-width:220px}.cv-bdel{background:var(--crit)!important;border-color:var(--crit)!important;color:#fff!important}
   @media(prefers-reduced-motion:no-preference){.cv-feito .cv-fok{animation:cvOk .35s ease-out}@keyframes cvOk{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}}
   @media(max-width:760px){.cv-hero{padding:18px 16px 16px;border-radius:18px}.cv-cnt{width:100%}.cv-cnt div{flex:1;min-width:0}.cv-grid,.cv-gridp{grid-template-columns:minmax(0,1fr)}
     .cv-tile:not(.fora){flex-direction:row;align-items:center;flex-wrap:wrap}.cv-tile:not(.fora) .cv-mod{flex:1}.cv-tile:not(.fora) .cv-go{margin-top:0;padding:0 16px}

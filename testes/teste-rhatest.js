@@ -1,0 +1,64 @@
+/* RH · matrícula no cadastro e atestado pelo link (atestado.html + modulos/rh-atestados.js, 27/11/2026). Dados inventados.
+   SHOT=1 salva as telas em /tmp/rhatest-*.png. */
+const H=require('./harness'); const {seedManut}=require('./manut-seed'); const res=[]; const ok=(n,c,d)=>{ res.push({n,ok:!!c}); console.log((c?'PASSOU ':'FALHOU ')+n+(d?' — '+String(d).slice(0,300):'')); };
+const SHOT=!!process.env.SHOT, shot=async(p,n)=>{ if(SHOT) await p.screenshot({path:'/tmp/rhatest-'+n+'.png'}); };
+(async()=>{ const {d}=seedManut(); const D=d.docs; d.users['rh@painel-colafix.app']={uid:'uRH',pass:'rh1234',nome:'Paula RH'}; D['perfis/uRH']={nome:'Paula RH',usuario:'rh'}; D['acessos/uRH']={perfil:'rh',mods:['rh'],locais:[],ativo:true};
+ const dd=k=>{ const x=new Date(); x.setDate(x.getDate()+k); return x.toISOString().slice(0,10); };
+ D['rh/config']={setores:['Linha 1']};
+ const base={funcao:'Operador',setor:'Linha 1',tipo:'CLT',empresa:'COLAFIX',status:'Ativo',nascimento:'1990-01-01'};
+ D['rh/dados/funcionarios/a']=Object.assign({},base,{nome:'ANA SOUZA',cpf:'52998224725',admissao:dd(-200)});
+ D['rh/dados/funcionarios/b']=Object.assign({},base,{nome:'BRUNO ROCHA',cpf:'11144477735',admissao:dd(-60),matricula:'2002'});
+ const srv=p=>p.evaluate(()=>JSON.parse(localStorage.getItem('__srv')).docs); const erros=[];
+ /* ---------- matrícula no cadastro ---------- */
+ const A=await H.abrir({viewport:{width:1366,height:900}}); const pa=A.page; pa.on('pageerror',e=>erros.push('rh: '+e.message)); pa.on('dialog',x=>x.accept('documento ilegível'));
+ await H.preparar(pa,d); await pa.goto(H.BASE); await H.entrar(pa,'rh','rh1234'); await H.dorme(3000);
+ await pa.evaluate(()=>__T.go('rhfunc')); await H.dorme(900);
+ await pa.evaluate(()=>{ const b=document.createElement('button'); b.dataset.act='rh-ed'; b.dataset.id='a'; document.body.appendChild(b); b.click(); b.remove(); }); await H.dorme(600);
+ ok('Cadastro tem o campo Matrícula', await pa.evaluate(()=>!!document.querySelector('[data-rh-f="matricula"]')));
+ await pa.fill('[data-rh-f="matricula"]','2002'); await pa.click('[data-act="rh-salvar"]'); await H.dorme(500);
+ ok('Matrícula repetida é recusada', /Já existe um funcionário com a matrícula 2002/.test(await pa.evaluate(()=>document.body.innerText)));
+ await pa.fill('[data-rh-f="matricula"]',' 1001 '); await pa.click('[data-act="rh-salvar"]'); await H.dorme(800);
+ let s=await srv(pa); ok('Matrícula salva no cadastro', s['rh/dados/funcionarios/a'].matricula==='1001', s['rh/dados/funcionarios/a'].matricula);
+ await pa.fill('#rh-q','1001').catch(()=>{}); await H.dorme(800);
+ const ls=await pa.evaluate(()=>[...document.querySelectorAll('.rh-v2r .rh-nm2')].map(x=>x.textContent));
+ ok('Busca pela matrícula acha a pessoa', ls.length===1&&ls[0]==='ANA SOUZA', ls.join(','));
+ /* ---------- link do atestado (sem login) ---------- */
+ const B=await H.abrir({viewport:{width:390,height:844}}); const pb=B.page; pb.on('pageerror',e=>erros.push('link: '+e.message));
+ await H.preparar(pb,{users:d.users,docs:await srv(pa)}); await pb.goto(H.BASE+'atestado.html'); await H.dorme(1200);
+ ok('Página do atestado abre sem login', /Enviar atestado/.test(await pb.evaluate(()=>document.body.innerText))&&!!(await pb.$('#mat')));
+ await shot(pb,'link');
+ await pb.fill('#mat','1001'); await pb.fill('#nome','Ana Souza'); await pb.fill('#dias','2'); await pb.click('.b1'); await H.dorme(300);
+ ok('Sem foto não envia', /Tire a foto do documento/.test(await pb.evaluate(()=>document.body.innerText)));
+ await pb.setInputFiles('#arq',__dirname+'/foto-a.png'); await H.dorme(800);
+ ok('Foto aparece como miniatura', await pb.evaluate(()=>document.querySelectorAll('.foto img').length===1));
+ await pb.setInputFiles('#arq',__dirname+'/foto-b.png'); await H.dorme(800);
+ await pb.fill('#obs','consulta'); await pb.click('.b1'); await H.dorme(1500);
+ ok('Enviado: tela de confirmação com protocolo', /Atestado enviado/.test(await pb.evaluate(()=>document.body.innerText))&&/Protocolo/.test(await pb.evaluate(()=>document.body.innerText)));
+ await shot(pb,'enviado');
+ s=await srv(pb); let recs=Object.entries(s).filter(([k])=>k.startsWith('rhatestrec/')).map(([k,v])=>Object.assign({_id:k.slice(11)},v));
+ ok('Envio gravado (matrícula, nome, tipo, datas, 2 fotos) sem ler nada do RH', recs.length===1&&recs[0].mat==='1001'&&recs[0].nome==='Ana Souza'&&recs[0].tipo==='atestado'&&recs[0].dias===2&&recs[0].n===2&&recs[0].st==='novo'&&!!s['rhatestarq/'+recs[0]._id+'-0']&&s['rhatestarq/'+recs[0]._id+'-1'].mime==='image/jpeg', JSON.stringify(recs[0]).slice(0,200));
+ await pb.click('[data-a="outro"]'); await H.dorme(300);
+ ok('Matrícula e nome ficam lembrados no celular', (await pb.inputValue('#mat'))==='1001'&&(await pb.inputValue('#nome'))==='Ana Souza');
+ await pb.fill('#mat','7777'); await pb.fill('#nome','Bruno Rocha'); await pb.click('[data-a="tipo"][data-v="comparecimento"]'); await H.dorme(200);
+ await pb.fill('#hIni','08:00'); await pb.fill('#hFim','11:30'); await pb.setInputFiles('#arq',__dirname+'/foto-a.png'); await H.dorme(700); await pb.click('.b1'); await H.dorme(1500);
+ /* ---------- RH confere e registra ---------- */
+ await H.preparar(pa,{users:d.users,docs:await srv(pb)}); await pa.goto(H.BASE); await H.entrar(pa,'rh','rh1234'); await H.dorme(3000);
+ await pa.evaluate(()=>__T.go('rhatest')); await H.dorme(1200);
+ const rb=await pa.evaluate(()=>(document.querySelector('.rat-rec')||{}).innerText||'');
+ ok('Atestados e faltas mostra "Recebidos pelo link · 2" com a pessoa achada pela matrícula ou pelo nome', /Recebidos pelo link · 2/.test(rb)&&/Ana Souza/i.test(rb)&&/Matrícula 1001 · Linha 1/.test(rb)&&/Bruno Rocha/i.test(rb)&&/achado pelo nome/.test(rb)&&/08:00 às 11:30/.test(rb), rb.replace(/\n/g,' | ').slice(0,400));
+ await pa.click('[data-act="rat-rlink"]'); await H.dorme(300); await pa.click('[data-act="rat-rcopia"]'); await H.dorme(200);
+ ok('Link para os funcionários: QR e endereço atestado.html', await pa.evaluate(()=>!!document.querySelector('.rat-lk svg path')&&/atestado\.html$/.test(window.__ratLink||'')), await pa.evaluate(()=>window.__ratLink));
+ await shot(pa,'recebidos');
+ const ida=recs[0]._id; await pa.click(`[data-act="rat-rreg"][data-id="${ida}"]`); await H.dorme(1500);
+ const f=await pa.evaluate(()=>{ const F=RHAtest._A.f; return F&&{funcId:F.funcId,tipo:F.tipo,dias:F.dias,mot:F.mot,file:F.file&&F.file.name,tam:F.file&&F.file.size}; });
+ ok('Registrar abre o formulário já preenchido (pessoa, tipo, dias, observação e o documento)', f&&f.funcId==='a'&&f.tipo==='atestado'&&+f.dias===2&&f.mot==='consulta'&&/\.(jpg|pdf)$/.test(f.file||'')&&f.tam>1000, JSON.stringify(f));
+ await pa.click('[data-act="rat-ok"]'); await H.dorme(2000);
+ s=await srv(pa); const at=Object.entries(s).filter(([k,v])=>k.startsWith('rh/dados/atestados/')&&v.funcId==='a').map(([,v])=>v)[0];
+ ok('Atestado registrado para a pessoa, envio marcado como registrado e as fotos apagadas', at&&at.dias===2&&at.tipo==='atestado'&&s['rhatestrec/'+ida].st==='registrado'&&!s['rhatestarq/'+ida+'-0']&&!s['rhatestarq/'+ida+'-1'], JSON.stringify({at:at&&{d:at.dias,arq:!!at.arq},st:s['rhatestrec/'+ida].st}));
+ const idb=Object.entries(s).filter(([k,v])=>k.startsWith('rhatestrec/')&&v.mat==='7777').map(([k])=>k.slice(11))[0];
+ await pa.click(`[data-act="rat-rrec"][data-id="${idb}"]`); await H.dorme(900); s=await srv(pa);
+ ok('Recusar guarda o motivo e tira da lista', s['rhatestrec/'+idb].st==='recusado'&&s['rhatestrec/'+idb].motivo==='documento ilegível'&&!(await pa.evaluate(()=>!!document.querySelector('.rat-rec'))));
+ ok('Sem erros de programa', !erros.length, erros.join(' | '));
+ await A.browser.close(); await B.browser.close();
+ const nf=res.filter(r=>!r.ok).length; console.log(nf?`\n${nf} FALHOU de ${res.length}`:`\nTODOS PASSARAM (${res.length})`); process.exit(nf?1:0);
+})().catch(e=>{ console.error(e); process.exit(1); });

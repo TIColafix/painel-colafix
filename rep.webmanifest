@@ -1,0 +1,18 @@
+{
+  "name": "Colafix · Pedir agendamento",
+  "short_name": "Colafix agenda",
+  "description": "Representante: pedir, acompanhar, reagendar e cancelar agendamentos de carregamento na Colafix.",
+  "lang": "pt-BR",
+  "start_url": "rep.html",
+  "scope": "./rep.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eef2f4",
+  "theme_color": "#163c52",
+  "icons": [
+    { "src": "icons/icon-192.png?v=4", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png?v=4", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-192.png?v=4", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }
+  ],
+  "id": "./rep.html"
+}

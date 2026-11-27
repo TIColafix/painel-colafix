@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#163c52">
+<meta name="robots" content="noindex">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Colafix agendamento">
+<link rel="manifest" href="rep.webmanifest">
+<link rel="icon" href="icons/favicon-192.png?v=5" sizes="192x192"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=3">
+<title>Colafix · Pedir agendamento</title>
+<!-- Link do representante (27/11/2026): substitui o email de pedido de agendamento. Sem senha: o link tem um código só do
+     representante (bordorep/<código>). Ele pede o agendamento, acompanha (enviado → avaliação → liberado → chegou → carregado),
+     pede para reagendar e cancela. Tudo cai na tela Solicitações de agendamento do painel (modulos/bordo.js). -->
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#eef2f4;color:#1d2b33;-webkit-text-size-adjust:100%}
+[hidden]{display:none!important}
+.top{background:#163c52;color:#fff;padding:calc(16px + env(safe-area-inset-top)) 18px 0;position:sticky;top:0;z-index:5}
+.top .l1{display:flex;justify-content:space-between;align-items:center;gap:10px}.top img{height:24px;display:block}.top .nm{font-size:13px;opacity:.8;text-align:right}
+nav{display:flex;gap:4px;margin-top:14px}nav button{flex:1;font:inherit;font-size:15px;padding:11px 0;border:0;border-radius:10px 10px 0 0;background:rgba(255,255,255,.12);color:#fff;cursor:pointer}
+nav button[aria-pressed=true]{background:#eef2f4;color:#163c52;font-weight:700}nav b{background:#e3312d;color:#fff;border-radius:999px;padding:1px 7px;font-size:12px;margin-left:4px}
+main{padding:16px 16px 40px;max-width:560px;margin:0 auto}
+.lb{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700;color:#5d6e77;margin:0 0 14px}.lb small{font-weight:400}
+.in{font:inherit;font-size:16px;color:#1d2b33;min-height:48px;padding:0 12px;border-radius:12px;border:1.5px solid #c9d4da;background:#fff;width:100%}
+.in:focus,.chips:focus-within{outline:3px solid rgba(22,60,82,.25);outline-offset:1px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:50px;border:1.5px solid #163c52;border-radius:12px;padding:6px 8px;background:#fff}
+.chips input{flex:1;min-width:110px;font:inherit;font-size:16px;border:0;outline:0;height:34px;background:transparent}
+.chip{display:inline-flex;align-items:center;gap:6px;background:#e3ecf1;color:#163c52;font-weight:700;font-size:15px;padding:5px 5px 5px 10px;border-radius:8px}
+.chip button{width:26px;height:26px;border-radius:50%;border:0;background:#c4d4dd;color:#163c52;font-size:16px;cursor:pointer}
+.hint{font-size:12.5px;color:#5d6e77;font-weight:400;margin:2px 0 0}
+fieldset{border:0;padding:0;margin:0 0 14px}legend{font-size:13px;font-weight:700;color:#5d6e77;margin-bottom:6px;padding:0}
+.dias{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}.dias button,.seg button{font:inherit;border-radius:12px;border:1.5px solid #c9d4da;background:#fff;color:#1d2b33;cursor:pointer}
+.dias button{padding:8px 0;font-size:13px;line-height:1.25}.dias button b{display:block;font-size:16px}.seg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.seg button{min-height:46px;font-size:15px}
+.dias button[aria-pressed=true],.seg button[aria-pressed=true],.vs button[aria-pressed=true]{background:#163c52;border-color:#163c52;color:#fff;font-weight:700}
+.vs{display:flex;flex-wrap:wrap;gap:6px}.vs button{font:inherit;font-size:14px;min-height:40px;padding:0 13px;border-radius:999px;border:1px solid #c9d4da;background:#fff;color:#1d2b33;cursor:pointer}
+.nota{font-size:13.5px;line-height:1.4;color:#33464f;background:#e3ecf1;border-radius:12px;padding:10px 12px;margin:0 0 14px}.nota b{color:#163c52}
+.b1{width:100%;font:inherit;font-size:18px;font-weight:700;min-height:56px;border:0;border-radius:14px;background:#163c52;color:#fff;cursor:pointer}.b1:disabled{opacity:.6}
+.b0{font:inherit;font-size:14px;font-weight:700;min-height:40px;padding:0 14px;border-radius:10px;border:1.5px solid #c9d4da;background:#fff;color:#163c52;cursor:pointer}
+.lk{font:inherit;font-size:14px;background:none;border:0;color:#163c52;text-decoration:underline;cursor:pointer;padding:6px}
+.err{color:#b0391f;font-weight:700;font-size:14px;margin:0 0 12px}
+.ok{background:#fff;border-radius:18px;padding:22px 18px;text-align:center}.ok .ck{width:72px;height:72px;border-radius:50%;background:#e3f1ea;color:#17694a;font-size:40px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px}.ok h1{margin:0 0 6px;font-size:22px}.ok p{color:#5d6e77;margin:0 0 16px}
+.card{background:#fff;border-radius:14px;padding:12px 14px;border:1px solid #dde4e8;margin:0 0 10px;display:flex;flex-direction:column;gap:6px}
+.card .h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.card .h b{font-size:16px}.pill{font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;background:#eef2f4;color:#3c4d56}
+.pill.ava{background:#fff4e5;color:#7a4a06}.pill.lib{background:#e3ecf1;color:#163c52}.pill.pat{background:#efe7fb;color:#5b3a99}.pill.fim{background:#e3f1ea;color:#17694a}.pill.can{background:#eceff1;color:#6b7a83}
+.ped{font-size:13.5px;color:#163c52;font-weight:700}.inf{font-size:13px;color:#5d6e77}
+.passos{display:flex;gap:4px;margin-top:4px}.passos span{flex:1;display:flex;flex-direction:column;gap:3px;align-items:center;font-size:10.5px;color:#5d6e77}.passos i{height:6px;width:100%;border-radius:3px;background:#d5dde2}.passos i.on{background:#163c52}
+.acs{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}.pedido{background:#fff4e5;border-radius:10px;padding:8px 10px;font-size:13px;color:#5a4208}
+.vz{text-align:center;color:#5d6e77;padding:30px 10px}.av{background:#fff;border-radius:14px;padding:12px 14px;margin:18px 0 0;font-size:13px;color:#5d6e77;line-height:1.45}.av b{color:#1d2b33}
+.sheet{position:fixed;inset:0;background:rgba(15,43,59,.55);display:flex;align-items:flex-end;z-index:20}.sheet>div{background:#eef2f4;border-radius:20px 20px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom));width:100%;max-width:560px;margin:0 auto;max-height:90vh;overflow:auto}
+.sheet h2{margin:0 0 4px;font-size:20px;color:#163c52}.sheet .sub{margin:0 0 14px;font-size:13.5px;color:#5d6e77}
+.bloq{background:#fff;border-radius:18px;padding:24px 18px;text-align:center;margin-top:30px}.bloq h1{font-size:20px;margin:0 0 8px}.bloq p{color:#5d6e77;margin:0}
+</style>
+</head>
+<body>
+<div class="top" role="banner"><div class="l1"><img src="icons/logo-colafix-escuro.png" alt="Colafix"><span class="nm" id="nm"></span></div>
+  <nav id="tabs" hidden><button type="button" data-aba="pedir" aria-pressed="true">Pedir agendamento</button><button type="button" data-aba="meus" aria-pressed="false">Meus pedidos <b id="nmeus" hidden></b></button></nav></div>
+<main id="app"><p class="vz">Abrindo…</p></main>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="config.js"></script>
+<script>
+(function(){ 'use strict';
+  const CFG=window.PAINEL_CONFIG||{}; firebase.initializeApp(CFG.firebase); const auth=firebase.auth();
+  const BANCO=CFG.banco||'(default)'; let fs; if(BANCO==='(default)') fs=firebase.firestore(); else { const app=firebase.app(); const exp=app.container.getProvider('firestore').getImmediate({identifier:BANCO}); fs=new firebase.firestore.Firestore(app,exp); }
+  try{ fs.settings({ignoreUndefinedProperties:true,merge:true}); }catch(e){}
+  const $=id=>document.getElementById(id), app=$('app');
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const LS={get:k=>{ try{ return localStorage.getItem(k); }catch(e){ return null; } },set:(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} }};
+  const tokUrl=(location.search.match(/[?&]t=([a-f0-9]{20,64})/i)||[])[1]; if(tokUrl) LS.set('colafix.rep.t',tokUrl);
+  const TOK=tokUrl||LS.get('colafix.rep.t')||'';
+  const pz=n=>String(n).padStart(2,'0'), dstr=d=>d.getFullYear()+'-'+pz(d.getMonth()+1)+'-'+pz(d.getDate());
+  const hoje=()=>dstr(new Date()), addD=(d,n)=>{ const x=new Date(d+'T12:00:00'); x.setDate(x.getDate()+n); return dstr(x); };
+  const util=d=>{ const w=new Date(d+'T12:00:00').getDay(); return w!==0&&w!==6; }, proxUtil=(d,n)=>{ let x=d,k=0; while(k<(n||1)){ x=addD(x,1); if(util(x)) k++; } return x; };
+  const DS=['dom','seg','ter','qua','qui','sex','sáb'], DSL=['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+  const br=d=>d?d.slice(8,10)+'/'+d.slice(5,7):'', dsem=d=>DS[new Date(d+'T12:00:00').getDay()];
+  const hm=iso=>{ if(!iso) return ''; const d=new Date(iso); return pz(d.getHours())+':'+pz(d.getMinutes()); };
+  const diaDe=iso=>iso?dstr(new Date(iso)):'';
+  const quando=iso=>{ const d=diaDe(iso); return (d===hoje()?'hoje':d===addD(hoje(),-1)?'ontem':br(d))+' '+hm(iso); };
+  function prazos(rec){ const t=new Date(rec), d=dstr(t), cd=util(d)&&t.getHours()<12?d:proxUtil(d,1); return {conf:new Date(cd+'T12:00:00').toISOString(),carr:proxUtil(d,2)}; }
+  const VEICS=[['CAMIONETE','Camionete'],['HR','HR'],['TOCO','Toco'],['TRUCK','Truck'],['BITRUCK','Bitruck'],['CARRETA','Carreta'],['CARRETA_GRANELEIRA','Carreta graneleira']];
+  const veicN=k=>(VEICS.find(v=>v[0]===k)||[k,k||''])[1];
+  const R={rep:null,aba:'pedir',f:{peds:[],cli:'',dia:'',turno:'manhã',veic:'',obs:''},meus:[],lidoMeus:false,feito:null,err:'',env:false,sheet:null};
+
+  async function entrar(){ try{ if(!auth.currentUser) await auth.signInAnonymously(); }catch(e){ console.info('sem conta anônima',e&&e.code); } }
+  async function abrir(){ if(!TOK){ bloq('Link incompleto','Abra o link que o faturamento da Colafix mandou para você.'); return; }
+    await entrar();
+    try{ const g=await fs.collection('bordorep').doc(TOK).get(); if(!g.exists||g.data().ativo!==true){ bloq('Link desligado','Este link não está mais ativo. Peça um link novo ao faturamento da Colafix.'); return; } R.rep=g.data(); }
+    catch(e){ bloq('Sem conexão','Não deu para abrir agora ('+((e&&e.code)||'erro')+'). Confira a internet e tente de novo.'); return; }
+    $('nm').textContent=R.rep.nome+(R.rep.reg?' · '+R.rep.reg:''); $('tabs').hidden=false; lerMeus(); desenha(); setInterval(lerMeus,60000); }
+  function bloq(t,x){ $('tabs').hidden=true; app.innerHTML='<div class="bloq"><h1>'+esc(t)+'</h1><p>'+esc(x)+'</p></div>'; }
+  async function lerMeus(){ try{ const q=await fs.collection('bordosol').where('tok','==',TOK).limit(80).get(); R.meus=q.docs.map(d=>Object.assign({_id:d.id},d.data())).sort((a,b)=>String(b.recebido).localeCompare(String(a.recebido))); R.lidoMeus=true;
+      const n=R.meus.filter(s=>s.aberto!==false&&s.st!=='cancelado').length, b=$('nmeus'); b.hidden=!n; b.textContent=n; if(R.aba==='meus'&&!R.sheet) desenha(); }catch(e){ console.warn('meus',e&&e.code); } }
+  const pedsDe=t=>[...new Set(String(t||'').match(/\d{4,8}/g)||[])];
+  function addPeds(t){ const n=pedsDe(t).filter(p=>!R.f.peds.includes(p)); if(!n.length) return false; R.f.peds=R.f.peds.concat(n).slice(0,20); return true; }
+
+  function vPedir(){ if(R.feito){ const s=R.feito; return '<div class="ok"><div class="ck" aria-hidden="true">✓</div><h1>Pedido enviado</h1><p>Pedido '+esc(s.peds.join(', '))+'. O faturamento confirma o dia até <b>'+esc(diaDe(s.prazoConf)===hoje()?'hoje':dsem(diaDe(s.prazoConf))+' '+br(diaDe(s.prazoConf)))+' às 12:00</b>. Acompanhe em "Meus pedidos".</p><button type="button" class="b1" data-a="outro">Pedir outro agendamento</button><p></p><button type="button" class="lk" data-a="vermeus">Ver meus pedidos</button></div>'; }
+    const F=R.f, h=hoje(), dias=[]; let d=h; if(!util(d)) d=proxUtil(d,1); while(dias.length<5){ dias.push(d); d=proxUtil(d,1); }
+    const p=prazos(new Date().toISOString());
+    return '<form id="fp" autocomplete="off" novalidate>'+
+      '<div class="lb">Pedidos<div class="chips" id="chips">'+F.peds.map((x,i)=>'<span class="chip">'+esc(x)+'<button type="button" data-a="px" data-v="'+i+'" aria-label="Tirar o pedido '+esc(x)+'">×</button></span>').join('')+'<input id="ped" inputmode="numeric" placeholder="'+(F.peds.length?'mais pedidos…':'Cole ou digite os pedidos')+'" aria-label="Pedidos"></div><p class="hint">Pode colar vários de uma vez.</p></div>'+
+      '<label class="lb">Cliente<input id="cli" class="in" maxlength="80" value="'+esc(F.cli)+'" placeholder="Nome do cliente"></label>'+
+      '<fieldset><legend>Quando o cliente quer carregar?</legend><div class="dias">'+dias.map(x=>'<button type="button" data-a="dia" data-v="'+x+'" aria-pressed="'+(F.dia===x)+'">'+dsem(x)+'<b>'+br(x)+'</b></button>').join('')+'</div>'+
+        '<div class="seg"><button type="button" data-a="turno" data-v="manhã" aria-pressed="'+(F.turno==='manhã')+'">Manhã</button><button type="button" data-a="turno" data-v="tarde" aria-pressed="'+(F.turno==='tarde')+'">Tarde</button></div></fieldset>'+
+      '<fieldset><legend>Veículo</legend><div class="vs">'+VEICS.map(([k,n])=>'<button type="button" data-a="veic" data-v="'+k+'" aria-pressed="'+(F.veic===k)+'">'+esc(n)+'</button>').join('')+'</div></fieldset>'+
+      '<label class="lb">Observação <small>opcional</small><input id="obs" class="in" maxlength="200" value="'+esc(F.obs)+'" placeholder="Ex.: descarga só até 17h"></label>'+
+      '<p class="nota">Enviando agora, o faturamento confirma o dia até <b>'+esc(diaDe(p.conf)===h?'hoje':dsem(diaDe(p.conf))+' '+br(diaDe(p.conf)))+' às 12:00</b>. Você recebe o aviso aqui.</p>'+
+      (R.err?'<p class="err" role="alert">'+esc(R.err)+'</p>':'')+'<button type="submit" class="b1"'+(R.env?' disabled':'')+'>'+(R.env?'Enviando…':'Enviar pedido de agendamento')+'</button></form>'+avisos(); }
+  function avisos(){ return R.rep&&R.rep.topico?'<div class="av"><b>Receba os avisos no celular</b> (liberado, caminhão chegou, carregado): instale o app <b>ntfy</b>, toque em + e assine o tópico <button type="button" class="lk" data-a="tp">'+esc(R.rep.topico)+'</button>.<br>Dica: no navegador, use "Adicionar à tela inicial" para abrir este link como um aplicativo.</div>':''; }
+  const ST={recebido:['Enviado','env',1],avaliacao:['Em avaliação','ava',2],liberado:['Liberado','lib',3],cancelado:['Cancelado','can',0]};
+  function vMeus(){ if(!R.lidoMeus) return '<p class="vz">Carregando…</p>'; if(!R.meus.length) return '<p class="vz">Nenhum pedido ainda.</p>';
+    const nomes=['Enviado','Avaliação','Liberado','Chegou','Carregado'];
+    return R.meus.map(s=>{ let st=ST[s.st]||ST.recebido, n=st[2], pill=st[0], cls=st[1];
+      if(s.st==='liberado'&&s.chegou){ n=4; pill='No pátio'; cls='pat'; } if(s.carregado){ n=5; pill='Carregado'; cls='fim'; }
+      const L=s.lib||{}, ac=s.acao&&!s.acao.feito?s.acao:null, fim=s.st==='cancelado'||s.carregado;
+      const info=s.carregado?'Carregado '+quando(s.carregado):s.st==='cancelado'?'Cancelado':s.chegou?'Caminhão no pátio desde '+hm(s.chegou):s.st==='liberado'?'Agendado '+DSL[new Date(L.dia+'T12:00:00').getDay()]+', '+br(L.dia)+(L.hora?' às '+L.hora:''):s.st==='avaliacao'?'O faturamento está avaliando · resposta até '+(diaDe(s.prazoConf)===hoje()?'':br(diaDe(s.prazoConf))+' ')+'12:00':'Enviado '+quando(s.recebido)+(s.quer&&s.quer.dia?' · pediu '+dsem(s.quer.dia)+' '+br(s.quer.dia)+' '+(s.quer.turno||''):'');
+      return '<article class="card"><div class="h"><b>'+esc(s.cli||'Cliente')+'</b><span class="pill '+cls+'">'+esc(pill)+'</span></div><span class="ped">'+esc((s.peds||[]).join(' · '))+'</span><span class="inf">'+esc(info)+'</span>'+
+        (s.st!=='cancelado'?'<div class="passos">'+nomes.map((t,k)=>'<span><i class="'+(k<n?'on':'')+'"></i>'+t+'</span>').join('')+'</div>':'')+
+        (ac?'<div class="pedido">Você pediu para '+(ac.tipo==='cancelar'?'cancelar':'mudar para '+dsem(ac.dia)+' '+br(ac.dia)+' '+(ac.turno||''))+'. Aguardando o faturamento.</div>':s.acao&&s.acao.feito==='recusado'?'<div class="pedido">O faturamento não aceitou o último pedido de mudança. Fale com o faturamento.</div>':'')+
+        (!fim&&!ac&&!s.chegou?'<div class="acs"><button type="button" class="b0" data-a="reag" data-v="'+esc(s._id)+'">Reagendar</button><button type="button" class="lk" data-a="canc" data-v="'+esc(s._id)+'">Cancelar</button></div>':'')+'</article>'; }).join('')+avisos(); }
+  function vSheet(){ const S=R.sheet; if(!S) return ''; const s=R.meus.find(x=>x._id===S.id); if(!s) return '';
+    if(S.tipo==='canc') return '<div class="sheet" role="dialog" aria-modal="true" aria-label="Cancelar"><div><h2>Cancelar o pedido?</h2><p class="sub">'+esc((s.peds||[]).join(', '))+' · '+esc(s.cli||'')+(s.st==='liberado'?'. Como já está liberado, o faturamento confirma o cancelamento.':'')+'</p><label class="lb">Motivo <small>opcional</small><input id="mot" class="in" maxlength="150"></label>'+(R.err?'<p class="err" role="alert">'+esc(R.err)+'</p>':'')+'<button type="button" class="b1" data-a="canc-ok" style="background:#8f1d19">Cancelar o pedido</button><p></p><button type="button" class="lk" data-a="sx">Voltar</button></div></div>';
+    const h=hoje(), dias=[]; let d=util(h)?h:proxUtil(h,1); while(dias.length<10){ dias.push(d); d=proxUtil(d,1); }
+    return '<div class="sheet" role="dialog" aria-modal="true" aria-label="Reagendar"><div><h2>Reagendar</h2><p class="sub">'+esc((s.peds||[]).join(', '))+' · '+esc(s.cli||'')+'. O faturamento confirma o novo dia.</p>'+
+      '<fieldset><legend>Novo dia</legend><div class="dias">'+dias.map(x=>'<button type="button" data-a="sdia" data-v="'+x+'" aria-pressed="'+(S.dia===x)+'">'+dsem(x)+'<b>'+br(x)+'</b></button>').join('')+'</div><div class="seg"><button type="button" data-a="sturno" data-v="manhã" aria-pressed="'+(S.turno==='manhã')+'">Manhã</button><button type="button" data-a="sturno" data-v="tarde" aria-pressed="'+(S.turno==='tarde')+'">Tarde</button></div></fieldset>'+
+      '<label class="lb">Motivo <small>opcional</small><input id="mot" class="in" maxlength="150" placeholder="Ex.: cliente pediu para sexta"></label>'+(R.err?'<p class="err" role="alert">'+esc(R.err)+'</p>':'')+'<button type="button" class="b1" data-a="reag-ok">Pedir o novo dia</button><p></p><button type="button" class="lk" data-a="sx">Voltar</button></div></div>'; }
+  function desenha(){ document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.aba===R.aba));
+    const a=document.activeElement, id=a&&a.id; app.innerHTML=(R.aba==='meus'?vMeus():vPedir())+vSheet(); if(id&&$(id)) $(id).focus(); }
+  async function enviar(){ const F=R.f, i=$('ped'); if(i&&i.value.trim()){ addPeds(i.value); i.value=''; } F.cli=($('cli')||{}).value||F.cli; F.obs=($('obs')||{}).value||F.obs;
+    R.err=!F.peds.length?'Coloque pelo menos um pedido.':String(F.cli||'').trim().length<2?'Escreva o nome do cliente.':!F.dia?'Escolha o dia que o cliente quer carregar.':!F.veic?'Escolha o veículo.':''; if(R.err){ desenha(); return; }
+    R.env=true; desenha();
+    try{ await entrar(); const agora=new Date().toISOString(), p=prazos(agora), id='r'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+      const d={peds:F.peds,cli:F.cli.trim().slice(0,80),repId:R.rep.repId,repNome:R.rep.nome,tok:TOK,origem:'link',recebido:agora,prazoConf:p.conf,prazoCarr:p.carr,quer:{dia:F.dia,turno:F.turno},veic:F.veic,obs:String(F.obs||'').trim().slice(0,200),st:'recebido',aberto:true,hist:[{em:agora,por:R.rep.nome,t:'Enviado pelo link do representante'}],acao:null};
+      await fs.collection('bordosol').doc(id).set(d); R.feito=d; R.f={peds:[],cli:'',dia:'',turno:'manhã',veic:'',obs:''}; R.err=''; lerMeus(); }
+    catch(e){ console.warn(e); R.err=e&&/permission/.test(e.code||'')?'O link não tem permissão (desligado?). Fale com o faturamento.':'Não deu para enviar ('+((e&&e.code)||'erro')+'). Tente de novo.'; }
+    R.env=false; desenha(); }
+  async function acao(tipo){ const S=R.sheet, s=S&&R.meus.find(x=>x._id===S.id); if(!s) return; const mot=String(($('mot')||{}).value||'').trim().slice(0,150), agora=new Date().toISOString();
+    if(tipo==='reagendar'&&!S.dia){ R.err='Escolha o novo dia.'; desenha(); return; }
+    const o={alterado:agora,hist:(s.hist||[]).concat([{em:agora,por:R.rep.nome,t:tipo==='cancelar'?'Representante '+(s.st==='liberado'?'pediu para cancelar':'cancelou'):'Representante pediu para mudar para '+br(S.dia)+' '+S.turno}]).slice(-40)};
+    if(tipo==='cancelar'&&s.st!=='liberado'){ o.st='cancelado'; o.aberto=false; o.acao={tipo:'cancelar',motivo:mot,em:agora,feito:'direto'}; }
+    else o.acao=tipo==='cancelar'?{tipo:'cancelar',motivo:mot,em:agora}:{tipo:'reagendar',dia:S.dia,turno:S.turno,motivo:mot,em:agora};
+    try{ await entrar(); await fs.collection('bordosol').doc(s._id).update(o); Object.assign(s,o); R.sheet=null; R.err=''; desenha(); lerMeus(); }
+    catch(e){ R.err='Não deu certo ('+((e&&e.code)||'erro')+'). Tente de novo.'; desenha(); } }
+  document.addEventListener('click',async ev=>{ const t=ev.target.closest('[data-aba],[data-a]'); if(!t) return;
+    if(t.dataset.aba){ R.aba=t.dataset.aba; R.feito=null; R.err=''; desenha(); if(R.aba==='meus') lerMeus(); return; }
+    const a=t.dataset.a, v=t.dataset.v; ev.preventDefault(); const F=R.f; const cap=()=>{ const c=$('cli'), o=$('obs'); if(c) F.cli=c.value; if(o) F.obs=o.value; };
+    if(a==='px'){ cap(); F.peds.splice(+v,1); desenha(); return; } if(a==='dia'){ cap(); F.dia=v; desenha(); return; } if(a==='turno'){ cap(); F.turno=v; desenha(); return; } if(a==='veic'){ cap(); F.veic=v; desenha(); return; }
+    if(a==='outro'){ R.feito=null; desenha(); return; } if(a==='vermeus'){ R.aba='meus'; R.feito=null; lerMeus(); desenha(); return; }
+    if(a==='tp'){ try{ await navigator.clipboard.writeText(R.rep.topico); t.textContent=R.rep.topico+' (copiado)'; }catch(e){} return; }
+    if(a==='reag'){ R.sheet={tipo:'reag',id:v,dia:'',turno:'manhã'}; R.err=''; desenha(); return; } if(a==='canc'){ R.sheet={tipo:'canc',id:v}; R.err=''; desenha(); return; }
+    if(a==='sx'){ R.sheet=null; R.err=''; desenha(); return; } if(a==='sdia'){ R.sheet.dia=v; desenha(); return; } if(a==='sturno'){ R.sheet.turno=v; desenha(); return; }
+    if(a==='reag-ok') return acao('reagendar'); if(a==='canc-ok') return acao('cancelar'); });
+  document.addEventListener('submit',ev=>{ if(ev.target.id==='fp'){ ev.preventDefault(); enviar(); } });
+  document.addEventListener('keydown',ev=>{ const t=ev.target; if(t.id==='ped'&&(ev.key==='Enter'||ev.key===',')){ ev.preventDefault(); if(addPeds(t.value)){ t.value=''; const c=$('cli'); if(c) R.f.cli=c.value; desenha(); $('ped').focus(); } }
+    if(t.id==='ped'&&ev.key==='Backspace'&&!t.value&&R.f.peds.length){ R.f.peds.pop(); desenha(); $('ped').focus(); } });
+  document.addEventListener('input',ev=>{ const t=ev.target; if(t.id==='ped'&&/[\s,;]/.test(t.value)&&pedsDe(t.value).length){ if(addPeds(t.value)){ t.value=''; const c=$('cli'); if(c) R.f.cli=c.value; desenha(); $('ped').focus(); } } if(t.id==='cli') R.f.cli=t.value; if(t.id==='obs') R.f.obs=t.value; });
+  document.addEventListener('paste',ev=>{ const t=ev.target; if(t.id!=='ped') return; const x=(ev.clipboardData||window.clipboardData).getData('text'); if(!pedsDe(x).length) return; ev.preventDefault(); addPeds(x); const c=$('cli'); if(c) R.f.cli=c.value; desenha(); $('ped').focus(); });
+  abrir();
+})();
+</script>
+</body>
+</html>

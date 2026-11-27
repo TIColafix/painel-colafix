@@ -1,7 +1,7 @@
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
 import fs from 'fs';
 const env = await initializeTestEnvironment({ projectId: 'demo-painel', firestore: { rules: fs.readFileSync(new URL('../../firestore.rules', import.meta.url),'utf8'), host:'127.0.0.1', port:8085 } });
-await env.withSecurityRulesDisabled(async c => { const d=c.firestore();
+await env.withSecurityRulesDisabled(async c => { const d=c.firestore(); await d.doc('bordorep/aaaaaaaaaaaaaaaaaaaaaaaa').set({repId:'r1',nome:'Rep',ativo:true}); await d.doc('bordorep/bbbbbbbbbbbbbbbbbbbbbbbb').set({repId:'r2',nome:'Rep2',ativo:false}); await d.doc('bordosol/s1').set({peds:['1'],repId:'r1',tok:'aaaaaaaaaaaaaaaaaaaaaaaa',st:'recebido',aberto:true}); await d.doc('bordosol/s2').set({peds:['2'],repId:'r1',tok:'aaaaaaaaaaaaaaaaaaaaaaaa',st:'liberado',aberto:true}); await d.doc('bordosol/s3').set({peds:['3'],repId:'r9',tok:'cccccccccccccccccccccccc',st:'recebido',aberto:true});
   await d.doc('acessos/op').set({perfil:'outro',mods:['producao'],ativo:true});
   await d.doc('acessos/rh').set({perfil:'rh',mods:['rh'],ativo:true});
   await d.doc('acessos/tv').set({perfil:'tv',mods:['telas'],ativo:true});
@@ -49,4 +49,28 @@ await ok('diretor NÃO grava o resumo do chatbot', assertFails(dir.doc('api/resu
 await ok('diretor NÃO muda motivos', assertFails(dir.doc('config/geral').update({motivos:['x']})));
 await ok('gestor continua gravando o quadro de pessoas e o plano', assertSucceeds(Promise.all([ges.doc('gxquadro/atual').set({cols:[]}),ges.doc('gxacoes/a2').set({t:'x'})])));
 await ok('gestor continua gravando o resumo do chatbot', assertSucceeds(ges.doc('api/resumo').set({versao:3},{merge:true})));
+// link do representante (27/11/2026)
+const T='aaaaaaaaaaaaaaaaaaaaaaaa', novaRep=(o)=>Object.assign({peds:['146800'],cli:'X',repId:'r1',repNome:'Rep',tok:T,origem:'link',recebido:'x',prazoConf:'x',prazoCarr:'x',quer:{dia:'x',turno:'tarde'},veic:'HR',obs:'',st:'recebido',aberto:true,hist:[],acao:null},o||{});
+await ok('representante (sem login) lê o próprio link', assertSucceeds(anon.doc('bordorep/'+T).get()));
+await ok('sem login NÃO lista os links', assertFails(anon.collection('bordorep').get()));
+await ok('representante lê as próprias solicitações', assertSucceeds(anon.collection('bordosol').where('tok','==',T).get()));
+await ok('representante NÃO lê a de outro', assertFails(anon.doc('bordosol/s3').get()));
+await ok('representante cria solicitação pelo link', assertSucceeds(anon.doc('bordosol/r1').set(novaRep())));
+await ok('NÃO cria com link desligado', assertFails(anon.doc('bordosol/r2').set(novaRep({tok:'bbbbbbbbbbbbbbbbbbbbbbbb',repId:'r2'}))));
+await ok('NÃO cria já liberada', assertFails(anon.doc('bordosol/r3').set(novaRep({st:'liberado'}))));
+await ok('NÃO cria em nome de outro representante', assertFails(anon.doc('bordosol/r4').set(novaRep({repId:'r9'}))));
+await ok('representante cancela a que não foi liberada', assertSucceeds(anon.doc('bordosol/s1').update({st:'cancelado',aberto:false,acao:{tipo:'cancelar'},hist:[]})));
+await ok('representante NÃO cancela direto a liberada', assertFails(anon.doc('bordosol/s2').update({st:'cancelado',aberto:false})));
+await ok('representante pede reagendar a liberada', assertSucceeds(anon.doc('bordosol/s2').update({acao:{tipo:'reagendar',dia:'x'},hist:[]})));
+await ok('representante NÃO muda o dia liberado', assertFails(anon.doc('bordosol/s2').update({lib:{dia:'x'}})));
+await ok('operador grava as solicitações', assertSucceeds(op.doc('bordosol/s9').set({peds:['9'],st:'recebido'})));
+// atestado pelo link (27/11/2026)
+const envio={mat:'1001',nome:'Ana Souza',tipo:'atestado',ini:'2026-11-27',dias:2,hIni:'',hFim:'',obs:'',tel:'',n:1,em:'x',st:'novo'};
+await ok('funcionário (sem login) envia o atestado', assertSucceeds(anon.doc('rhatestrec/a-abcdefgh12').set(envio)));
+await ok('funcionário envia a foto', assertSucceeds(anon.doc('rhatestarq/a-abcdefgh12-0').set({rec:'a-abcdefgh12',d:'data:image/jpeg;base64,AAAA',mime:'image/jpeg',nome:'f.jpg',em:'x'})));
+await ok('sem login NÃO lê os atestados enviados', assertFails(anon.doc('rhatestrec/a-abcdefgh12').get()));
+await ok('NÃO envia já como registrado', assertFails(anon.doc('rhatestrec/a-abcdefgh13').set(Object.assign({},envio,{st:'registrado'}))));
+await ok('operador NÃO lê os atestados enviados', assertFails(op.doc('rhatestrec/a-abcdefgh12').get()));
+await ok('RH lê e registra', assertSucceeds(rh.doc('rhatestrec/a-abcdefgh12').update({st:'registrado'})));
+await ok('RH apaga a foto', assertSucceeds(rh.doc('rhatestarq/a-abcdefgh12-0').delete()));
 console.log(n,'passou',f,'falhou'); await env.cleanup(); process.exit(f?1:0);

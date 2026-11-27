@@ -107,7 +107,12 @@
   const vivos=xs=>xs.filter(e=>!e.removido);
 
   /* ---------- ações ---------- */
-  function novoForm(o){ return Object.assign({placa:'',mot:'',peds:[],repId:'',veic:'',tipo:'carrega',cli:'',info:null,prev:null,err:null,edit:null},o||{}); }
+  function novoForm(o){ return Object.assign({placa:'',mot:'',peds:[],repId:'',veic:'',tipo:'carrega',cli:'',info:null,prev:null,err:null,edit:null,hora:'',saida:''},o||{}); }
+  /* 27/11/2026 · hora digitada (lançar depois os caminhões que já vieram): HH:MM do dia do registro → ISO */
+  const hmOk=t=>/^([01]?\d|2[0-3]):[0-5]\d$/.test(String(t||'').trim());
+  const isoDe=(dia,t)=>{ const [h,m]=String(t).trim().split(':').map(Number); const d=new Date(dia+'T00:00:00'); d.setHours(h,m,0,0); return d.toISOString(); };
+  async function renumera(dia){ try{ const xs=vivos(B.ent).filter(e=>e.dia===dia).sort((a,b)=>String(a.cheg).localeCompare(String(b.cheg))); let n=0;
+    for(const e of xs){ n++; if(+e.ord!==n){ e.ord=n; await P.db().collection('bordo').doc(e._id).update({ord:n}); } } }catch(e){ console.warn('[bordo] ordem',e); } }
   function addPeds(txt){ const F=B.f; if(!F) return; const n=pedLimpo(txt).filter(p=>!F.peds.includes(p)); if(!n.length) return false; F.peds=F.peds.concat(n).slice(0,20); olhaAg(); return true; }
   let _agT=0;
   async function olhaAg(){ const F=B.f; if(!F) return; const my=++_agT; if(!F.peds.length){ F.info=null; rr(); return; }
@@ -128,18 +133,27 @@
     if(pl.length<7) F.err={id:'bd-f-placa',t:'Digite a placa completa (ex.: ABC1D23).'};
     else if(String(F.mot||'').trim().length<3) F.err={id:'bd-f-mot',t:'Escreva o nome do motorista.'};
     else if(!F.veic) F.err={id:'bd-f-veic',t:'Escolha o veículo.'};
+    const eOld=F.edit?entDe(F.edit):null, diaR=eOld?eOld.dia:hoje(), agoraMs=Date.now()+60000;
+    let chegMan=null, saiMan=null;
+    if(!F.err&&String(F.hora||'').trim()){ if(!hmOk(F.hora)) F.err={id:'bd-f-hora',t:'Hora da chegada inválida. Use 07:30.'}; else { chegMan=isoDe(diaR,F.hora); if(new Date(chegMan).getTime()>agoraMs) F.err={id:'bd-f-hora',t:'A hora da chegada não pode ser depois de agora.'}; } }
+    if(!F.err&&F.edit&&String(F.saida||'').trim()){ if(!hmOk(F.saida)) F.err={id:'bd-f-saida',t:'Hora da saída inválida. Use 16:45.'}; else { saiMan=isoDe(diaR,F.saida); const ch=chegMan||(eOld&&eOld.cheg);
+        if(new Date(saiMan).getTime()>agoraMs) F.err={id:'bd-f-saida',t:'A hora da saída não pode ser depois de agora.'}; else if(ch&&saiMan<ch) F.err={id:'bd-f-saida',t:'A saída tem que ser depois da chegada.'}; } }
     if(F.err){ P.render(); return; }
     if(!pode()){ P.toast('Seu acesso é só para ver.'); return; }
     if(F.salvando) return; F.salvando=true; P.render();
     try{ const agora=new Date().toISOString(), r=repDe(F.repId);
       if(F.edit){ const e=entDe(F.edit); const ags=await agsDosPeds(F.peds); const c=classAg(ags,e.dia);
-        await P.db().collection('bordo').doc(F.edit).update({placa:pl,mot:F.mot.trim(),peds:F.peds,repId:F.repId||'',repNome:r?r.nome:'',veic:F.veic,tipo:F.tipo,cli:F.cli||(ags[0]&&ags[0].cliente)||'',agIds:ags.map(x=>x._id),agKind:c.k,agData:c.d||null,editEm:agora,editPor:eu()});
+        const up={placa:pl,mot:F.mot.trim(),peds:F.peds,repId:F.repId||'',repNome:r?r.nome:'',veic:F.veic,tipo:F.tipo,cli:F.cli||(ags[0]&&ags[0].cliente)||'',agIds:ags.map(x=>x._id),agKind:c.k,agData:c.d||null,editEm:agora,editPor:eu()};
+        const mudouH=chegMan&&chegMan.slice(0,16)!==String(e.cheg||'').slice(0,16); if(mudouH) up.cheg=chegMan;
+        if(saiMan&&saiMan.slice(0,16)!==String((e.et||{}).fim||'').slice(0,16)){ const et=Object.assign({},e.et||{}), por=Object.assign({},e.etPor||{}); if(juntos()&&(!et.carr||et.carr===et.fim)){ et.carr=saiMan; por.carr=por.carr||eu(); } et.fim=saiMan; por.fim=por.fim||eu(); up.et=et; up.etPor=por; }
+        await P.db().collection('bordo').doc(F.edit).update(up); Object.assign(e,up); if(mudouH) await renumera(e.dia);
         B.f=null; B.ov=null; P.toast('Corrigido.'); P.render(); return; }
       const ags=await agsDosPeds(F.peds), c=classAg(ags,hoje()), ord=Math.max(0,...vivos(B.ent).map(e=>+e.ord||0))+1, id='b'+hoje().replace(/-/g,'')+'-'+novoId();
       const d={dia:hoje(),ord,placa:pl,mot:F.mot.trim().replace(/\s+/g,' '),veic:F.veic,tipo:F.tipo||'carrega',peds:F.peds,cli:F.cli||(ags[0]&&ags[0].cliente)||'',repId:F.repId||'',repNome:r?r.nome:'',
-        agIds:ags.map(x=>x._id),agKind:c.k,agData:c.d||null,carga:(ags.find(x=>x.carga)||{}).carga||'',cheg:agora,et:{},etPor:{},al:{},des:null,por:S.uid,porN:eu(),criado:agora};
+        agIds:ags.map(x=>x._id),agKind:c.k,agData:c.d||null,carga:(ags.find(x=>x.carga)||{}).carga||'',cheg:chegMan||agora,horaDigitada:!!chegMan,et:{},etPor:{},al:{},des:null,por:S.uid,porN:eu(),criado:agora};
       await P.db().collection('bordo').doc(id).set(d); B.ent=B.ent.filter(e=>e._id!==id).concat([Object.assign({_id:id},d)]);
-      for(const x of ags){ const o={chegou:agora}; if(!x.diario) o.diario=String(ord); if(!x.placa) o.placa=pl; try{ await gravaAg(x,o,'Caminhão chegou às '+hm(agora)+' (diário de bordo nº '+ord+', '+pl+')'); }catch(e){ console.warn('[bordo] agendamento',e); } }
+      if(chegMan&&vivos(B.ent).some(e=>e._id!==id&&e.dia===d.dia&&String(e.cheg)>chegMan)){ await renumera(d.dia); d.ord=(entDe(id)||d).ord; }
+      for(const x of ags){ const o={chegou:agora}; if(!x.diario) o.diario=String(ord); if(!x.placa) o.placa=pl; try{ await gravaAg(x,o,'Caminhão chegou às '+hm(d.cheg)+' (diário de bordo nº '+ord+', '+pl+')'); }catch(e){ console.warn('[bordo] agendamento',e); } }
       B.port.feito=Object.assign({_id:id},d); B.f=null; B.ov=null; P.toast('Chegada registrada · nº '+ord+'.');
       if(S.view==='bdport') setTimeout(()=>{ if(B.port.feito&&B.port.feito._id===id){ B.port.feito=null; P.render(); } },7000);
     }catch(e){ P.erro(e); }
@@ -196,15 +210,17 @@
       ${F.prev?`<p class="bd-prev"><b>Já esteve aqui em ${esc(br(F.prev.dia))}.</b> Motorista, veículo e representante vieram da última vez. Confira e mude se precisar.</p>`:''}
       <div class="bd-f2"><label class="bd-lb">Placa<input id="bd-f-placa" class="bd-in bd-plin" maxlength="8" autocomplete="off" autocapitalize="characters" value="${esc(F.placa)}" placeholder="ABC1D23"${er.id==='bd-f-placa'?' aria-invalid="true"':''}></label>
         <label class="bd-lb">Motorista<input id="bd-f-mot" class="bd-in" maxlength="60" autocomplete="off" value="${esc(F.mot)}" placeholder="Nome do motorista"${er.id==='bd-f-mot'?' aria-invalid="true"':''}></label></div>${eB('bd-f-placa')}${eB('bd-f-mot')}
+      <div class="bd-f2"><label class="bd-lb">Chegou às<input id="bd-f-hora" class="bd-in" inputmode="numeric" maxlength="5" autocomplete="off" value="${esc(F.hora||'')}" placeholder="agora (${esc(hm(new Date().toISOString()))})"${er.id==='bd-f-hora'?' aria-invalid="true"':''}></label>
+        ${F.edit?`<label class="bd-lb">Saiu às <small>(se já saiu)</small><input id="bd-f-saida" class="bd-in" inputmode="numeric" maxlength="5" autocomplete="off" value="${esc(F.saida||'')}" placeholder="—"${er.id==='bd-f-saida'?' aria-invalid="true"':''}></label>`:'<p class="bd-hint" style="align-self:end">Deixe vazio para usar a hora de agora. Para lançar um caminhão que já veio, digite a hora em que ele chegou.</p>'}</div>${eB('bd-f-hora')}${eB('bd-f-saida')}
       <div class="bd-lb">Pedidos<div class="bd-chips" id="bd-f-chips">${F.peds.map((p,i)=>`<span class="bd-chip">${esc(p)}<button type="button" data-act="bd-f-px" data-v="${i}" aria-label="Tirar o pedido ${esc(p)}">×</button></span>`).join('')}<input id="bd-f-ped" inputmode="numeric" autocomplete="off" placeholder="${F.peds.length?'mais pedidos…':'Digite ou cole os pedidos'}"></div>
         ${F.info?`<p class="bd-info ${F.info.t}">${esc(F.info.x)}</p>`:'<p class="bd-hint">Enter ou vírgula separa os pedidos. Pode colar vários de uma vez.</p>'}</div>
       <div class="bd-lb">Representante
         ${rs.length?`<div class="bd-replst"><input id="bd-f-repq" class="bd-repq" autocomplete="off" placeholder="Buscar representante" aria-label="Buscar representante">
-          <div class="bd-reps" role="radiogroup" aria-label="Representante">${rs.map(r=>`<button type="button" class="bd-rep" role="radio" aria-checked="${r.id===F.repId}" data-act="bd-f-rep" data-v="${esc(r.id)}" data-b="${esc(norm(r.nome+' '+(r.reg||'')))}"><span class="bd-rdot" aria-hidden="true"></span><span class="bd-rn">${esc(r.nome)}</span><small>${esc(r.reg||'')}</small></button>`).join('')}</div></div>`
+          <div class="bd-reps" role="radiogroup" aria-label="Representante">${rs.map(r=>`<button type="button" class="bd-rep" role="radio" aria-checked="${r.id===F.repId}" data-act="bd-f-rep" data-v="${esc(r.id)}" data-b="${esc(norm(r.nome+' '+(r.reg||'')+' '+(r.ct||'')))}"><span class="bd-rdot" aria-hidden="true"></span><span class="bd-rn">${esc(r.nome)}</span><small>${esc(r.reg||'')}</small></button>`).join('')}</div></div>`
           :'<p class="bd-hint">Nenhum representante cadastrado (Solicitações › Representantes).</p>'}${rsel?'':''}</div>
       <fieldset class="bd-fs"><legend>Veículo</legend><div class="bd-seg">${VEICS.map(([k,n])=>`<button type="button" data-act="bd-f-veic" data-v="${k}" aria-pressed="${F.veic===k}">${esc(n)}</button>`).join('')}</div>${eB('bd-f-veic')}</fieldset>
       <fieldset class="bd-fs"><legend>Tipo</legend><div class="bd-seg two"><button type="button" data-act="bd-f-tipo" data-v="carrega" aria-pressed="${F.tipo==='carrega'}">Carrega</button><button type="button" data-act="bd-f-tipo" data-v="pit" aria-pressed="${F.tipo==='pit'}">PIT</button></div></fieldset>
-      <div class="bd-facts">${F.edit?`<button type="button" class="bd-b0" data-act="bd-apaga" data-v="${esc(F.edit)}">Apagar registro</button>`:''}<button type="button" class="bd-b1 ok" data-act="bd-f-ok"${F.salvando?' disabled':''}>${F.salvando?'Gravando…':F.edit?'Salvar correção':'Registrar chegada · '+hm(new Date().toISOString())}</button></div></div>`; }
+      <div class="bd-facts">${F.edit?`<button type="button" class="bd-b0" data-act="bd-apaga" data-v="${esc(F.edit)}">Apagar registro</button>`:''}<button type="button" class="bd-b1 ok" data-act="bd-f-ok"${F.salvando?' disabled':''}>${F.salvando?'Gravando…':F.edit?'Salvar correção':'Registrar chegada · '+(hmOk(F.hora)?String(F.hora).trim().padStart(5,'0'):hm(new Date().toISOString()))}</button></div></div>`; }
 
   /* ---------- telas: Diário de bordo (escritório) ---------- */
   function linhasDia(){ return B.dia===B.diaLive?B.ent:(B.outro||[]); }
@@ -249,7 +265,7 @@
       <label class="bd-busca"><span class="sr">Buscar</span><input id="bd-q" type="search" placeholder="Motorista, cliente, placa ou pedido" value="${esc(B.q||'')}"></label></div>${tab}</section>`+ovHtml(); }
   function topoDia(d){ const live=d===B.diaLive, dt=new Date(d+'T12:00:00');
     return `<header class="bd-top"><div><p class="bd-eb"><button type="button" class="bd-dn" data-act="bd-dia" data-v="-1" aria-label="Dia anterior">‹</button>${esc(DSL[dt.getDay()])}, ${esc(br(d))}${live?' · hoje':''}<button type="button" class="bd-dn" data-act="bd-dia" data-v="1" aria-label="Próximo dia"${live?' disabled':''}>›</button>${live?'':'<button type="button" class="bd-lk" data-act="bd-dia" data-v="0">Voltar para hoje</button>'}</p><h1>Diário de bordo</h1></div>
-      <div class="bd-ta"><button type="button" class="btn sec" data-act="bd-csv">Planilha do dia</button>${P.viewOk('bordotv')?'<button type="button" class="btn sec" data-go="bordotv">TV</button>':''}${pode()&&live?'<button type="button" class="btn" data-act="bd-nova">+ Registrar chegada</button>':''}</div></header>`; }
+      <div class="bd-ta"><button type="button" class="btn sec" data-act="bd-csv">Planilha do dia</button>${P.viewOk('bordotv')?`<a class="btn sec" href="${esc(tvUrl())}" target="_blank" rel="noopener" title="Abre numa aba nova: arraste para o monitor e aperte F11">TV ↗</a>`:''}${pode()&&live?'<button type="button" class="btn" data-act="bd-nova">+ Registrar chegada</button>':''}</div></header>`; }
   function placaMini(p){ p=plN(p); return `<span class="bd-pl" aria-label="Placa ${esc(p)}">${esc(p)}</span>`; }
   function ovHtml(){ const O=B.ov; if(!O) return '';
     if(O.f&&B.f) return `<div class="bd-ov" role="dialog" aria-modal="true" aria-label="${B.f.edit?'Corrigir registro':'Registrar chegada'}"><div class="bd-ovb"><div class="bd-ovh"><h2>${B.f.edit?'Corrigir registro':'Registrar chegada'}</h2><button type="button" class="bd-x" data-act="bd-ovx" aria-label="Fechar">×</button></div>${formChegada(false)}</div></div>`;
@@ -269,7 +285,7 @@
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([t],{type:'text/csv;charset=utf-8'})); a.download=nome; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500); }
 
   /* ---------- tela da TV (aba Diário de bordo + aba Agendados, trocam sozinhas) ---------- */
-  const tvSolo=()=>{ try{ const A=S.acs; if(!A||!A.pronto||S.view!=='bordotv') return false; if(B.tv.cheia) return true; if(A.dono) return /[?&]tv=bordo\b/.test(location.search); return (A.doc||{}).perfil==='tvbordo'; }catch(e){ return false; } };
+  const tvSolo=()=>{ try{ const A=S.acs; if(!A||!A.pronto||S.view!=='bordotv') return false; if(B.tv.cheia) return true; if(/[?&]tv=bordo\b/.test(location.search)) return true; return (A.doc||{}).perfil==='tvbordo'; }catch(e){ return false; } };
   const segTV=()=>Math.max(10,+B.cfg.tvSeg||30);
   function vTV(){ iniciar(); const so=tvSolo(); try{ document.body.classList.toggle('bd-tvon',so); }catch(e){}
     const ab=B.tv.aba, ag=new Date(), rel=String(ag.getHours()).padStart(2,'0')+':'+String(ag.getMinutes()).padStart(2,'0');
@@ -354,11 +370,44 @@
       return `<section class="bd-col ${k}"><div class="bd-colh"><i aria-hidden="true"></i><h2>${n}</h2><span>${xs.length}</span></div><p class="bd-sub">${dd}</p>${xs.map(cartao).join('')||'<p class="bd-colvz">Nada aqui.</p>'}</section>`; };
     return `<header class="bd-top"><div><p class="bd-eb">${esc(DSL[new Date().getDay()])}, ${esc(br(h))} · confirmar o dia até 12:00 · carregar em até 2 dias úteis</p><h1>Solicitações de agendamento</h1></div>
       <div class="bd-ta"><span class="bd-kp crit"><b>${atr.length}</b> atrasada${atr.length===1?'':'s'}</span><span class="bd-kp warn"><b>${vh.length}</b> vence${vh.length===1?'':'m'} hoje às 12:00</span></div></header><!--tabs-->${nova}${faltas}<div class="bd-cols">${SOL_ST.map(col).join('')}</div>`; }
+  /* 27/11/2026 · colar a lista do comercial (Região / REPRESENTANTE ou VENDEDOR / Contato / Telefone / E-mail).
+     O mesmo nome em duas regiões vira um cadastro só, com as regiões juntas. Quem já está cadastrado (mesmo nome) é atualizado. */
+  function lerLista(txt){ const ls=String(txt||'').split(/\r?\n/).map(x=>x.replace(/\s+/g,' ').trim()); const out=[]; let cur=null, cab='', pend=null;
+    const LB=[[/^regi[aã]o\s*:?\s*(.*)$/i,'reg'],[/^(representante|vendedora?)\s*:?\s*(.*)$/i,'nome'],[/^contato\s*:?\s*(.*)$/i,'ct'],[/^telefone\s*:?\s*(.*)$/i,'tel'],[/^e-?mail\s*:?\s*(.*)$/i,'em']];
+    const fecha=()=>{ if(cur&&cur.nome) out.push(cur); cur=null; };
+    for(const l of ls){ if(!l) continue; let hit=null, val='';
+      for(const [re,k] of LB){ const m=l.match(re); if(m){ hit=k; val=(k==='nome'?m[2]:m[1])||''; if(k==='nome') cur&&(cur.tipo=/^vend/i.test(m[1])?'vendedor':'representante'); break; } }
+      if(hit){ if(hit==='reg'){ fecha(); cur={reg:'',nome:'',ct:'',tel:'',em:''}; }
+        if(hit==='nome'){ if(cur&&cur.nome) fecha(); if(!cur) cur={reg:'',nome:'',ct:'',tel:'',em:''}; if(!cur.reg&&cab) cur.reg=cab; cur.tipo=/^vend/i.test(l)?'vendedor':'representante'; }
+        pend=null; if(val) cur[hit]=val; else pend=hit; continue; }
+      if(pend&&cur){ cur[pend]=l; pend=null; continue; }
+      cab=l; }
+    fecha();
+    const tit=x=>x&&x===x.toUpperCase()&&/[A-Z]/.test(x)&&x.length>4?x.toLowerCase().replace(/(^|\s|-|\/)(\p{L})/gu,(a,b,c)=>b+c.toUpperCase()).replace(/\b(Ltda|Rs|Sc)\b/gi,w=>w.toUpperCase()).replace(/ (D[aeo]s?|E) /g,w=>w.toLowerCase()):x;
+    const lst=[]; out.forEach(o=>{ o.nome=tit(o.nome.replace(/\s+/g,' ').trim()).slice(0,60); o.reg=tit(o.reg).slice(0,120); o.ct=tit(o.ct).slice(0,60); o.em=(o.em.match(/[^\s@]+@[^\s@]+\.[^\s@]+/)||[''])[0].toLowerCase(); o.tel=o.tel.replace(/[–—]/g,'-').slice(0,40);
+      const j=lst.find(x=>norm(x.nome)===norm(o.nome)); if(j){ if(o.reg&&!norm(j.reg).includes(norm(o.reg))) j.reg=(j.reg?j.reg+' · ':'')+o.reg; ['ct','tel','em'].forEach(k=>{ if(!j[k]&&o[k]) j[k]=o[k]; }); } else lst.push(o); });
+    return lst.filter(o=>o.nome.length>=3); }
+  function colarHtml(){ const C=B.colar, L=C.lst;
+    return `<section class="card bd-nova"><h2>Colar lista de representantes</h2><p class="bd-sub">Cole a lista do comercial do jeito que está (Região, Representante ou Vendedor, Contato, Telefone, E-mail). Confira antes de cadastrar.</p>
+      <textarea id="bd-r-txt" class="bd-in" rows="8" style="width:100%;font:inherit" placeholder="Região: Serra Gaúcha&#10;REPRESENTANTE: ...&#10;Contato: ...&#10;Telefone: ...&#10;E-mail: ...">${esc(C.txt||'')}</textarea>
+      <div class="bd-libb"><button type="button" class="bd-b0" data-act="bd-r-colver">Conferir</button><button type="button" class="bd-lk" data-act="bd-r-colx">Cancelar</button></div>
+      ${L?(L.length?`<p class="bd-sub"><b>${L.length} cadastro${L.length>1?'s':''}</b>${L.filter(o=>reps().some(r=>norm(r.nome)===norm(o.nome))).length?' · os que já existem serão atualizados':''}</p>
+        <div class="bd-tw"><table class="bd-tab"><thead><tr><th>Nome</th><th>Região</th><th>Contato</th><th>Telefone</th><th>E-mail</th></tr></thead><tbody>${L.map(o=>`<tr><td><b>${esc(o.nome)}</b>${reps().some(r=>norm(r.nome)===norm(o.nome))?' <small>(já existe)</small>':''}</td><td>${esc(o.reg)}</td><td>${esc(o.ct)}</td><td>${esc(o.tel)}</td><td>${esc(o.em)}</td></tr>`).join('')}</tbody></table></div>
+        <div class="bd-libb"><button type="button" class="bd-b1" data-act="bd-r-colok">Cadastrar ${L.length}</button></div>`:'<p class="bd-err" role="alert">Não achei nenhum representante. Confira se a lista tem "Região:" e "REPRESENTANTE:" (ou "VENDEDOR:").</p>'):''}</section>`; }
+  async function importaReps(){ const L=B.colar&&B.colar.lst; if(!L||!L.length) return; if(!pode()) return P.toast('Seu acesso é só para ver.');
+    const lst=(B.cfg.reps||[]).slice(); const mexe=[];
+    L.forEach(o=>{ let r=lst.find(x=>!x.removido&&norm(x.nome)===norm(o.nome));
+      if(r) Object.assign(r,{reg:o.reg||r.reg||'',ct:o.ct||r.ct||'',tel:o.tel||r.tel||'',em:o.em||r.em||'',tipo:o.tipo||r.tipo||''});
+      else { r={id:novoId('r'),nome:o.nome,reg:o.reg,tel:o.tel,ct:o.ct,em:o.em,tipo:o.tipo||'representante',tok:novoTok(),topico:'colafix-rep-'+Math.random().toString(36).slice(2,10),ativo:true,criado:new Date().toISOString()}; lst.push(r); }
+      mexe.push(r); });
+    try{ await P.db().doc('config/bordo').set({reps:lst},{merge:true});
+      for(const r of mexe) await P.db().collection('bordorep').doc(r.tok).set({repId:r.id,nome:r.nome,reg:r.reg||'',ativo:r.ativo!==false,topico:r.topico||''});
+      B.cfg.reps=lst; B.colar=null; P.toast(mexe.length+' representantes cadastrados. Agora é só mandar o link de cada um.'); }catch(e){ P.erro(e); } P.render(); }
   function vReps(){ const E=B.edRep, rs=reps();
-    const form=E?`<section class="card bd-nova"><h2>${E.id?'Editar representante':'Novo representante'}</h2><div class="bd-ng r"><label class="bd-lb">Nome<input id="bd-r-no" class="bd-in" maxlength="60" value="${esc(E.nome||'')}"></label><label class="bd-lb">Região<input id="bd-r-rg" class="bd-in" maxlength="40" value="${esc(E.reg||'')}" placeholder="Ex.: Serra"></label><label class="bd-lb">Telefone (WhatsApp)<input id="bd-r-tel" class="bd-in" inputmode="tel" maxlength="20" value="${esc(E.tel||'')}" placeholder="(51) 99999-0000"></label>
-      <div class="bd-libb"><button type="button" class="bd-b1" data-act="bd-r-salva">Salvar</button><button type="button" class="bd-lk" data-act="bd-r-x">Cancelar</button></div></div>${E.err?`<p class="bd-err" role="alert">${esc(E.err)}</p>`:''}</section>`:`<button type="button" class="btn" data-act="bd-r-novo">+ Novo representante</button>`;
-    const linha=r=>`<li class="bd-rl${r.ativo===false?' off':''}"><span class="bd-av" aria-hidden="true">${esc(ini(r.nome))}</span><span class="bd-rlt"><b>${esc(r.nome)}</b><small>${esc([r.reg,r.tel].filter(Boolean).join(' · '))}${r.ativo===false?' · link desligado':''}</small><small class="bd-tp2">Avisos: app ntfy, tópico <button type="button" class="bd-lk" data-act="bd-r-tp" data-v="${esc(r.topico||'')}">${esc(r.topico||'')}</button></small></span>
-      <span class="bd-rla">${r.ativo!==false?`<button type="button" class="bd-b0 sm" data-act="bd-r-link" data-v="${esc(r.id)}">Copiar link</button><a class="bd-b0 sm" target="_blank" rel="noopener" href="https://wa.me/${esc(String(r.tel||'').replace(/\D/g,'').replace(/^(?!55)(\d{10,11})$/,'55$1'))}?text=${encodeURIComponent('Olá '+r.nome.split(' ')[0]+'! Este é o seu link para pedir agendamento de carregamento na Colafix: '+linkRep(r)+' (salve na tela inicial do celular).')}">WhatsApp</a>`:''}
+    const form=E?`<section class="card bd-nova"><h2>${E.id?'Editar representante':'Novo representante'}</h2><div class="bd-ng r"><label class="bd-lb">Nome<input id="bd-r-no" class="bd-in" maxlength="60" value="${esc(E.nome||'')}"></label><label class="bd-lb">Região<input id="bd-r-rg" class="bd-in" maxlength="120" value="${esc(E.reg||'')}" placeholder="Ex.: Serra Gaúcha"></label><label class="bd-lb">Contato<input id="bd-r-ct" class="bd-in" maxlength="60" value="${esc(E.ct||'')}" placeholder="Quem atende"></label><label class="bd-lb">E-mail<input id="bd-r-em" class="bd-in" type="email" maxlength="80" value="${esc(E.em||'')}"></label><label class="bd-lb">Telefone (WhatsApp)<input id="bd-r-tel" class="bd-in" inputmode="tel" maxlength="20" value="${esc(E.tel||'')}" placeholder="(51) 99999-0000"></label>
+      <div class="bd-libb"><button type="button" class="bd-b1" data-act="bd-r-salva">Salvar</button><button type="button" class="bd-lk" data-act="bd-r-x">Cancelar</button></div></div>${E.err?`<p class="bd-err" role="alert">${esc(E.err)}</p>`:''}</section>`:B.colar?colarHtml():`<div class="bd-libb"><button type="button" class="btn" data-act="bd-r-novo">+ Novo representante</button><button type="button" class="btn sec" data-act="bd-r-colar">Colar lista de representantes</button></div>`;
+    const linha=r=>`<li class="bd-rl${r.ativo===false?' off':''}"><span class="bd-av" aria-hidden="true">${esc(ini(r.nome))}</span><span class="bd-rlt"><b>${esc(r.nome)}</b><small>${esc([r.reg,r.ct&&r.ct!==r.nome?'Contato: '+r.ct:'',r.tel,r.em].filter(Boolean).join(' · '))}${r.ativo===false?' · link desligado':''}</small><small class="bd-tp2">Avisos: app ntfy, tópico <button type="button" class="bd-lk" data-act="bd-r-tp" data-v="${esc(r.topico||'')}">${esc(r.topico||'')}</button></small></span>
+      <span class="bd-rla">${r.ativo!==false?`<button type="button" class="bd-b0 sm" data-act="bd-r-link" data-v="${esc(r.id)}">Copiar link</button><a class="bd-b0 sm" target="_blank" rel="noopener" href="https://wa.me/${esc(String(r.tel||'').split('/')[0].replace(/\D/g,'').replace(/^(?!55)(\d{10,11})$/,'55$1'))}?text=${encodeURIComponent('Olá '+r.nome.split(' ')[0]+'! Este é o seu link para pedir agendamento de carregamento na Colafix: '+linkRep(r)+' (salve na tela inicial do celular).')}">WhatsApp</a>`:''}
         <button type="button" class="bd-lk" data-act="bd-r-ed" data-v="${esc(r.id)}">Editar</button><button type="button" class="bd-lk" data-act="bd-r-at" data-v="${esc(r.id)}">${r.ativo===false?'Ligar link':'Desligar link'}</button><button type="button" class="bd-lk" data-act="bd-r-novolink" data-v="${esc(r.id)}">Trocar link</button></span></li>`;
     return `<header class="bd-top"><div><p class="bd-eb">Solicitações</p><h1>Representantes</h1></div></header><!--tabs-->
       <p class="bd-sub" style="margin:0 0 12px">Cada representante recebe um link só dele (sem senha) para pedir agendamento, acompanhar, reagendar e cancelar. Desligar o link bloqueia na hora; "Trocar link" invalida o antigo.</p>${form}
@@ -427,10 +476,10 @@
     catch(e){ P.erro(e); } P.render(); }
   function respostaEmail(s){ const L=s.lib||{}; return 'Olá '+String(s.repNome||'').split(' ')[0]+',\n\nO pedido '+(s.peds||[]).join(', ')+(s.cli?' ('+s.cli+')':'')+' está agendado para '+DSL[new Date(L.dia+'T12:00:00').getDay()]+', '+br(L.dia)+(L.hora?' às '+L.hora:'')+(L.veic?' · '+veicN(L.veic):'')+'.\n\nColafix · Faturamento'; }
   async function copiar(t){ try{ await navigator.clipboard.writeText(t); }catch(e){ const a=document.createElement('textarea'); a.value=t; document.body.appendChild(a); a.select(); try{ document.execCommand('copy'); }catch(x){} a.remove(); } window.__bdCopiado=t; }
-  async function salvaRep(){ const E=B.edRep; if(!E) return; const v=id=>String((document.getElementById(id)||{}).value||'').trim(); E.nome=v('bd-r-no').replace(/\s+/g,' '); E.reg=v('bd-r-rg'); E.tel=v('bd-r-tel');
+  async function salvaRep(){ const E=B.edRep; if(!E) return; const v=id=>String((document.getElementById(id)||{}).value||'').trim(); E.nome=v('bd-r-no').replace(/\s+/g,' '); E.reg=v('bd-r-rg'); E.tel=v('bd-r-tel'); E.ct=v('bd-r-ct'); E.em=v('bd-r-em');
     if(E.nome.length<3){ E.err='Escreva o nome.'; P.render(); return; } if(reps().some(r=>r.id!==E.id&&norm(r.nome)===norm(E.nome))){ E.err='Já existe um representante com esse nome.'; P.render(); return; }
     const lst=(B.cfg.reps||[]).slice(); let r=E.id?lst.find(x=>x.id===E.id):null;
-    if(r) Object.assign(r,{nome:E.nome,reg:E.reg,tel:E.tel}); else { r={id:novoId('r'),nome:E.nome,reg:E.reg,tel:E.tel,tok:novoTok(),topico:'colafix-rep-'+Math.random().toString(36).slice(2,10),ativo:true,criado:new Date().toISOString()}; lst.push(r); }
+    if(r) Object.assign(r,{nome:E.nome,reg:E.reg,tel:E.tel,ct:E.ct||'',em:E.em||''}); else { r={id:novoId('r'),nome:E.nome,reg:E.reg,tel:E.tel,ct:E.ct||'',em:E.em||'',tok:novoTok(),topico:'colafix-rep-'+Math.random().toString(36).slice(2,10),ativo:true,criado:new Date().toISOString()}; lst.push(r); }
     try{ await P.db().doc('config/bordo').set({reps:lst},{merge:true}); await P.db().collection('bordorep').doc(r.tok).set({repId:r.id,nome:r.nome,reg:r.reg||'',ativo:r.ativo!==false,topico:r.topico||''});
       B.cfg.reps=lst; B.edRep=null; P.toast(E.id?'Salvo.':'Representante cadastrado. Copie o link e mande para ele.'); }catch(e){ P.erro(e); } P.render(); }
   const novoTok=()=>{ const a=new Uint8Array(18); (window.crypto||{}).getRandomValues?crypto.getRandomValues(a):a.forEach((_,i)=>a[i]=Math.random()*256|0); return Array.from(a,b=>('0'+b.toString(16)).slice(-2)).join(''); };
@@ -490,11 +539,11 @@
     const vs=ordena(vivos(B.ent)), pat=vs.filter(e=>estado(e).k==='pend'), out=vs.filter(e=>estado(e).k!=='pend');
     const card=e=>{ const st=estado(e); return `<li class="bd-pi2 ${st.k==='fim'?'fim':st.k==='des'?'des':st.atr?'atr':''}"><span class="bd-po">${e.ord}</span><span class="bd-pt2"><b>${esc(e.mot)}</b><small>${esc(e.placa)} · ${esc(veicN(e.veic))}${e.cli?' · '+esc(e.cli):''}</small>
       <small>${st.k==='pend'?'Chegou '+esc(hm(e.cheg))+' · esperando '+esc(ETN[st.etapa].toLowerCase())+' há '+esc(dur(st.min)):st.k==='fim'?'Finalizado '+esc(hm(e.et.fim)):'Desistiu '+esc(hm(e.des.em))+' · '+esc(e.des.motivo)}</small></span>
-      ${st.k==='pend'&&pode()?`<span class="bd-pa"><button type="button" class="bd-b0 sm" data-act="bd-et" data-v="${esc(e._id)}|fim">Saiu</button><button type="button" class="bd-lk" data-act="bd-des" data-v="${esc(e._id)}">Desistiu</button></span>`:''}</li>`; };
-    return `<section class="bd-phero"><div><p class="bd-eb">${esc(DSL[new Date().getDay()])}, ${esc(br(hoje()))}</p><h1>Caminhões</h1></div><div class="bd-pcnt"><div><b>${pat.length}</b><span>no pátio</span></div><div><b>${out.filter(e=>!e.des).length}</b><span>saíram</span></div></div>
+      ${pode()?`<span class="bd-pa">${st.k==='pend'?`<button type="button" class="bd-b0 sm" data-act="bd-et" data-v="${esc(e._id)}|fim">Saiu</button><button type="button" class="bd-lk" data-act="bd-des" data-v="${esc(e._id)}">Desistiu</button>`:''}<button type="button" class="bd-lk" data-act="bd-ed" data-v="${esc(e._id)}">Corrigir</button></span>`:''}</li>`; };
+    return `<div class="bd-ptl"><section class="bd-phero"><div><p class="bd-eb">${esc(DSL[new Date().getDay()])}, ${esc(br(hoje()))}</p><h1>Caminhões</h1></div><div class="bd-pcnt"><div><b>${pat.length}</b><span>no pátio</span></div><div><b>${out.filter(e=>!e.des).length}</b><span>saíram</span></div></div>
       ${pode()?'<button type="button" class="bd-pbig" data-act="bd-nova"><span aria-hidden="true">+</span>Registrar chegada</button>':''}</section>
       <div class="bd-psec"><h2>No pátio <span>${pat.length}</span></h2>${pat.length?`<ul class="bd-pl2">${pat.map(card).join('')}</ul>`:'<p class="bd-hint">Nenhum caminhão no pátio.</p>'}</div>
-      ${out.length?`<div class="bd-psec"><h2>Já saíram hoje <span>${out.length}</span></h2><ul class="bd-pl2">${out.slice().reverse().map(card).join('')}</ul></div>`:''}`; }
+      ${out.length?`<div class="bd-psec"><h2>Já saíram hoje <span>${out.length}</span></h2><ul class="bd-pl2">${out.slice().reverse().map(card).join('')}</ul></div>`:''}</div>`; }
   P.bordoPort=vPort;
 
   /* ---------- redesenhar sem perder o campo em que a pessoa está digitando ---------- */
@@ -514,6 +563,8 @@
   document.addEventListener('input',ev=>{ const t=ev.target; if(!t||!t.id) return; const F=B.f;
     if(F&&t.id==='bd-f-placa'){ const v=t.value.toUpperCase().replace(/[^A-Z0-9-]/g,''); if(t.value!==v) t.value=v; F.placa=v; if(F.err&&F.err.id==='bd-f-placa'){ F.err=null; } clearTimeout(olhaPlaca._t); olhaPlaca._t=setTimeout(olhaPlaca,450); return; }
     if(F&&t.id==='bd-f-mot'){ F.mot=t.value; return; }
+    if(F&&(t.id==='bd-f-hora'||t.id==='bd-f-saida')){ let dg=t.value.replace(/\D/g,'').slice(0,4); if(dg.length>=3) dg=dg.slice(0,dg.length-2)+':'+dg.slice(-2); if(t.value!==dg) t.value=dg; F[t.id==='bd-f-hora'?'hora':'saida']=dg; if(F.err&&(F.err.id===t.id)) F.err=null;
+      if(t.id==='bd-f-hora'){ const b=document.querySelector('[data-act="bd-f-ok"]'); if(b&&!F.edit&&!F.salvando) b.textContent='Registrar chegada · '+(hmOk(dg)?dg.padStart(5,'0'):hm(new Date().toISOString())); } return; }
     if(F&&t.id==='bd-f-ped'){ if(/[\s,;]/.test(t.value)&&pedLimpo(t.value).length){ if(addPeds(t.value)){ t.value=''; rr(); } } return; }
     if(t.id==='bd-f-repq'){ const q=norm(t.value); document.querySelectorAll('.bd-reps .bd-rep').forEach(b=>{ b.hidden=!!q&&!b.dataset.b.includes(q); }); return; }
     if(t.id==='bd-dobs'&&B.ov&&B.ov.des){ B.ov.des.obs=t.value; return; }
@@ -533,7 +584,7 @@
     if(ev.key==='Escape'&&B.ov){ B.ov=null; if(S.view!=='bdport') B.f=null; P.render(); } });
   document.addEventListener('click',async ev=>{ const b=ev.target.closest&&ev.target.closest('[data-act^="bd-"]'); if(!b) return; const a=b.dataset.act, v=b.dataset.v; if(b.tagName!=='A') ev.preventDefault();
     if(a==='bd-nova'){ if(!pode()) return P.toast('Seu acesso é só para ver.'); B.f=novoForm(); B.port.feito=null; if(S.view!=='bdport') B.ov={f:1}; P.render(); setTimeout(()=>{ const i=document.getElementById('bd-f-placa'); i&&i.focus(); },60); return; }
-    if(a==='bd-ed'){ const e=entDe(v); if(!e) return; B.f=novoForm({placa:e.placa,mot:e.mot,peds:(e.peds||[]).slice(),repId:e.repId||'',veic:e.veic||'',tipo:e.tipo||'carrega',cli:e.cli||'',edit:e._id}); B.ov={f:1}; P.render(); return; }
+    if(a==='bd-ed'){ const e=entDe(v); if(!e) return; B.f=novoForm({placa:e.placa,mot:e.mot,peds:(e.peds||[]).slice(),repId:e.repId||'',veic:e.veic||'',tipo:e.tipo||'carrega',cli:e.cli||'',edit:e._id,hora:hm(e.cheg),saida:hm((e.et||{}).fim)}); B.ov={f:1}; P.render(); return; }
     if(a==='bd-ovx'||a==='bd-p-x'){ B.ov=null; B.f=null; P.render(); return; }
     if(a==='bd-f-px'&&B.f){ B.f.peds.splice(+v,1); olhaAg(); rr(); return; }
     if(a==='bd-f-rep'&&B.f){ B.f.repId=B.f.repId===v?'':v; rr(); return; }
@@ -571,7 +622,11 @@
     if(a==='bd-s-ano'){ const s=solDe(v); if(!s||!s.acao) return; try{ await solMuda(v,{acao:Object.assign({},s.acao,{feito:'recusado',em2:new Date().toISOString()})},'Pedido do representante recusado'); avisaRep(s.repId,'Pedido não aceito','O faturamento não conseguiu '+(s.acao.tipo==='cancelar'?'cancelar':'mudar o dia d')+'o pedido '+(s.peds||[]).join(', ')+'. Fale com o faturamento.'); }catch(e){ P.erro(e); } P.render(); return; }
     if(a==='bd-f-reag') return reagFalta(v,false); if(a==='bd-f-canc') return reagFalta(v,true);
     if(a==='bd-r-novo'){ B.edRep={}; P.render(); return; } if(a==='bd-r-x'){ B.edRep=null; P.render(); return; }
-    if(a==='bd-r-ed'){ const r=repDe(v); if(r){ B.edRep={id:r.id,nome:r.nome,reg:r.reg,tel:r.tel}; P.render(); } return; }
+    if(a==='bd-r-ed'){ const r=repDe(v); if(r){ B.edRep={id:r.id,nome:r.nome,reg:r.reg,tel:r.tel,ct:r.ct||'',em:r.em||''}; B.colar=null; P.render(); } return; }
+    if(a==='bd-r-colar'){ B.colar={txt:'',lst:null}; B.edRep=null; P.render(); setTimeout(()=>{ const t=document.getElementById('bd-r-txt'); if(t) t.focus(); },50); return; }
+    if(a==='bd-r-colx'){ B.colar=null; P.render(); return; }
+    if(a==='bd-r-colver'){ const t=document.getElementById('bd-r-txt'); B.colar={txt:t?t.value:'',lst:lerLista(t?t.value:'')}; P.render(); return; }
+    if(a==='bd-r-colok') return importaReps();
     if(a==='bd-r-salva') return salvaRep();
     if(a==='bd-r-at') return repAtiva(v,false); if(a==='bd-r-novolink') return repAtiva(v,true);
     if(a==='bd-r-link'){ const r=repDe(v); if(!r) return; await copiar(linkRep(r)); P.toast('Link de '+r.nome+' copiado.'); return; }
@@ -585,11 +640,27 @@
     const ag=Date.now(); if(ag-B.tv.fixo<120000) return; if(ag-B.tv.troca>=segTV()*1000){ B.tv.aba=B.tv.aba==='diario'?'agend':'diario'; B.tv.troca=ag; P.render(); } },1000);
   document.addEventListener('fullscreenchange',()=>{ if(!document.fullscreenElement&&B.tv.cheia){ B.tv.cheia=false; P.render(); } });
 
-  P.registrarModulo({ id:'bordo', nome:'Diário de bordo', ic:'caminhao', telas:{ bordo:{nome:'Diário de bordo',mob:'Diário',render:vDiario}, bordosol:{nome:'Solicitações de agendamento',mob:'Solicitações',render:vSol}, bordotv:{nome:'TV do diário',mob:'TV',render:vTV}, bordorel:{nome:'Relatório do mês',mob:'Relatório',render:vRel} }, iniciar });
+  /* 27/11/2026 (pedido do faturamento): as telas do diário ficam na lateral, embaixo de "Diário de bordo" (como o RH),
+     e a TV abre numa aba nova (?tv=bordo) para levar ao monitor. No celular continuam as abas de baixo. */
+  const comSide=f=>function(){ const h=f.apply(this,arguments); try{ window.__bdSide&&window.__bdSide(); }catch(e){} return h; };
+  function tvUrl(){ return location.pathname+'?tv=bordo'; }
+  const BD_SIDE=[['bordo','Diário de bordo'],['bordosol','Solicitações de agendamento'],['bordotv','TV do diário'],['bordorel','Relatório do mês']];
+  function bdSide(){ try{ const nl=document.getElementById('navlist'); if(!nl) return; const old=nl.querySelector('.bd-side'); if(old) old.remove();
+      const b=nl.querySelector('[data-mod="bordo"]')||nl.querySelector('.navbtn[data-go="bordo"]'); const vs=BD_SIDE.filter(([v])=>P.viewOk(v));
+      document.body.classList.toggle('bd-side-on',!!b&&vs.length>1&&!document.body.classList.contains('bd-tvon')); if(!b||vs.length<2) return;
+      const h=vs.map(([v,n])=>v==='bordotv'?`<a class="navbtn gxg-si" href="${esc(tvUrl())}" target="_blank" rel="noopener" title="Abre numa aba nova"><span>${esc(n)} ↗</span></a>`
+        :`<button class="navbtn gxg-si" data-go="${v}" ${S.view===v?'aria-current="page"':''}><span>${esc(n)}</span></button>`).join('');
+      b.insertAdjacentHTML('afterend',`<div class="gxg-sub bd-side">${h}</div>`); }catch(e){ console.warn('[bordo] lateral',e); } }
+  /* a lateral é refeita pelo painel a cada desenho: observa o #navlist e põe as telas de novo (sem laço: só quando falta) */
+  { let _bs=0; const bsAgenda=()=>{ if(_bs) return; _bs=setTimeout(()=>{ _bs=0; const nl=document.getElementById('navlist'); if(!nl) return; const sub=nl.querySelector('.bd-side');
+      const ok=sub&&[...sub.querySelectorAll('[data-go]')].every(x=>(x.getAttribute('aria-current')==='page')===(x.dataset.go===S.view)); if(!ok||!nl.querySelector('[data-mod="bordo"]')!==!sub) bdSide(); },0); };
+    const liga=()=>{ const nl=document.getElementById('navlist'); if(!nl||!window.MutationObserver){ setTimeout(liga,500); return; } new MutationObserver(bsAgenda).observe(nl,{childList:true}); bsAgenda(); };
+    liga(); window.__bdSide=bsAgenda; }
+  P.registrarModulo({ id:'bordo', nome:'Diário de bordo', ic:'caminhao', telas:{ bordo:{nome:'Diário de bordo',mob:'Diário',render:comSide(vDiario)}, bordosol:{nome:'Solicitações de agendamento',mob:'Solicitações',render:comSide(vSol)}, bordotv:{nome:'TV do diário',mob:'TV',render:comSide(vTV)}, bordorel:{nome:'Relatório do mês',mob:'Relatório',render:comSide(vRel)} }, iniciar });
   P.registrarPerfil('faturamento',{ nome:'Faturamento e expedição', mods:['bordo','agend'], pos:5, desc:'Para o pessoal do faturamento/expedição: diário de bordo (registrar chegada, marcar Mix/Faturado e Carregado/Finalizado, desistentes), solicitações dos representantes, agendamentos, TV e relatório do mês.' });
   P.registrarPerfil('tvbordo',{ nome:'TV do diário de bordo', mods:['bordo'], soVer:true, pos:5, desc:'Para a TV ou o monitor da expedição: mostra o diário de bordo e os agendados em tela inteira, trocando de aba sozinho. Só acompanha, não grava nada.' });
   { let foi=false; const t=setInterval(()=>{ try{ const A=S.acs; if(!A||!A.pronto) return; clearInterval(t); const d=A.doc||{};
-      if(!foi&&((!A.dono&&d.perfil==='tvbordo')||(A.dono&&/[?&]tv=bordo\b/.test(location.search)))&&P.viewOk('bordotv')){ foi=true; P.go('bordotv'); } }catch(e){ clearInterval(t); } },400); }
+      if(!foi&&((!A.dono&&d.perfil==='tvbordo')||/[?&]tv=bordo\b/.test(location.search))&&P.viewOk('bordotv')){ foi=true; P.go('bordotv'); } }catch(e){ clearInterval(t); } },400); }
 
   document.head.insertAdjacentHTML('beforeend',`<style id="bd-css">
   .bd-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:16px}.bd-top h1{margin:2px 0 0;font-size:clamp(24px,3vw,32px);line-height:1.1}
@@ -678,6 +749,7 @@
   .bd-pf{background:var(--surface);border-radius:18px;padding:24px 18px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;border:1px solid var(--line)}.bd-pfok{width:72px;height:72px;border-radius:50%;background:#e3f1ea;color:#17694a;font-size:40px;display:flex;align-items:center;justify-content:center}
   .bd-pf h1{margin:0;font-size:24px}.bd-pfn{margin:0;font-size:16px}.bd-pfn b{font-size:22px}.bd-pf dl{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin:6px 0;text-align:left;width:100%}.bd-pf dt{font-size:12px;color:var(--muted)}.bd-pf dd{margin:0;font-weight:700}.bd-pf .bd-b1{width:100%}
   /* TV */
+  @media (min-width:901px){body.bd-side-on nav.tabs[aria-label="Diário de bordo"]{display:none}}
   body.bd-tvon .side,body.bd-tvon header.top,body.bd-tvon .bottomnav,body.bd-tvon nav.tabs,body.bd-tvon .mob-top,body.bd-tvon .crumbs{display:none!important}body.bd-tvon .content{padding:0!important;max-width:none!important}body.bd-tvon .main{margin:0!important}
   .bd-tv{font-size:clamp(9px,.9vw,22px);background:#fff;color:#1d2b33;display:flex;flex-direction:column;border-radius:14px;overflow:hidden;border:1px solid var(--line)}.bd-tv.so{border-radius:0;border:0;min-height:100vh;font-size:1vw}
   .bd-tvh{display:flex;align-items:center;gap:1.2em;background:#163c52;color:#fff;padding:.8em 1.4em 0;flex-wrap:nowrap;min-width:0}.bd-tvlogo img{height:2.4em;display:block;margin-bottom:.8em}
@@ -694,5 +766,8 @@
   .bd-tvf{display:flex;gap:2em;align-items:center;padding:.7em 1.4em;font-size:1.05em;color:#5d6e77;flex-wrap:wrap}.bd-tvf i{display:inline-block;width:1em;height:1em;vertical-align:-.15em;margin-right:.4em;border:1px solid rgba(0,0,0,.08)}.bd-tvf .r{margin-left:auto}
   @media (max-width:900px){.bd-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.bd-cols,.bd-r2,.bd-ng,.bd-ng.r,.bd-ajg{grid-template-columns:minmax(0,1fr)}.bd-fl{grid-template-columns:1fr}.bd-busca{margin-left:0;width:100%}.bd-busca input{width:100%}.bd-rb{grid-template-columns:120px 1fr 56px}}
   @media (max-width:520px){.bd-f2{grid-template-columns:1fr}.bd-form.cel .bd-f2{grid-template-columns:1fr}}
-  </style>`);
+  
+  @media (min-width:1000px){.bd-ptl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 22px;align-items:start}.bd-ptl>.bd-phero{grid-column:1/-1;flex-direction:row;align-items:center;flex-wrap:wrap}.bd-ptl>.bd-phero>*{flex:1 1 auto}.bd-ptl>.bd-phero .bd-pbig{flex:0 0 320px}
+    .cv-appc .bd-pcard,.cv-appc .bd-pf{max-width:820px;margin-left:auto;margin-right:auto}}
+</style>`);
 })();

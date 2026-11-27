@@ -190,7 +190,7 @@ Eu, {NOME}, CPF {CPF}, declaro que estou ciente e de acordo com as regras abaixo
     const hero=`<section class="cv-hero${SO?' so':''}"><div class="cv-hh">${SO?'':`<div><p class="cv-eb">Portaria · ${esc(DSEM[dt.getDay()])}, ${esc(brD(h))}</p><h1>Carros</h1></div>`}
         <div class="cv-cnt"><div><b>${fora.length}</b><span>fora</span></div><div><b>${dentro.length}</b><span>na empresa</span></div><div><b>${ev.length}</b><span>movimentos hoje</span></div></div></div>
       ${C.cam.on?`<div class="cv-cam"><div class="cv-vw"><video id="cv-video" playsinline muted autoplay></video><span class="cv-mira" aria-hidden="true"><i></i></span></div><p>Aponte para o QR code colado no carro</p><button type="button" class="cv-bt2" data-act="cv-camx">Cancelar</button></div>`
-        :`<button type="button" class="cv-scan" data-act="cv-cam"><span class="cv-qric" aria-hidden="true">${SVG.qr}</span><span class="cv-sct"><b>Escanear QR do carro</b><small>Abre a saída ou a volta na hora</small></span></button>${C.cam.erro?`<p class="cv-err cv-errh">${esc(C.cam.erro)}</p>`:''}`}</section>`;
+        :`<button type="button" class="cv-scan" data-act="cv-cam"><span class="cv-qric" aria-hidden="true">${SVG.qr}</span><span class="cv-sct"><b>Escanear QR do carro</b><small>Abre a saída ou a volta na hora</small></span></button>${C.cam.erro?`<p class="cv-err cv-errh">${esc(C.cam.erro)}</p>`:''}<p class="cv-nbh">No computador: clique em <b>Saída</b> ou <b>Registrar volta</b> no carro abaixo.</p>`}</section>`;
     const aviso=C.msg?`<div class="cv-msg ${C.msg.t}" role="status">${esc(C.msg.x)}</div>`:'';
     const tFora=c=>{ const a=abertaDe(c.id), ms=ag-new Date(a.emS).getTime(), lg=ms>8*3600e3;
       return `<button type="button" class="cv-tile fora${lg?' longo':''}" data-act="cv-abre" data-v="${esc(c.id)}"><span class="cv-tt">${placa(c)}${c.frota?`<span class="cv-fro">Frota ${esc(c.frota)}</span>`:''}<span class="cv-chip${lg?' warn':''}">${SVG.rel}há ${esc(dur(ms))}</span></span>
@@ -199,9 +199,9 @@ Eu, {NOME}, CPF {CPF}, declaro que estou ciente e de acordo com as regras abaixo
         <span class="cv-go vol">${SVG.vol}Registrar volta</span></button>`; };
     const tDentro=c=>`<button type="button" class="cv-tile" data-act="cv-abre" data-v="${esc(c.id)}"><span class="cv-tt">${placa(c)}</span><span class="cv-mod">${c.frota?`<span class="cv-fro">Frota ${esc(c.frota)}</span>`:''}<b>${esc(c.modelo||'Carro')}</b><small>${fK(ultKm(c))} km</small></span><span class="cv-go sai">${SVG.sai}Saída</span></button>`;
     const linha=e=>{ const v=e.v; return `<li class="${e.k}"><span class="cv-tlh">${esc(hm(e.t))}</span><span class="cv-tli" aria-hidden="true">${e.k==='sai'?SVG.sai:SVG.vol}</span><span class="cv-tlt"><b>${e.k==='sai'?'Saída':'Volta'} · ${esc(plT(v.placa))}</b><small>${esc(v.motNome)} · ${e.k==='sai'?fK(v.kmS)+' km':fK(v.kmV)+' km · rodou '+fK(v.rodou)+' km'}</small></span></li>`; };
-    return hero+aviso+vPend()+`<div class="cv-sec"><h2>Fora agora <span>${fora.length}</span></h2>${fora.length?`<div class="cv-grid">${fora.map(tFora).join('')}</div>`:'<p class="cv-nada cv-nadab">Todos os carros estão na empresa.</p>'}</div>
+    return `<div class="cv-ptl">`+hero+aviso+vPend()+`<div class="cv-sec"><h2>Fora agora <span>${fora.length}</span></h2>${fora.length?`<div class="cv-grid">${fora.map(tFora).join('')}</div>`:'<p class="cv-nada cv-nadab">Todos os carros estão na empresa.</p>'}</div>
       <div class="cv-sec"><h2>Na empresa <span>${dentro.length}</span></h2>${dentro.length?`<div class="cv-grid cv-gridp">${dentro.map(tDentro).join('')}</div>`:'<p class="cv-nada cv-nadab">Todos os carros estão fora.</p>'}</div>
-      ${ev.length?`<section class="card cv-tl"><div class="cv-h2b"><h2>Movimentos de hoje</h2>${kmHoje?`<span class="cv-sub">${fK(kmHoje)} km rodados nas voltas de hoje</span>`:''}</div><ol>${ev.slice(0,12).map(linha).join('')}</ol></section>`:''}`; }
+      ${ev.length?`<section class="card cv-tl"><div class="cv-h2b"><h2>Movimentos de hoje</h2>${kmHoje?`<span class="cv-sub">${fK(kmHoje)} km rodados nas voltas de hoje</span>`:''}</div><ol>${ev.slice(0,12).map(linha).join('')}</ol></section>`:''}</div>`; }
   function vFeito(M){ const d=M.d, sai=d.tipo==='saida';
     return `<section class="cv-feito ${sai?'sai':'vol'}" role="status"><span class="cv-fok" aria-hidden="true">${SVG.ok}</span><h1>${sai?'Saída registrada':'Volta registrada'}</h1>${placa(d.placa,'g')}<p class="cv-fmod">${esc([d.frota?'Frota '+d.frota:'',d.mod].filter(Boolean).join(' · '))}</p>
       <dl class="cv-fdl"><div><dt>Motorista</dt><dd>${esc(d.mot)}</dd></div><div><dt>${sai?'Km na saída':'Km na volta'}</dt><dd>${fK(d.km)}</dd></div>${sai?`<div><dt>Hora</dt><dd>${esc(d.hora)}</dd></div>`:`<div><dt>Rodou</dt><dd>${fK(d.rodou)} km</dd></div><div><dt>Ficou fora</dt><dd>${esc(d.fora)}</dd></div>`}</dl>
@@ -839,5 +839,13 @@ Eu, {NOME}, CPF {CPF}, declaro que estou ciente e de acordo com as regras abaixo
   .cv-ftpain{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:110px;border:2px dashed #143F54;border-radius:14px;cursor:pointer;color:#143F54;text-align:center;padding:10px}.cv-ftpain span{font-size:28px}.cv-ftpain b{font-size:16px}.cv-ftpain small{color:var(--muted);font-size:13px}
   .cv-ftp{width:100%;height:180px}.cv-ftp img{object-fit:contain;background:#000}
   .cv-com .cv-bt1{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px}.cv-com .cv-bt1 svg{width:20px;height:20px;flex:none}
-  </style>`);
+  
+  /* 27/11/2026 · portaria no notebook: sem câmera, sem o botão do QR; tela larga em duas colunas. Celular não muda. */
+  .cv-nbh{display:none;margin:0;font-size:14px;opacity:.9}
+  @media (hover:hover) and (pointer:fine){.cv-hero .cv-scan,.cv-hero .cv-errh{display:none!important}.cv-hero .cv-nbh{display:block}}
+  @media (min-width:1000px){.cv-appc{max-width:1180px;padding:18px 24px 32px}
+    .cv-ptl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 22px;align-items:start}.cv-ptl>*{grid-column:1/-1}.cv-ptl>.cv-sec{grid-column:auto}
+    .cv-ptl .cv-grid{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+    .cv-appc .cv-feito,.cv-appc .cv-flh,.cv-appc .cv-fl{max-width:640px;margin-left:auto;margin-right:auto}}
+</style>`);
 })();

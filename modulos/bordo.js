@@ -24,7 +24,7 @@
   const ETAPAS=[['mix','Mix'],['fat','Faturado'],['carr','Carregado'],['fim','Finalizado']], ETN=Object.fromEntries(ETAPAS);
   const LIM_PAD={mix:60,fat:30,carr:60,fim:30};
   const VEICS=[['CAMIONETE','Camionete'],['HR','HR'],['TOCO','Toco'],['TRUCK','Truck'],['BITRUCK','Bitruck'],['CARRETA','Carreta'],['CARRETA_GRANELEIRA','Carreta graneleira'],['CARRETA_SIDER','Carreta sider']];
-  const PAR={mix:'fat',fat:'mix',carr:'fim',fim:'carr'}; const juntos=()=>{ try{ return !(B.cfg&&B.cfg.juntos===false); }catch(e){ return true; } };
+  const PAR={fat:'mix',fim:'carr'}; /* 27/11 (faturamento): Mix e Carregado se marcam sozinhos; Faturado preenche o Mix e Finalizado o Carregado se estiverem vazios */ const juntos=()=>{ try{ return !(B.cfg&&B.cfg.juntos===false); }catch(e){ return true; } };
   const MOTIVOS=['Demora no pátio','Falta de material','Documento / nota com problema','Veículo não serve para a carga','Cliente cancelou','Outro'];
   const SOL_ST=[['recebido','Recebido','Chegou e ninguém olhou ainda'],['avaliacao','Em avaliação','Conferindo saldo, crédito e veículo'],['liberado','Agendamento liberado','Dia e horário confirmados: já está nos Agendamentos e na TV']];
   const veicN=k=>(VEICS.find(v=>v[0]===k)||[k,k||''])[1];
@@ -107,8 +107,9 @@
   const vivos=xs=>xs.filter(e=>!e.removido);
 
   /* ---------- ações ---------- */
-  function novoForm(o){ return Object.assign({placa:'',mot:'',peds:[],repId:'',veic:'',tipo:'carrega',cli:'',info:null,prev:null,err:null,edit:null,hora:'',saida:''},o||{}); }
+  function novoForm(o){ return Object.assign({placa:'',mot:'',peds:[],repId:'',veic:'',tipo:'carrega',cli:'',info:null,prev:null,err:null,edit:null,hora:'',ets:{}},o||{}); }
   /* 27/11/2026 · hora digitada (lançar depois os caminhões que já vieram): HH:MM do dia do registro → ISO */
+  const ETID={mix:'bd-f-et-mix',fat:'bd-f-et-fat',carr:'bd-f-et-carr',fim:'bd-f-saida'};
   const hmOk=t=>/^([01]?\d|2[0-3]):[0-5]\d$/.test(String(t||'').trim());
   const isoDe=(dia,t)=>{ const [h,m]=String(t).trim().split(':').map(Number); const d=new Date(dia+'T00:00:00'); d.setHours(h,m,0,0); return d.toISOString(); };
   async function renumera(dia){ try{ const xs=vivos(B.ent).filter(e=>e.dia===dia).sort((a,b)=>String(a.cheg).localeCompare(String(b.cheg))); let n=0;
@@ -134,10 +135,12 @@
     else if(String(F.mot||'').trim().length<3) F.err={id:'bd-f-mot',t:'Escreva o nome do motorista.'};
     else if(!F.veic) F.err={id:'bd-f-veic',t:'Escolha o veículo.'};
     const eOld=F.edit?entDe(F.edit):null, diaR=eOld?eOld.dia:hoje(), agoraMs=Date.now()+60000;
-    let chegMan=null, saiMan=null;
+    let chegMan=null;
     if(!F.err&&String(F.hora||'').trim()){ if(!hmOk(F.hora)) F.err={id:'bd-f-hora',t:'Hora da chegada inválida. Use 07:30.'}; else { chegMan=isoDe(diaR,F.hora); if(new Date(chegMan).getTime()>agoraMs) F.err={id:'bd-f-hora',t:'A hora da chegada não pode ser depois de agora.'}; } }
-    if(!F.err&&F.edit&&String(F.saida||'').trim()){ if(!hmOk(F.saida)) F.err={id:'bd-f-saida',t:'Hora da saída inválida. Use 16:45.'}; else { saiMan=isoDe(diaR,F.saida); const ch=chegMan||(eOld&&eOld.cheg);
-        if(new Date(saiMan).getTime()>agoraMs) F.err={id:'bd-f-saida',t:'A hora da saída não pode ser depois de agora.'}; else if(ch&&saiMan<ch) F.err={id:'bd-f-saida',t:'A saída tem que ser depois da chegada.'}; } }
+    const etMan={}; if(!F.err&&F.edit){ const ch=chegMan||(eOld&&eOld.cheg); for(const [k,n] of ETAPAS){ const v=String((F.ets||{})[k]||'').trim(); if(!v){ etMan[k]=null; continue; }
+        if(!hmOk(v)){ F.err={id:ETID[k],t:'Hora do '+n.toLowerCase()+' inválida. Use 16:45.'}; break; } const iso=isoDe(diaR,v);
+        if(new Date(iso).getTime()>agoraMs){ F.err={id:ETID[k],t:n+': a hora não pode ser depois de agora.'}; break; }
+        if(ch&&iso.slice(0,16)<String(ch).slice(0,16)){ F.err={id:ETID[k],t:(k==='fim'?'A saída':n)+' tem que ser depois da chegada.'}; break; } etMan[k]=iso; } }
     if(F.err){ P.render(); return; }
     if(!pode()){ P.toast('Seu acesso é só para ver.'); return; }
     if(F.salvando) return; F.salvando=true; P.render();
@@ -145,7 +148,10 @@
       if(F.edit){ const e=entDe(F.edit); const ags=await agsDosPeds(F.peds); const c=classAg(ags,e.dia);
         const up={placa:pl,mot:F.mot.trim(),peds:F.peds,repId:F.repId||'',repNome:r?r.nome:'',veic:F.veic,tipo:F.tipo,cli:F.cli||(ags[0]&&ags[0].cliente)||'',agIds:ags.map(x=>x._id),agKind:c.k,agData:c.d||null,editEm:agora,editPor:eu()};
         const mudouH=chegMan&&chegMan.slice(0,16)!==String(e.cheg||'').slice(0,16); if(mudouH) up.cheg=chegMan;
-        if(saiMan&&saiMan.slice(0,16)!==String((e.et||{}).fim||'').slice(0,16)){ const et=Object.assign({},e.et||{}), por=Object.assign({},e.etPor||{}); if(juntos()&&(!et.carr||et.carr===et.fim)){ et.carr=saiMan; por.carr=por.carr||eu(); } et.fim=saiMan; por.fim=por.fim||eu(); up.et=et; up.etPor=por; }
+        { const et0=e.et||{}, et=Object.assign({},et0), por=Object.assign({},e.etPor||{}); let mud=false;
+          for(const [k] of ETAPAS){ const nv=etMan[k]; if(String(nv||'').slice(0,16)===String(et0[k]||'').slice(0,16)) continue; mud=true; et[k]=nv; por[k]=nv?(por[k]||eu()):null; }
+          if(juntos()){ if(et.fat&&!et.mix&&!(F.ets||{}).mix){ et.mix=et.fat; por.mix=por.mix||eu(); } if(et.fim&&!et.carr&&!(F.ets||{}).carr){ et.carr=et.fim; por.carr=por.carr||eu(); } }
+          if(mud){ up.et=et; up.etPor=por; } }
         await P.db().collection('bordo').doc(F.edit).update(up); Object.assign(e,up); if(mudouH) await renumera(e.dia);
         B.f=null; B.ov=null; P.toast('Corrigido.'); P.render(); return; }
       const ags=await agsDosPeds(F.peds), c=classAg(ags,hoje()), ord=Math.max(0,...vivos(B.ent).map(e=>+e.ord||0))+1, id='b'+hoje().replace(/-/g,'')+'-'+novoId();
@@ -211,11 +217,14 @@
       <div class="bd-f2"><label class="bd-lb">Placa<input id="bd-f-placa" class="bd-in bd-plin" maxlength="8" autocomplete="off" autocapitalize="characters" value="${esc(F.placa)}" placeholder="ABC1D23"${er.id==='bd-f-placa'?' aria-invalid="true"':''}></label>
         <label class="bd-lb">Motorista<input id="bd-f-mot" class="bd-in" maxlength="60" autocomplete="off" value="${esc(F.mot)}" placeholder="Nome do motorista"${er.id==='bd-f-mot'?' aria-invalid="true"':''}></label></div>${eB('bd-f-placa')}${eB('bd-f-mot')}
       <div class="bd-f2"><label class="bd-lb">Chegou às<input id="bd-f-hora" class="bd-in" inputmode="numeric" maxlength="5" autocomplete="off" value="${esc(F.hora||'')}" placeholder="agora (${esc(hm(new Date().toISOString()))})"${er.id==='bd-f-hora'?' aria-invalid="true"':''}></label>
-        ${F.edit?`<label class="bd-lb">Saiu às <small>(se já saiu)</small><input id="bd-f-saida" class="bd-in" inputmode="numeric" maxlength="5" autocomplete="off" value="${esc(F.saida||'')}" placeholder="—"${er.id==='bd-f-saida'?' aria-invalid="true"':''}></label>`:'<p class="bd-hint" style="align-self:end">Deixe vazio para usar a hora de agora. Para lançar um caminhão que já veio, digite a hora em que ele chegou.</p>'}</div>${eB('bd-f-hora')}${eB('bd-f-saida')}
+        ${F.edit?'<p class="bd-hint" style="align-self:end">Corrija as horas abaixo. Campo vazio = etapa não marcada.</p>':'<p class="bd-hint" style="align-self:end">Deixe vazio para usar a hora de agora. Para lançar um caminhão que já veio, digite a hora em que ele chegou.</p>'}</div>${eB('bd-f-hora')}
+      ${F.edit?`<div class="bd-f4">${ETAPAS.map(([k,n])=>`<label class="bd-lb">${k==='fim'?'Finalizado (saiu)':n}<input id="${ETID[k]}" class="bd-in" inputmode="numeric" maxlength="5" autocomplete="off" value="${esc((F.ets||{})[k]||'')}" placeholder="—"${er.id===ETID[k]?' aria-invalid="true"':''}></label>`).join('')}</div>${ETAPAS.map(([k])=>eB(ETID[k])).join('')}`:''}
+      <label class="bd-lb">Cliente <small>(opcional)</small><input id="bd-f-cli" class="bd-in" maxlength="80" autocomplete="off" value="${esc(F.cli||'')}" placeholder="Nome do cliente (vem sozinho do pedido agendado)"></label>
       <div class="bd-lb">Pedidos<div class="bd-chips" id="bd-f-chips">${F.peds.map((p,i)=>`<span class="bd-chip">${esc(p)}<button type="button" data-act="bd-f-px" data-v="${i}" aria-label="Tirar o pedido ${esc(p)}">×</button></span>`).join('')}<input id="bd-f-ped" inputmode="numeric" autocomplete="off" placeholder="${F.peds.length?'mais pedidos…':'Digite ou cole os pedidos'}"></div>
         ${F.info?`<p class="bd-info ${F.info.t}">${esc(F.info.x)}</p>`:'<p class="bd-hint">Enter ou vírgula separa os pedidos. Pode colar vários de uma vez.</p>'}</div>
       <div class="bd-lb">Representante
-        ${rs.length?`<div class="bd-replst"><input id="bd-f-repq" class="bd-repq" autocomplete="off" placeholder="Buscar representante" aria-label="Buscar representante">
+        ${rsel&&!F.repAbre?`<div class="bd-repsel"><span class="bd-rdot on" aria-hidden="true"></span><span class="bd-rst"><b>${esc(rsel.nome)}</b><small>${esc([rsel.reg,rsel.ct&&rsel.ct!==rsel.nome?'Contato: '+rsel.ct:''].filter(Boolean).join(' · '))}</small></span><button type="button" class="bd-b0 sm" data-act="bd-f-reptroca">Trocar</button></div>`
+        :rs.length?`<div class="bd-replst"><input id="bd-f-repq" class="bd-repq" autocomplete="off" placeholder="Buscar representante" aria-label="Buscar representante">
           <div class="bd-reps" role="radiogroup" aria-label="Representante">${rs.map(r=>`<button type="button" class="bd-rep" role="radio" aria-checked="${r.id===F.repId}" data-act="bd-f-rep" data-v="${esc(r.id)}" data-b="${esc(norm(r.nome+' '+(r.reg||'')+' '+(r.ct||'')))}"><span class="bd-rdot" aria-hidden="true"></span><span class="bd-rn">${esc(r.nome)}</span><small>${esc(r.reg||'')}</small></button>`).join('')}</div></div>`
           :'<p class="bd-hint">Nenhum representante cadastrado (Solicitações › Representantes).</p>'}${rsel?'':''}</div>
       <fieldset class="bd-fs"><legend>Veículo</legend><div class="bd-seg">${VEICS.map(([k,n])=>`<button type="button" data-act="bd-f-veic" data-v="${k}" aria-pressed="${F.veic===k}">${esc(n)}</button>`).join('')}</div>${eB('bd-f-veic')}</fieldset>
@@ -259,7 +268,7 @@
         <td class="bd-num bd-pt${st.atr?' atr':''}">${e.des?'saiu '+esc(hm(e.des.em)):esc(dur(pm))}</td>
         <td class="bd-acts">${pode()&&st.k==='pend'?`<button type="button" class="bd-lk" data-act="bd-des" data-v="${esc(e._id)}">Desistiu</button>`:''}${pode()?`<button type="button" class="bd-lk" data-act="bd-ed" data-v="${esc(e._id)}">Corrigir</button>`:''}</td></tr>`; };
     const tab=vs.length?`<div class="bd-tw"><table class="bd-tab"><thead><tr><th>#</th><th>Motorista · cliente</th><th>Placa · veículo</th><th>Chegada</th><th>Agenda</th><th>Tipo</th>${ETAPAS.map(([,n])=>`<th>${n}</th>`).join('')}<th class="r">No pátio</th><th><span class="sr">Ações</span></th></tr></thead><tbody>${rows.map(linha).join('')||'<tr><td colspan="13" class="bd-vz">Nada neste filtro.</td></tr>'}</tbody></table></div>
-      <p class="bd-leg">Toque na etapa para marcar a hora${juntos()?' (Mix e Faturado marcam juntos; Carregado e Finalizado também)':''}. Laranja: esperando agora, com o tempo · vermelho: passou do tempo combinado (${ETAPAS.map(([k,n])=>n.toLowerCase()+' '+lim(k)+' min').join(', ')}) · verde: finalizado · cinza: desistente.</p>`
+      <p class="bd-leg">Toque na etapa para marcar a hora${juntos()?' (Faturado preenche o Mix se estiver vazio; Finalizado preenche o Carregado). Para mudar uma hora, use Corrigir':''}. Laranja: esperando agora, com o tempo · vermelho: passou do tempo combinado (${ETAPAS.map(([k,n])=>n.toLowerCase()+' '+lim(k)+' min').join(', ')}) · verde: finalizado · cinza: desistente.</p>`
       :`<div class="bd-vz2"><b>${live?'Nenhum caminhão chegou ainda hoje.':'Nenhum caminhão neste dia.'}</b><span>${live?'A portaria registra a chegada pelo celular, ou use "+ Registrar chegada".':''}</span></div>`;
     return topoDia(d)+kp+`<section class="card bd-card"><div class="bd-bar"><h2>Fila ${live?'de hoje':'do dia'}</h2>${ch('todos','Todos',vs.length)}${ch('patio','No pátio',K.pat.length)}${ch('fim','Finalizados',K.fim.length)}${ch('des','Desistentes',K.des.length)}
       <label class="bd-busca"><span class="sr">Buscar</span><input id="bd-q" type="search" placeholder="Motorista, cliente, placa ou pedido" value="${esc(B.q||'')}"></label></div>${tab}</section>`+ovHtml(); }
@@ -292,7 +301,7 @@
     const corpo=ab==='agend'?tvAgend():tvDiario();
     return `<div class="bd-tv${so?' so':''}"><header class="bd-tvh"><div class="bd-tvlogo"><img src="icons/logo-colafix-escuro.png" alt="Colafix"></div>
       <nav class="bd-tvt" aria-label="Telas da TV"><button type="button" data-act="bd-tvaba" data-v="diario" aria-pressed="${ab==='diario'}">Diário de bordo</button><button type="button" data-act="bd-tvaba" data-v="agend" aria-pressed="${ab==='agend'}">Agendados</button></nav>
-      <span class="bd-tvd">${esc(br(B.diaLive))}</span><div class="bd-tvk">${corpo.k}</div><div class="bd-tvc" data-rtv-clk>${rel}</div>${so?'':'<button type="button" class="bd-tvfs" data-act="bd-tvcheia">Tela cheia</button>'}</header>
+      <span class="bd-tvd">${esc(br(B.diaLive))}</span><div class="bd-tvk">${corpo.k}</div><div class="bd-tvc" data-rtv-clk>${rel}</div>${document.fullscreenElement?'':`<button type="button" class="bd-tvfs" data-act="bd-tvcheia" title="Ocupa a tela toda (ou aperte F11). Esc para sair.">⛶ Tela cheia</button>`}</header>
       <div class="bd-tvb">${corpo.h}</div><footer class="bd-tvf">${corpo.f}<span class="r">Troca de aba sozinha a cada ${segTV()} s · atualiza sozinho</span></footer></div>`; }
   const lg=(c,t)=>`<span><i style="background:${c}"></i>${t}</span>`;
   function tvDiario(){ if(!B.lido.dia) return {k:'',h:'<p class="bd-tvvz">Carregando…</p>',f:''};
@@ -416,7 +425,7 @@
     return `<header class="bd-top"><div><p class="bd-eb">Solicitações · diário de bordo</p><h1>Ajustes</h1></div></header><!--tabs-->
       <section class="card"><h2>Tempo máximo de cada etapa</h2><p class="bd-sub">Passou desse tempo esperando a etapa, a linha fica vermelha na TV e no diário, e quem cuida da etapa recebe o aviso (se tiver tópico).</p>
       <div class="bd-ajg">${ETAPAS.map(([k,n])=>`<label class="bd-lb">${n} (minutos)<input id="bd-a-l-${k}" class="bd-in" type="number" min="5" max="600" value="${esc(String(L[k]||LIM_PAD[k]))}"></label><label class="bd-lb">Aviso do ${n.toLowerCase()} (tópico do ntfy)<input id="bd-a-t-${k}" class="bd-in" maxlength="60" value="${esc(T[k]||'')}" placeholder="ex.: colafix-${k}"></label>`).join('')}</div>
-      <label class="bd-ck" style="display:flex;gap:8px;align-items:center;margin:0 0 12px"><input type="checkbox" id="bd-a-jt" ${juntos()?'checked':''}> Um toque marca Mix e Faturado juntos (e Carregado e Finalizado juntos)</label>
+      <label class="bd-ck" style="display:flex;gap:8px;align-items:center;margin:0 0 12px"><input type="checkbox" id="bd-a-jt" ${juntos()?'checked':''}> Marcar Faturado preenche o Mix vazio, e Finalizado preenche o Carregado vazio</label>
       <label class="bd-lb" style="max-width:260px">TV: trocar de aba a cada (segundos)<input id="bd-a-tv" class="bd-in" type="number" min="10" max="600" value="${esc(String(B.cfg.tvSeg||30))}"></label>
       ${pode()?'<div class="bd-libb"><button type="button" class="bd-b1" data-act="bd-a-salva">Salvar ajustes</button></div>':''}<p class="bd-hint">Para receber o aviso: instale o app ntfy no celular, toque em + e assine o tópico escrito aqui.</p></section>`; }
 
@@ -563,7 +572,9 @@
   document.addEventListener('input',ev=>{ const t=ev.target; if(!t||!t.id) return; const F=B.f;
     if(F&&t.id==='bd-f-placa'){ const v=t.value.toUpperCase().replace(/[^A-Z0-9-]/g,''); if(t.value!==v) t.value=v; F.placa=v; if(F.err&&F.err.id==='bd-f-placa'){ F.err=null; } clearTimeout(olhaPlaca._t); olhaPlaca._t=setTimeout(olhaPlaca,450); return; }
     if(F&&t.id==='bd-f-mot'){ F.mot=t.value; return; }
-    if(F&&(t.id==='bd-f-hora'||t.id==='bd-f-saida')){ let dg=t.value.replace(/\D/g,'').slice(0,4); if(dg.length>=3) dg=dg.slice(0,dg.length-2)+':'+dg.slice(-2); if(t.value!==dg) t.value=dg; F[t.id==='bd-f-hora'?'hora':'saida']=dg; if(F.err&&(F.err.id===t.id)) F.err=null;
+    if(F&&t.id==='bd-f-cli'){ F.cli=t.value; return; }
+    const etK=Object.keys(ETID).find(k=>ETID[k]===t.id);
+    if(F&&(t.id==='bd-f-hora'||etK)){ let dg=t.value.replace(/\D/g,'').slice(0,4); if(dg.length>=3) dg=dg.slice(0,dg.length-2)+':'+dg.slice(-2); if(t.value!==dg) t.value=dg; if(etK){ F.ets=F.ets||{}; F.ets[etK]=dg; } else F.hora=dg; if(F.err&&(F.err.id===t.id)) F.err=null;
       if(t.id==='bd-f-hora'){ const b=document.querySelector('[data-act="bd-f-ok"]'); if(b&&!F.edit&&!F.salvando) b.textContent='Registrar chegada · '+(hmOk(dg)?dg.padStart(5,'0'):hm(new Date().toISOString())); } return; }
     if(F&&t.id==='bd-f-ped'){ if(/[\s,;]/.test(t.value)&&pedLimpo(t.value).length){ if(addPeds(t.value)){ t.value=''; rr(); } } return; }
     if(t.id==='bd-f-repq'){ const q=norm(t.value); document.querySelectorAll('.bd-reps .bd-rep').forEach(b=>{ b.hidden=!!q&&!b.dataset.b.includes(q); }); return; }
@@ -584,10 +595,11 @@
     if(ev.key==='Escape'&&B.ov){ B.ov=null; if(S.view!=='bdport') B.f=null; P.render(); } });
   document.addEventListener('click',async ev=>{ const b=ev.target.closest&&ev.target.closest('[data-act^="bd-"]'); if(!b) return; const a=b.dataset.act, v=b.dataset.v; if(b.tagName!=='A') ev.preventDefault();
     if(a==='bd-nova'){ if(!pode()) return P.toast('Seu acesso é só para ver.'); B.f=novoForm(); B.port.feito=null; if(S.view!=='bdport') B.ov={f:1}; P.render(); setTimeout(()=>{ const i=document.getElementById('bd-f-placa'); i&&i.focus(); },60); return; }
-    if(a==='bd-ed'){ const e=entDe(v); if(!e) return; B.f=novoForm({placa:e.placa,mot:e.mot,peds:(e.peds||[]).slice(),repId:e.repId||'',veic:e.veic||'',tipo:e.tipo||'carrega',cli:e.cli||'',edit:e._id,hora:hm(e.cheg),saida:hm((e.et||{}).fim)}); B.ov={f:1}; P.render(); return; }
+    if(a==='bd-ed'){ const e=entDe(v); if(!e) return; B.f=novoForm({placa:e.placa,mot:e.mot,peds:(e.peds||[]).slice(),repId:e.repId||'',veic:e.veic||'',tipo:e.tipo||'carrega',cli:e.cli||'',edit:e._id,hora:hm(e.cheg),ets:Object.fromEntries(ETAPAS.map(([k])=>[k,hm((e.et||{})[k])]))}); B.ov={f:1}; P.render(); return; }
     if(a==='bd-ovx'||a==='bd-p-x'){ B.ov=null; B.f=null; P.render(); return; }
     if(a==='bd-f-px'&&B.f){ B.f.peds.splice(+v,1); olhaAg(); rr(); return; }
-    if(a==='bd-f-rep'&&B.f){ B.f.repId=B.f.repId===v?'':v; rr(); return; }
+    if(a==='bd-f-rep'&&B.f){ B.f.repId=B.f.repId===v?'':v; B.f.repAbre=false; rr(); return; }
+    if(a==='bd-f-reptroca'&&B.f){ B.f.repAbre=true; rr(); setTimeout(()=>{ const q=document.getElementById('bd-f-repq'); if(q) q.focus(); const on=document.querySelector('.bd-rep[aria-checked="true"]'); if(on) on.scrollIntoView({block:'nearest'}); },30); return; }
     if(a==='bd-f-veic'&&B.f){ B.f.veic=v; if(B.f.err&&B.f.err.id==='bd-f-veic') B.f.err=null; rr(); return; }
     if(a==='bd-f-tipo'&&B.f){ B.f.tipo=v; rr(); return; }
     if(a==='bd-f-ok') return salvarChegada();
@@ -601,7 +613,7 @@
     if(a==='bd-dia'){ const n=+v; B.dia=n===0?B.diaLive:addD(B.dia,n); if(B.dia>B.diaLive) B.dia=B.diaLive; if(B.dia!==B.diaLive) lerOutro(B.dia); else B.outro=null; P.render(); return; }
     if(a==='bd-csv') return csvDia();
     if(a==='bd-tvaba'){ B.tv.aba=v; B.tv.troca=Date.now(); B.tv.fixo=Date.now(); P.render(); return; }
-    if(a==='bd-tvcheia'){ B.tv.cheia=true; try{ document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{}); }catch(e){} P.render(); return; }
+    if(a==='bd-tvcheia'){ B.tv.cheia=true; try{ document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().then(()=>P.render()).catch(()=>{}); }catch(e){} P.render(); return; }
     if(a==='bd-saba'){ B.solAba=v; P.render(); return; }
     if(a==='bd-email'){ B.ov={email:1}; P.render(); setTimeout(()=>{ const t=document.getElementById('bd-em-tx'); t&&t.focus(); },60); return; }
     if(a==='bd-em-ok'){ const o=lerEmail((document.getElementById('bd-em-tx')||{}).value); const N=B.nova||(B.nova={peds:[],cli:'',repId:'',rec:'',origem:'painel'}); N.peds=[...new Set(N.peds.concat(o.peds))]; if(o.cli) N.cli=o.cli; if(o.rep) N.repId=o.rep; if(o.rec) N.rec=o.rec; N.origem='email'; B.ov=null;
@@ -638,6 +650,10 @@
   /* TV: troca de aba sozinha (tocar numa aba segura ela por 2 min) */
   setInterval(()=>{ if(S.view!=='bordotv'){ if(document.body.classList.contains('bd-tvon')) document.body.classList.remove('bd-tvon'); B.tv.cheia=false; return; }
     const ag=Date.now(); if(ag-B.tv.fixo<120000) return; if(ag-B.tv.troca>=segTV()*1000){ B.tv.aba=B.tv.aba==='diario'?'agend':'diario'; B.tv.troca=ag; P.render(); } },1000);
+  /* 27/11/2026: o navegador só deixa ocupar a tela toda depois de um clique: na TV sozinha, o primeiro clique em qualquer lugar já põe em tela cheia */
+  document.addEventListener('click',ev=>{ try{ if(S.view!=='bordotv'||document.fullscreenElement||!document.body.classList.contains('bd-tvon')) return; if(ev.target.closest&&ev.target.closest('[data-act="bd-tvcheia"]')) return;
+    document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().then(()=>P.render()).catch(()=>{}); }catch(e){} },true);
+  document.addEventListener('fullscreenchange',()=>{ try{ if(S.view==='bordotv') P.render(); }catch(e){} });
   document.addEventListener('fullscreenchange',()=>{ if(!document.fullscreenElement&&B.tv.cheia){ B.tv.cheia=false; P.render(); } });
 
   /* 27/11/2026 (pedido do faturamento): as telas do diário ficam na lateral, embaixo de "Diário de bordo" (como o RH),
@@ -752,7 +768,7 @@
   @media (min-width:901px){body.bd-side-on nav.tabs[aria-label="Diário de bordo"]{display:none}}
   body.bd-tvon .side,body.bd-tvon header.top,body.bd-tvon .bottomnav,body.bd-tvon nav.tabs,body.bd-tvon .mob-top,body.bd-tvon .crumbs{display:none!important}body.bd-tvon .content{padding:0!important;max-width:none!important}body.bd-tvon .main{margin:0!important}
   .bd-tv{font-size:clamp(9px,.9vw,22px);background:#fff;color:#1d2b33;display:flex;flex-direction:column;border-radius:14px;overflow:hidden;border:1px solid var(--line)}.bd-tv.so{border-radius:0;border:0;min-height:100vh;font-size:1vw}
-  .bd-tvh{display:flex;align-items:center;gap:1.2em;background:#163c52;color:#fff;padding:.8em 1.4em 0;flex-wrap:nowrap;min-width:0}.bd-tvlogo img{height:2.4em;display:block;margin-bottom:.8em}
+  .bd-tvh{display:flex;align-items:center;gap:1.2em;background:#163c52;color:#fff;padding:1.4em 1.4em 0;flex-wrap:nowrap;min-width:0}.bd-tvlogo img{height:2.4em;display:block;margin-bottom:.8em;white-space:nowrap;flex:none}
   .bd-tvt{display:flex;gap:.4em;align-self:flex-end}.bd-tvt button{font:inherit;font-size:1.5em;padding:.45em 1.1em;border:0;border-radius:.4em .4em 0 0;background:rgba(255,255,255,.12);color:#fff;cursor:pointer}.bd-tvt button[aria-pressed=true]{background:#fff;color:#163c52;font-weight:700}
   .bd-tvd{font-size:1.2em;opacity:.75;margin-bottom:.8em}.bd-tvk{display:flex;gap:1.1em;margin-left:auto;font-size:1.15em;flex-wrap:nowrap;white-space:nowrap;margin-bottom:.8em;min-width:0}.bd-tvc{font-size:2.4em;font-weight:700;font-variant-numeric:tabular-nums;margin-bottom:.3em}
   .bd-tvfs{font:inherit;font-size:1em;border:1px solid rgba(255,255,255,.4);background:transparent;color:#fff;border-radius:.4em;padding:.4em .8em;cursor:pointer;margin-bottom:.8em}
@@ -769,5 +785,9 @@
   
   @media (min-width:1000px){.bd-ptl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 22px;align-items:start}.bd-ptl>.bd-phero{grid-column:1/-1;flex-direction:row;align-items:center;flex-wrap:wrap}.bd-ptl>.bd-phero>*{flex:1 1 auto}.bd-ptl>.bd-phero .bd-pbig{flex:0 0 320px}
     .cv-appc .bd-pcard,.cv-appc .bd-pf{max-width:820px;margin-left:auto;margin-right:auto}}
+
+  .bd-f4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}@media (max-width:560px){.bd-f4{grid-template-columns:1fr 1fr}}
+
+  .bd-repsel{display:flex;align-items:center;gap:12px;border:2px solid var(--teal-strong,#163c52);border-radius:12px;padding:10px 12px;background:var(--teal-tint,#eaf3f6)}.bd-rst{flex:1;min-width:0}.bd-rst b{display:block}.bd-rst small{color:var(--muted);font-size:12px}.bd-repsel .bd-rdot{flex:none;width:16px;height:16px;border-radius:50%;border:5px solid var(--teal-strong,#163c52);background:#fff}
 </style>`);
 })();

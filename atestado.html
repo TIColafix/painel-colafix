@@ -8,7 +8,7 @@
 <link rel="icon" href="icons/favicon-192.png?v=5" sizes="192x192"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=3">
 <title>Colafix · Enviar atestado</title>
 <!-- Link do atestado (27/11/2026, pedido do RH: "um link para os funcionários fazerem o upload do atestado"). Sem login:
-     o funcionário põe a matrícula e o nome, o tipo, as datas e a foto/PDF. Só CRIA o envio (rhatestrec + rhatestarq);
+     o funcionário põe o CPF e o nome, o tipo, as datas e a foto/PDF. Só CRIA o envio (rhatestrec + rhatestarq);
      não lê nada do painel. O RH confere em Atestados e faltas › "Recebidos pelo link" e registra (modulos/rh-atestados.js).
      Não pede CID (dado de saúde, LGPD). -->
 <style>
@@ -51,8 +51,10 @@ fieldset{border:0;padding:0;margin:0 0 14px}legend{font-size:13px;font-weight:70
   const LS={get:k=>{ try{ return localStorage.getItem(k)||''; }catch(e){ return ''; } },set:(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} }};
   const pz=n=>String(n).padStart(2,'0'), hoje=()=>{ const d=new Date(); return d.getFullYear()+'-'+pz(d.getMonth()+1)+'-'+pz(d.getDate()); };
   const br=d=>d?d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(0,4):'';
+  const cpfOk=c=>{ c=String(c||'').replace(/\D/g,''); if(c.length!==11||/^(\d)\1{10}$/.test(c)) return false; let s=0; for(let i=0;i<9;i++) s+=+c[i]*(10-i); let d=s*10%11%10; if(d!==+c[9]) return false; s=0; for(let i=0;i<10;i++) s+=+c[i]*(11-i); d=s*10%11%10; return d===+c[10]; };
+  const fCpf=c=>{ c=String(c||'').replace(/\D/g,'').slice(0,11); return c.length>9?c.slice(0,3)+'.'+c.slice(3,6)+'.'+c.slice(6,9)+'-'+c.slice(9):c.length>6?c.slice(0,3)+'.'+c.slice(3,6)+'.'+c.slice(6):c.length>3?c.slice(0,3)+'.'+c.slice(3):c; };
   const TIPOS=[['atestado','Atestado médico','dias'],['comparecimento','Declaração de comparecimento (horas)','horas'],['acompanhante','Acompanhamento de familiar','dias']];
-  const F={mat:LS.get('colafix.at.mat'),nome:LS.get('colafix.at.nome'),tipo:'atestado',ini:hoje(),dias:'1',hIni:'',hFim:'',obs:'',tel:LS.get('colafix.at.tel'),arqs:[]};
+  const F={cpf:LS.get('colafix.at.cpf'),nome:LS.get('colafix.at.nome'),tipo:'atestado',ini:hoje(),dias:'1',hIni:'',hFim:'',obs:'',tel:LS.get('colafix.at.tel'),arqs:[]};
   let err='', errId='', env=false, feito=null;
   async function entrar(){ try{ if(!auth.currentUser) await auth.signInAnonymously(); }catch(e){ console.info('sem conta anônima',e&&e.code); } }
   const lerArq=f=>new Promise((ok,er)=>{ const r=new FileReader(); r.onload=()=>ok(r.result); r.onerror=er; r.readAsDataURL(f); });
@@ -64,7 +66,7 @@ fieldset{border:0;padding:0;margin:0 0 14px}legend{font-size:13px;font-weight:70
   function desenha(){ if(feito){ app.innerHTML='<div class="ok" role="status"><div class="ck" aria-hidden="true">✓</div><h2>Atestado enviado</h2><p>O RH recebeu o seu '+esc(TIPOS.find(t=>t[0]===feito.tipo)[1].split(' (')[0].toLowerCase())+' de <b>'+esc(br(feito.ini))+'</b>. Guarde o papel original: o RH pode pedir.</p><p>Protocolo <b>'+esc(feito.id.slice(-6).toUpperCase())+'</b></p><button type="button" class="lk" data-a="outro">Enviar outro</button></div>'; return; }
     const t=TIPOS.find(x=>x[0]===F.tipo);
     app.innerHTML='<form id="fa" novalidate autocomplete="on">'+
-      '<div class="g2">'+campo('mat','Matrícula','text',F.mat,'inputmode="numeric" maxlength="12" autocomplete="off"')+campo('tel','Telefone <small>opcional</small>','tel',F.tel,'maxlength="20" autocomplete="tel"')+'</div>'+
+      '<div class="g2">'+campo('cpf','CPF','text',F.cpf,'inputmode="numeric" maxlength="14" autocomplete="off" placeholder="000.000.000-00"')+campo('tel','Telefone <small>opcional</small>','tel',F.tel,'maxlength="20" autocomplete="tel"')+'</div>'+
       campo('nome','Nome completo','text',F.nome,'maxlength="80" autocomplete="name"')+
       '<fieldset><legend>O que você vai mandar?</legend><div class="tps">'+TIPOS.map(x=>'<button type="button" data-a="tipo" data-v="'+x[0]+'" aria-pressed="'+(F.tipo===x[0])+'"><i aria-hidden="true"></i>'+esc(x[1])+'</button>').join('')+'</div></fieldset>'+
       (t[2]==='horas'?'<div class="g2">'+campo('ini','Dia','date',F.ini)+'<span></span></div><div class="g2">'+campo('hIni','Das','time',F.hIni)+campo('hFim','Até','time',F.hFim)+'</div>'
@@ -75,19 +77,19 @@ fieldset{border:0;padding:0;margin:0 0 14px}legend{font-size:13px;font-weight:70
       '<p class="nota">O documento vai só para o RH da Colafix. Entregue o papel original quando o RH pedir.</p>'+
       (err?'<p class="err" role="alert">'+esc(err)+'</p>':'')+'<button type="submit" class="b1"'+(env?' disabled':'')+'>'+(env?'Enviando…':'Enviar para o RH')+'</button></form>';
     if(errId&&$(errId)) $(errId).focus(); }
-  function le(){ ['mat','tel','nome','ini','dias','hIni','hFim','obs'].forEach(k=>{ const e=$(k); if(e) F[k]=e.value; }); }
-  async function enviar(){ le(); err=''; errId=''; const t=TIPOS.find(x=>x[0]===F.tipo), mat=String(F.mat||'').trim().replace(/\s+/g,''), nome=String(F.nome||'').trim().replace(/\s+/g,' ');
-    if(!/^[0-9A-Za-z.\-]{1,12}$/.test(mat)){ err='Escreva a sua matrícula.'; errId='mat'; }
+  function le(){ ['cpf','tel','nome','ini','dias','hIni','hFim','obs'].forEach(k=>{ const e=$(k); if(e) F[k]=e.value; }); }
+  async function enviar(){ le(); err=''; errId=''; const t=TIPOS.find(x=>x[0]===F.tipo), cpf=String(F.cpf||'').replace(/\D/g,''), nome=String(F.nome||'').trim().replace(/\s+/g,' ');
+    if(!cpfOk(cpf)){ err=cpf.length===11?'Esse CPF não está certo. Confira os números.':'Escreva o seu CPF (11 números).'; errId='cpf'; }
     else if(nome.length<5||!/\s/.test(nome)){ err='Escreva o seu nome completo.'; errId='nome'; }
     else if(!/^\d{4}-\d{2}-\d{2}$/.test(F.ini||'')){ err='Escolha o dia.'; errId='ini'; }
     else if(t[2]==='horas'&&!(F.hIni&&F.hFim&&F.hFim>F.hIni)){ err='Diga das que horas até que horas.'; errId='hIni'; }
     else if(t[2]==='dias'&&!(+F.dias>=1&&+F.dias<=365)){ err='Quantos dias de afastamento?'; errId='dias'; }
     else if(!F.arqs.length){ err='Tire a foto do documento.'; }
     if(err){ desenha(); return; }
-    env=true; desenha(); LS.set('colafix.at.mat',mat); LS.set('colafix.at.nome',nome); LS.set('colafix.at.tel',String(F.tel||'').trim());
+    env=true; desenha(); LS.set('colafix.at.cpf',fCpf(cpf)); LS.set('colafix.at.nome',nome); LS.set('colafix.at.tel',String(F.tel||'').trim());
     try{ await entrar(); const id='a-'+Date.now().toString(36)+Math.random().toString(36).slice(2,8), agora=new Date().toISOString();
       for(let i=0;i<F.arqs.length;i++){ const a=F.arqs[i]; await fs.collection('rhatestarq').doc(id+'-'+i).set({rec:id,d:a.d,mime:a.mime,nome:String(a.nome||'').slice(0,80),em:agora}); }
-      const d={mat,nome:nome.slice(0,80),tipo:F.tipo,ini:F.ini,dias:t[2]==='dias'?Math.round(+F.dias):1,hIni:t[2]==='horas'?F.hIni:'',hFim:t[2]==='horas'?F.hFim:'',obs:String(F.obs||'').trim().slice(0,200),tel:String(F.tel||'').trim().slice(0,20),n:F.arqs.length,em:agora,st:'novo'};
+      const d={cpf,nome:nome.slice(0,80),tipo:F.tipo,ini:F.ini,dias:t[2]==='dias'?Math.round(+F.dias):1,hIni:t[2]==='horas'?F.hIni:'',hFim:t[2]==='horas'?F.hFim:'',obs:String(F.obs||'').trim().slice(0,200),tel:String(F.tel||'').trim().slice(0,20),n:F.arqs.length,em:agora,st:'novo'};
       await fs.collection('rhatestrec').doc(id).set(d); feito={id,tipo:F.tipo,ini:F.ini}; F.arqs=[]; F.obs=''; F.tipo='atestado'; F.ini=hoje(); F.dias='1'; F.hIni=''; F.hFim=''; }
     catch(e){ console.warn(e); err=e&&/permission/.test(e.code||'')?'O envio foi recusado. Avise o RH (as regras do painel precisam ser publicadas).':'Não deu para enviar ('+((e&&e.code)||'sem internet?')+'). Tente de novo.'; }
     env=false; desenha(); }
@@ -97,6 +99,7 @@ fieldset{border:0;padding:0;margin:0 0 14px}legend{font-size:13px;font-weight:70
       else if(/^image\//.test(f.type)){ if(F.arqs.some(a=>a.mime==='application/pdf')){ err='Já tem um PDF. Tire o PDF para mandar fotos.'; } else F.arqs.push({d:await reduz(f),mime:'image/jpeg',nome:f.name||'foto.jpg'}); }
       else err='Escolha uma foto ou um PDF.'; }catch(e){ err='Não consegui ler o arquivo. Tente tirar a foto de novo.'; }
     desenha(); });
+  document.addEventListener('input',ev=>{ const t=ev.target; if(t.id==='cpf'){ const v=fCpf(t.value); if(v!==t.value) t.value=v; } });
   document.addEventListener('submit',ev=>{ if(ev.target.id==='fa'){ ev.preventDefault(); enviar(); } });
   entrar(); desenha();
 })();

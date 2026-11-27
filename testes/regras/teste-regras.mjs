@@ -65,7 +65,7 @@ await ok('representante pede reagendar a liberada', assertSucceeds(anon.doc('bor
 await ok('representante NÃO muda o dia liberado', assertFails(anon.doc('bordosol/s2').update({lib:{dia:'x'}})));
 await ok('operador grava as solicitações', assertSucceeds(op.doc('bordosol/s9').set({peds:['9'],st:'recebido'})));
 // atestado pelo link (27/11/2026)
-const envio={mat:'1001',nome:'Ana Souza',tipo:'atestado',ini:'2026-11-27',dias:2,hIni:'',hFim:'',obs:'',tel:'',n:1,em:'x',st:'novo'};
+const envio={cpf:'52998224725',nome:'Ana Souza',tipo:'atestado',ini:'2026-11-27',dias:2,hIni:'',hFim:'',obs:'',tel:'',n:1,em:'x',st:'novo'};
 await ok('funcionário (sem login) envia o atestado', assertSucceeds(anon.doc('rhatestrec/a-abcdefgh12').set(envio)));
 await ok('funcionário envia a foto', assertSucceeds(anon.doc('rhatestarq/a-abcdefgh12-0').set({rec:'a-abcdefgh12',d:'data:image/jpeg;base64,AAAA',mime:'image/jpeg',nome:'f.jpg',em:'x'})));
 await ok('sem login NÃO lê os atestados enviados', assertFails(anon.doc('rhatestrec/a-abcdefgh12').get()));

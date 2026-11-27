@@ -238,9 +238,9 @@ service cloud.firestore {
     // o RH (rhOk) lê, marca como registrado/recusado e apaga as fotos depois de guardar o documento.
     match /rhatestrec/{id} {
       allow create: if id.matches('a-[a-z0-9]{8,30}')
-        && request.resource.data.keys().hasOnly(['mat', 'nome', 'tipo', 'ini', 'dias', 'hIni', 'hFim', 'obs', 'tel', 'n', 'em', 'st'])
+        && request.resource.data.keys().hasOnly(['cpf', 'nome', 'tipo', 'ini', 'dias', 'hIni', 'hFim', 'obs', 'tel', 'n', 'em', 'st'])
         && request.resource.data.st == 'novo' && request.resource.data.tipo in ['atestado', 'comparecimento', 'acompanhante']
-        && request.resource.data.mat is string && request.resource.data.mat.size() >= 1 && request.resource.data.mat.size() <= 12
+        && request.resource.data.cpf is string && request.resource.data.cpf.matches('[0-9]{11}')
         && request.resource.data.nome is string && request.resource.data.nome.size() >= 3 && request.resource.data.nome.size() <= 80
         && request.resource.data.obs is string && request.resource.data.obs.size() <= 200
         && request.resource.data.n is int && request.resource.data.n >= 1 && request.resource.data.n <= 3;

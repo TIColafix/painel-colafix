@@ -430,7 +430,7 @@
       <div class="ag-pd">${o.ck&&pode()?`<input type="checkbox" class="ag-ck" data-act="ag-sel" data-v="${esc(x._id)}" aria-label="Marcar o pedido ${esc(x.pedido)}"${A.sel.has(x._id)?' checked':''}>`:''}<b title="${esc(pedTodos(x))}">${esc(pedCurto(x))}</b></div>
       <div class="ag-mid"><div class="ag-cl">${x.cliente?esc(x.cliente):'<i>sem cliente</i>'}</div><div class="ag-sub">${sub}</div>${x.obs?`<div class="ag-obs">${esc(x.obs)}</div>`:''}</div>
       <div class="ag-qt">${esc(unTxt(r))}</div>
-      <div class="ag-ac">${o.bt&&(pode()||o.bt[1]==='ag-abrir')?`<button type="button" class="ag-bt${o.bt[2]?' sec':''}" data-act="${o.bt[1]}" data-v="${esc(x._id)}">${esc(pode()?o.bt[0]:'Ver')}</button>`:''}</div></div>`; }
+      <div class="ag-ac">${o.semCarga?`<button type="button" class="lnk ag-psep" data-act="ag-pdfsep" data-v="${esc(x._id)}" title="Separar o material antes de montar a carga">PDF de separação</button>`:''}${o.bt&&(pode()||o.bt[1]==='ag-abrir')?`<button type="button" class="ag-bt${o.bt[2]?' sec':''}" data-act="${o.bt[1]}" data-v="${esc(x._id)}">${esc(pode()?o.bt[0]:'Ver')}</button>`:''}</div></div>`; }
   const UNN={SC:['saco','sacos'],FD:['fardo','fardos'],CX:['caixa','caixas'],BD:['balde','baldes'],UN:['unidade','unidades'],PC:['peça','peças'],GL:['galão','galões'],LT:['litro','litros'],KG:['kg','kg'],PT:['pote','potes'],RL:['rolo','rolos']};
   const unN=(u,q)=>{ const n=UNN[String(u||'').toUpperCase()]; return n?(Math.abs(q-1)<1e-9?n[0]:n[1]):String(u||'').toLowerCase(); };
   const qtdUn=(q,u)=>fN(q)+' '+unN(u,q);
@@ -467,7 +467,7 @@
       ${d<h?`<p class="ag-atx">Marque "Carregou" ou mude a data.${pode()?` <button type="button" class="lnk" data-act="ag-adiar" data-v="${esc(xs.map(x=>x._id).join(','))}">Passar tudo para ${esc(brC(diaUtil(h)?h:proxUtil(h,0)))}</button>`:''}</p>`:''}
       ${fal.length?`<p class="ag-fdia">Falta material: ${fal.map(o=>`<b>${esc(o.cod)}</b> ${esc(fN(o.falta))}`).join(' · ')}</p>`:''}
       ${cargas.map((g,i)=>cartaoCarga(g.k,g.ys,i,cargas.length,d)).join('')}
-      ${sem?`<div class="ag-cgb sem"><div class="ag-cgh"><span class="ag-cgt"><b>Sem carga</b>${sem.ys.length>1?' · '+sem.ys.length+' pedidos':''}</span><span class="ag-cgs">${pode()?`<button type="button" class="lnk ag-cge" data-act="ag-cgedit" data-v="${esc(sem.ys.map(y=>y._id).join(','))}">Montar carga</button>`:''}</span></div>${sem.ys.map(x=>linha(x,{bt:['Carregou','ag-carregou'],semCarga:true,ck:true})).join('')}</div>`:''}</section>`; }
+      ${sem?`<div class="ag-cgb sem"><div class="ag-cgh"><span class="ag-cgt"><b>Sem carga</b>${sem.ys.length>1?' · '+sem.ys.length+' pedidos':''}</span><span class="ag-cgs"><button type="button" class="lnk ag-psep" data-act="ag-pdfsep" data-v="${esc(sem.ys.map(y=>y._id).join(','))}" title="Uma folha com todos os pedidos sem carga deste dia">PDF de separação${sem.ys.length>1?' de todos':''}</button>${pode()?`<button type="button" class="lnk ag-cge" data-act="ag-cgedit" data-v="${esc(sem.ys.map(y=>y._id).join(','))}">Montar carga</button>`:''}</span></div>${sem.ys.map(x=>linha(x,{bt:['Carregou','ag-carregou'],semCarga:true,ck:true})).join('')}</div>`:''}</section>`; }
 
   /* ---------- PLANEJAMENTO (25/11, "pode fazer tudo"): estoque somado entre os pedidos, produção programada, saldo atualizado,
      limite de paletes por dia, veículo/capacidade, peso e dias úteis ----------
@@ -697,7 +697,7 @@
     try{ if(!(window.jspdf&&window.jspdf.jsPDF)&&PP.carregar) await PP.carregar(); }catch(e){}
     if(!(window.jspdf&&window.jspdf.jsPDF)){ P.toast('O gerador de PDF não carregou. Confira a internet e tente de novo.'); return null; } return PP; }
   async function pdfSep(ids){ const PP=await pdfPronto(); if(!PP) return; const xs=ids.map(deId).filter(Boolean); if(!xs.length) return;
-    const r=soma(xs), cap=capCarga(xs), x0=xs[0], k=x0.carga?'Carga '+x0.carga:ehCarga(x0)?'Carga com '+pedList(x0).length+' pedidos':'Pedido '+pedCurto(x0);
+    const r=soma(xs), cap=capCarga(xs), x0=xs[0], k=x0.carga?'Carga '+x0.carga:ehCarga(x0)?'Carga com '+pedList(x0).length+' pedidos':xs.length>1?xs.length+' pedidos sem carga':'Pedido '+pedCurto(x0);
     try{ const img=await PP.imgs(), Q=PP.novo('Separação · '+k,[x0.data?br(x0.data):'sem data',x0.diario?'diário nº '+x0.diario:'',x0.transp||'',x0.placa||'',cap.v?cap.v.nome:'',x0.hora||''].filter(Boolean).join(' · '),img); Q.capa();
       Q.kpis([{t:'Paletes',v:r.pal>0?fP(r.pal):'—',s:fora(r).length?'+ '+foraTxt(r):'',c:'pet'},{t:'Quantidade',v:unTxt(r)},{t:'Peso',v:r.kg?fKg(r.kg):'—',s:cap.v?'veículo: '+fKg(cap.v.kg):''},{t:'Pedidos',v:String(xs.length)}],4);
       Q.secao('Itens para separar');
@@ -1219,7 +1219,9 @@
   .ag-cgb.sem{margin-top:12px;border:1px dashed var(--line);border-radius:14px;padding:4px 4px 6px}.ag-cgb.sem .ag-cgh{padding:8px 10px 4px}
   .ag-grp{margin-top:6px}
   @media (max-width:760px){.ag-head .ag-acts{width:100%;flex-wrap:wrap}.ag-head .ag-acts>*{flex:1 1 auto;justify-content:center}.ag-br1 .ag-q{max-width:none;margin-left:0}.ag-fs{max-width:none;flex:1 1 140px}.ag-dh{top:56px}.ag-cpb{flex:1 1 100%}}
-  </style>`);
+  
+  .ag-psep{margin-right:10px;white-space:nowrap}@media (max-width:760px){.ag-ln .ag-psep{display:none}}.ag-cgs{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+</style>`);
 
   /* ---------- resumo para o Início do diretor (js/95, 25/11): só leitura, nada grava ---------- */
   const infoDe=x=>({id:x._id,ped:pedList(x).join(', '),cliente:x.cliente||'',data:x.data||'',st:STN[x.status]||x.status||'',val:+x.total||0,carga:x.carga||'',diario:x.diario||'',transp:x.transp||'',fat:x.fat||null,emp:empTxt(x),reag:reagTxt(x),pal:soma([x]).pal});

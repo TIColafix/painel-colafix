@@ -107,7 +107,7 @@
   const vivos=xs=>xs.filter(e=>!e.removido);
 
   /* ---------- ações ---------- */
-  function novoForm(o){ return Object.assign({placa:'',mot:'',peds:[],repId:'',veic:'',tipo:'carrega',cli:'',info:null,prev:null,err:null,edit:null,hora:'',ets:{}},o||{}); }
+  function novoForm(o){ return Object.assign({placa:'',mot:'',peds:[],repId:'',veic:'',tipo:'carrega',cli:'',info:null,prev:null,err:null,edit:null,hora:'',ets:{},obs:''},o||{}); }
   /* 27/11/2026 · hora digitada (lançar depois os caminhões que já vieram): HH:MM do dia do registro → ISO */
   const ETID={mix:'bd-f-et-mix',fat:'bd-f-et-fat',carr:'bd-f-et-carr',fim:'bd-f-saida'};
   const hmOk=t=>/^([01]?\d|2[0-3]):[0-5]\d$/.test(String(t||'').trim());
@@ -146,7 +146,7 @@
     if(F.salvando) return; F.salvando=true; P.render();
     try{ const agora=new Date().toISOString(), r=repDe(F.repId);
       if(F.edit){ const e=entDe(F.edit); const ags=await agsDosPeds(F.peds); const c=classAg(ags,e.dia);
-        const up={placa:pl,mot:F.mot.trim(),peds:F.peds,repId:F.repId||'',repNome:r?r.nome:'',veic:F.veic,tipo:F.tipo,cli:F.cli||(ags[0]&&ags[0].cliente)||'',agIds:ags.map(x=>x._id),agKind:c.k,agData:c.d||null,editEm:agora,editPor:eu()};
+        const up={placa:pl,mot:F.mot.trim(),peds:F.peds,repId:F.repId||'',repNome:r?r.nome:'',veic:F.veic,tipo:F.tipo,cli:F.cli||(ags[0]&&ags[0].cliente)||'',agIds:ags.map(x=>x._id),agKind:c.k,agData:c.d||null,obs:String(F.obs||'').trim().slice(0,300),editEm:agora,editPor:eu()};
         const mudouH=chegMan&&chegMan.slice(0,16)!==String(e.cheg||'').slice(0,16); if(mudouH) up.cheg=chegMan;
         { const et0=e.et||{}, et=Object.assign({},et0), por=Object.assign({},e.etPor||{}); let mud=false;
           for(const [k] of ETAPAS){ const nv=etMan[k]; if(String(nv||'').slice(0,16)===String(et0[k]||'').slice(0,16)) continue; mud=true; et[k]=nv; por[k]=nv?(por[k]||eu()):null; }
@@ -156,7 +156,7 @@
         B.f=null; B.ov=null; P.toast('Corrigido.'); P.render(); return; }
       const ags=await agsDosPeds(F.peds), c=classAg(ags,hoje()), ord=Math.max(0,...vivos(B.ent).map(e=>+e.ord||0))+1, id='b'+hoje().replace(/-/g,'')+'-'+novoId();
       const d={dia:hoje(),ord,placa:pl,mot:F.mot.trim().replace(/\s+/g,' '),veic:F.veic,tipo:F.tipo||'carrega',peds:F.peds,cli:F.cli||(ags[0]&&ags[0].cliente)||'',repId:F.repId||'',repNome:r?r.nome:'',
-        agIds:ags.map(x=>x._id),agKind:c.k,agData:c.d||null,carga:(ags.find(x=>x.carga)||{}).carga||'',cheg:chegMan||agora,horaDigitada:!!chegMan,et:{},etPor:{},al:{},des:null,por:S.uid,porN:eu(),criado:agora};
+        agIds:ags.map(x=>x._id),agKind:c.k,agData:c.d||null,carga:(ags.find(x=>x.carga)||{}).carga||'',cheg:chegMan||agora,horaDigitada:!!chegMan,obs:String(F.obs||'').trim().slice(0,300),et:{},etPor:{},al:{},des:null,por:S.uid,porN:eu(),criado:agora};
       await P.db().collection('bordo').doc(id).set(d); B.ent=B.ent.filter(e=>e._id!==id).concat([Object.assign({_id:id},d)]);
       if(chegMan&&vivos(B.ent).some(e=>e._id!==id&&e.dia===d.dia&&String(e.cheg)>chegMan)){ await renumera(d.dia); d.ord=(entDe(id)||d).ord; }
       for(const x of ags){ const o={chegou:agora}; if(!x.diario) o.diario=String(ord); if(!x.placa) o.placa=pl; try{ await gravaAg(x,o,'Caminhão chegou às '+hm(d.cheg)+' (diário de bordo nº '+ord+', '+pl+')'); }catch(e){ console.warn('[bordo] agendamento',e); } }
@@ -220,6 +220,7 @@
         ${F.edit?'<p class="bd-hint" style="align-self:end">Corrija as horas abaixo. Campo vazio = etapa não marcada.</p>':'<p class="bd-hint" style="align-self:end">Deixe vazio para usar a hora de agora. Para lançar um caminhão que já veio, digite a hora em que ele chegou.</p>'}</div>${eB('bd-f-hora')}
       ${F.edit?`<div class="bd-f4">${ETAPAS.map(([k,n])=>`<label class="bd-lb">${k==='fim'?'Finalizado (saiu)':n}<input id="${ETID[k]}" class="bd-in" inputmode="numeric" maxlength="5" autocomplete="off" value="${esc((F.ets||{})[k]||'')}" placeholder="—"${er.id===ETID[k]?' aria-invalid="true"':''}></label>`).join('')}</div>${ETAPAS.map(([k])=>eB(ETID[k])).join('')}`:''}
       <label class="bd-lb">Cliente <small>(opcional)</small><input id="bd-f-cli" class="bd-in" maxlength="80" autocomplete="off" value="${esc(F.cli||'')}" placeholder="Nome do cliente (vem sozinho do pedido agendado)"></label>
+      <label class="bd-lb">Observação <small>(opcional)</small><textarea id="bd-f-obs" class="bd-in" rows="2" maxlength="300" placeholder="Ex.: veio sem lona, motorista vai almoçar, carga parcial, chegou com outro caminhão">${esc(F.obs||'')}</textarea></label>
       <div class="bd-lb">Pedidos<div class="bd-chips" id="bd-f-chips">${F.peds.map((p,i)=>`<span class="bd-chip">${esc(p)}<button type="button" data-act="bd-f-px" data-v="${i}" aria-label="Tirar o pedido ${esc(p)}">×</button></span>`).join('')}<input id="bd-f-ped" inputmode="numeric" autocomplete="off" placeholder="${F.peds.length?'mais pedidos…':'Digite ou cole os pedidos'}"></div>
         ${F.info?`<p class="bd-info ${F.info.t}">${esc(F.info.x)}</p>`:'<p class="bd-hint">Enter ou vírgula separa os pedidos. Pode colar vários de uma vez.</p>'}</div>
       <div class="bd-lb">Representante
@@ -257,9 +258,9 @@
       <div><span>Etapa mais lenta</span><b class="warn">${K.lenta?esc(K.lenta.n):'—'}</b><small>${K.lenta?esc(dur(K.lenta.m))+' em média':'sem etapas marcadas'}</small></div></section>`;
     const ch=(k,n,c)=>`<button type="button" class="bd-fc" data-act="bd-filt" data-v="${k}" aria-pressed="${f===k}">${n} <b>${c}</b></button>`;
     const linha=e=>{ const st=estado(e), pm=patioMin(e), cls=st.k==='fim'?'fim':st.k==='des'?'des':st.atr?'atr':'';
-      return `<tr class="${cls}" data-b="${esc(norm([e.mot,e.cli,e.placa,e.repNome,(e.peds||[]).join(' ')].join(' ')))}">
+      return `<tr class="${cls}" data-b="${esc(norm([e.mot,e.cli,e.placa,e.repNome,(e.peds||[]).join(' '),e.obs||''].join(' ')))}">
         <td class="bd-ord">${e.ord}</td>
-        <td><b class="bd-nm">${esc(e.mot)}</b><small>${esc(e.cli||'—')}${e.repNome?' · '+esc(e.repNome):''}</small></td>
+        <td><b class="bd-nm">${esc(e.mot)}</b><small>${esc(e.cli||'—')}${e.repNome?' · '+esc(e.repNome):''}</small>${e.obs?`<small class="bd-obs" title="${esc(e.obs)}">Obs.: ${esc(e.obs)}</small>`:''}</td>
         <td>${placaMini(e.placa)}<small>${esc(veicN(e.veic))}</small></td>
         <td class="bd-num">${esc(hm(e.cheg))}</td>
         <td><span class="bd-ag ${e.agKind||'sem'}">${esc(agTxt(e))}</span>${(e.peds||[]).length?`<small>${esc((e.peds||[]).join(', '))}</small>`:''}</td>
@@ -270,11 +271,35 @@
     const tab=vs.length?`<div class="bd-tw"><table class="bd-tab"><thead><tr><th>#</th><th>Motorista · cliente</th><th>Placa · veículo</th><th>Chegada</th><th>Agenda</th><th>Tipo</th>${ETAPAS.map(([,n])=>`<th>${n}</th>`).join('')}<th class="r">No pátio</th><th><span class="sr">Ações</span></th></tr></thead><tbody>${rows.map(linha).join('')||'<tr><td colspan="13" class="bd-vz">Nada neste filtro.</td></tr>'}</tbody></table></div>
       <p class="bd-leg">Toque na etapa para marcar a hora${juntos()?' (Faturado preenche o Mix se estiver vazio; Finalizado preenche o Carregado). Para mudar uma hora, use Corrigir':''}. Laranja: esperando agora, com o tempo · vermelho: passou do tempo combinado (${ETAPAS.map(([k,n])=>n.toLowerCase()+' '+lim(k)+' min').join(', ')}) · verde: finalizado · cinza: desistente.</p>`
       :`<div class="bd-vz2"><b>${live?'Nenhum caminhão chegou ainda hoje.':'Nenhum caminhão neste dia.'}</b><span>${live?'A portaria registra a chegada pelo celular, ou use "+ Registrar chegada".':''}</span></div>`;
-    return topoDia(d)+kp+`<section class="card bd-card"><div class="bd-bar"><h2>Fila ${live?'de hoje':'do dia'}</h2>${ch('todos','Todos',vs.length)}${ch('patio','No pátio',K.pat.length)}${ch('fim','Finalizados',K.fim.length)}${ch('des','Desistentes',K.des.length)}
+    return topoDia(d)+(B.imp&&live?impHtml():'')+kp+`<section class="card bd-card"><div class="bd-bar"><h2>Fila ${live?'de hoje':'do dia'}</h2>${ch('todos','Todos',vs.length)}${ch('patio','No pátio',K.pat.length)}${ch('fim','Finalizados',K.fim.length)}${ch('des','Desistentes',K.des.length)}
       <label class="bd-busca"><span class="sr">Buscar</span><input id="bd-q" type="search" placeholder="Motorista, cliente, placa ou pedido" value="${esc(B.q||'')}"></label></div>${tab}</section>`+ovHtml(); }
+  /* 27/11/2026 · trazer as linhas do dia do programa antigo (Diario de Bordo 1.0.14): colar o texto (copiado da tela ou de uma planilha)
+     com ORDEM, MOTORISTA, HISTORICO, PLACA, CHEGADA, TIPO, MIX, FATURADO, CARREGADO, FINALIZADO, VEICULO — separado por tab, ";" ou "|".
+     Só no dia de hoje; quem já está no painel (mesma placa e mesma hora de chegada) não repete. Desistente vira desistente. */
+  function impLer(txt){ const out=[], VK=VEICS.map(v=>v[0]);
+    String(txt||'').split(/\r?\n/).forEach(l=>{ if(!l.trim()) return; const c=l.split(/\t|;|\|/).map(x=>x.trim()); if(c.length<5) return; if(/^ordem$/i.test(c[0])||(/^motorista$/i.test(c[1]||'')&&!/\d/.test(c[0]))) return;
+      const t=x=>{ const m=String(x||'').match(/^(\d{1,2}):(\d{2})/); return m?String(+m[1]).padStart(2,'0')+':'+m[2]:''; };
+      const tipoT=String(c[5]||'').toUpperCase(), vRaw=String(c[10]||'').toUpperCase().replace(/\s+/g,'_'), veic=VK.includes(vRaw)?vRaw:(VK.find(k=>vRaw.startsWith(k))||'');
+      const o={ord:+c[0]||0,mot:c[1]||'',cli:c[2]||'',placa:plN(c[3]||''),cheg:t(c[4]),tipo:/PIT/.test(tipoT)?'pit':'carrega',des:/DESIST/.test(tipoT),et:{mix:t(c[6]),fat:t(c[7]),carr:t(c[8]),fim:t(c[9])},veic,veicTxt:c[10]||''};
+      if(o.mot&&o.cheg) out.push(o); }); return out; }
+  function impHtml(){ const I=B.imp, L=I.lst, ja=o=>vivos(B.ent).some(e=>e.placa===o.placa&&hm(e.cheg)===o.cheg);
+    return `<section class="card bd-nova"><h2>Trazer do programa antigo</h2><p class="bd-sub">Cole as linhas de hoje (Ordem, Motorista, Histórico, Placa, Chegada, Tipo, Mix, Faturado, Carregado, Finalizado, Veículo), uma por linha, separadas por tab ou ponto e vírgula. Quem já está no painel não repete.</p>
+      <textarea id="bd-imp-txt" class="bd-in" rows="7" style="width:100%;font:inherit;font-size:13px">${esc(I.txt||'')}</textarea>
+      <div class="bd-libb"><button type="button" class="bd-b0" data-act="bd-impver">Conferir</button><button type="button" class="bd-lk" data-act="bd-impx">Cancelar</button></div>
+      ${L?(L.length?`<div class="bd-tw"><table class="bd-tab"><thead><tr><th>#</th><th>Motorista · cliente</th><th>Placa</th><th>Chegada</th><th>Tipo</th>${ETAPAS.map(([,n])=>`<th>${n}</th>`).join('')}<th>Veículo</th></tr></thead><tbody>${L.map(o=>`<tr${ja(o)?' style="opacity:.45"':''}><td>${o.ord||''}</td><td><b>${esc(o.mot)}</b><small>${esc(o.cli)}${ja(o)?' · já está no painel':''}</small></td><td>${esc(o.placa)}</td><td>${esc(o.cheg)}</td><td>${o.des?'Desistente':o.tipo==='pit'?'PIT':'Carrega'}</td>${ETAPAS.map(([k])=>`<td>${esc(o.et[k]||'')}</td>`).join('')}<td>${o.veic?esc(veicN(o.veic)):`<span class="bd-err">${esc(o.veicTxt||'?')}</span>`}</td></tr>`).join('')}</tbody></table></div>
+        <div class="bd-libb"><button type="button" class="bd-b1" data-act="bd-impok"${I.salv?' disabled':''}>${I.salv?'Gravando…':'Trazer '+L.filter(o=>!ja(o)).length+' caminhões'}</button></div>`:'<p class="bd-err" role="alert">Não achei nenhuma linha. Confira se cada linha tem as colunas separadas por tab ou ponto e vírgula.</p>'):''}</section>`; }
+  async function impGrava(){ const I=B.imp; if(!I||!I.lst||I.salv) return; if(!pode()) return P.toast('Seu acesso é só para ver.'); const dia=B.diaLive, agMs=Date.now()+60000;
+    const ja=o=>vivos(B.ent).some(e=>e.placa===o.placa&&hm(e.cheg)===o.cheg); const xs=I.lst.filter(o=>!ja(o)&&new Date(isoDe(dia,o.cheg)).getTime()<=agMs); if(!xs.length){ P.toast('Nada novo para trazer.'); return; }
+    I.salv=true; P.render(); let n=0;
+    try{ for(const o of xs){ const cheg=isoDe(dia,o.cheg), et={}, por={}; ETAPAS.forEach(([k])=>{ if(o.et[k]){ et[k]=isoDe(dia,o.et[k]); por[k]='programa antigo'; } });
+        const id='b'+dia.replace(/-/g,'')+'-'+novoId(); const des=o.des?{em:et.fat||et.mix||cheg,motivo:'Outro',obs:'Registrado no programa antigo',por:eu()}:null;
+        const d={dia,ord:o.ord||99,placa:o.placa,mot:o.mot,veic:o.veic||'',tipo:o.tipo,peds:[],cli:o.cli,repId:'',repNome:'',agIds:[],agKind:'sem',agData:null,carga:'',cheg,horaDigitada:true,obs:'',et,etPor:por,al:{},des,por:S.uid,porN:eu(),criado:new Date().toISOString(),origem:'programa antigo'};
+        await P.db().collection('bordo').doc(id).set(d); B.ent=B.ent.filter(e=>e._id!==id).concat([Object.assign({_id:id},d)]); n++; }
+      await renumera(dia); B.imp=null; P.toast(n+' caminhões trazidos do programa antigo.'); }
+    catch(e){ I.salv=false; P.erro(e); } P.render(); }
   function topoDia(d){ const live=d===B.diaLive, dt=new Date(d+'T12:00:00');
     return `<header class="bd-top"><div><p class="bd-eb"><button type="button" class="bd-dn" data-act="bd-dia" data-v="-1" aria-label="Dia anterior">‹</button>${esc(DSL[dt.getDay()])}, ${esc(br(d))}${live?' · hoje':''}<button type="button" class="bd-dn" data-act="bd-dia" data-v="1" aria-label="Próximo dia"${live?' disabled':''}>›</button>${live?'':'<button type="button" class="bd-lk" data-act="bd-dia" data-v="0">Voltar para hoje</button>'}</p><h1>Diário de bordo</h1></div>
-      <div class="bd-ta"><button type="button" class="btn sec" data-act="bd-csv">Planilha do dia</button>${P.viewOk('bordotv')?`<a class="btn sec" href="${esc(tvUrl())}" target="_blank" rel="noopener" title="Abre numa aba nova: arraste para o monitor e aperte F11">TV ↗</a>`:''}${pode()&&live?'<button type="button" class="btn" data-act="bd-nova">+ Registrar chegada</button>':''}</div></header>`; }
+      <div class="bd-ta">${adm()&&live&&!B.imp?'<button type="button" class="btn sec" data-act="bd-imp">Trazer do programa antigo</button>':''}<button type="button" class="btn sec" data-act="bd-csv">Planilha do dia</button>${P.viewOk('bordotv')?`<a class="btn sec" href="${esc(tvUrl())}" target="_blank" rel="noopener" title="Abre numa aba nova: arraste para o monitor e aperte F11">TV ↗</a>`:''}${pode()&&live?'<button type="button" class="btn" data-act="bd-nova">+ Registrar chegada</button>':''}</div></header>`; }
   function placaMini(p){ p=plN(p); return `<span class="bd-pl" aria-label="Placa ${esc(p)}">${esc(p)}</span>`; }
   function ovHtml(){ const O=B.ov; if(!O) return '';
     if(O.f&&B.f) return `<div class="bd-ov" role="dialog" aria-modal="true" aria-label="${B.f.edit?'Corrigir registro':'Registrar chegada'}"><div class="bd-ovb"><div class="bd-ovh"><h2>${B.f.edit?'Corrigir registro':'Registrar chegada'}</h2><button type="button" class="bd-x" data-act="bd-ovx" aria-label="Fechar">×</button></div>${formChegada(false)}</div></div>`;
@@ -288,7 +313,7 @@
       <label class="bd-lb">Observação <small>opcional</small><input id="bd-dobs" class="bd-in" maxlength="200" value="${esc(D.obs||'')}" placeholder="Ex.: esperou o mix e não liberou"></label>${D.err?`<p class="bd-err" role="alert">${esc(D.err)}</p>`:''}
       <div class="bd-facts"><button type="button" class="bd-b0" data-act="bd-ovx">Voltar</button><button type="button" class="bd-b1 mut" data-act="bd-dok" data-v="${esc(e._id)}">Marcar desistente</button></div>`; }
   function csvDia(){ const xs=ordena(vivos(linhasDia())); if(!xs.length) return P.toast('Nada neste dia.');
-    const L=[['Ordem','Motorista','Cliente','Representante','Pedidos','Placa','Veículo','Chegada','Agenda','Tipo','Mix','Faturado','Carregado','Finalizado','No pátio (min)','Desistente','Motivo']].concat(xs.map(e=>[e.ord,e.mot,e.cli,e.repNome,(e.peds||[]).join(' '),e.placa,veicN(e.veic),hm(e.cheg),agTxt(e),e.tipo==='pit'?'PIT':'Carrega'].concat(ETAPAS.map(([k])=>hm((e.et||{})[k]))).concat([patioMin(e),e.des?hm(e.des.em):'',e.des?e.des.motivo:''])));
+    const L=[['Ordem','Motorista','Cliente','Representante','Pedidos','Placa','Veículo','Chegada','Agenda','Tipo','Mix','Faturado','Carregado','Finalizado','No pátio (min)','Desistente','Motivo','Observação']].concat(xs.map(e=>[e.ord,e.mot,e.cli,e.repNome,(e.peds||[]).join(' '),e.placa,veicN(e.veic),hm(e.cheg),agTxt(e),e.tipo==='pit'?'PIT':'Carrega'].concat(ETAPAS.map(([k])=>hm((e.et||{})[k]))).concat([patioMin(e),e.des?hm(e.des.em):'',e.des?e.des.motivo:'',e.obs||''])));
     baixar('diario-de-bordo-'+B.dia+'.csv',L); }
   function baixar(nome,L){ const t='﻿'+L.map(r=>r.map(c=>{ c=c==null?'':String(c); return /[;"\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c; }).join(';')).join('\r\n');
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([t],{type:'text/csv;charset=utf-8'})); a.download=nome; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500); }
@@ -546,7 +571,7 @@
     if(B.f) return `<section class="bd-pcard"><div class="bd-ph"><button type="button" class="bd-lk" data-act="bd-p-x">‹ Caminhões</button><h1>${B.f.edit?'Corrigir registro':'Registrar chegada'}</h1></div>${formChegada(true)}</section>`;
     if(B.ov&&B.ov.des){ const e=entDe(B.ov.des.id); if(e) return `<section class="bd-pcard">${desHtml(e)}</section>`; }
     const vs=ordena(vivos(B.ent)), pat=vs.filter(e=>estado(e).k==='pend'), out=vs.filter(e=>estado(e).k!=='pend');
-    const card=e=>{ const st=estado(e); return `<li class="bd-pi2 ${st.k==='fim'?'fim':st.k==='des'?'des':st.atr?'atr':''}"><span class="bd-po">${e.ord}</span><span class="bd-pt2"><b>${esc(e.mot)}</b><small>${esc(e.placa)} · ${esc(veicN(e.veic))}${e.cli?' · '+esc(e.cli):''}</small>
+    const card=e=>{ const st=estado(e); return `<li class="bd-pi2 ${st.k==='fim'?'fim':st.k==='des'?'des':st.atr?'atr':''}"><span class="bd-po">${e.ord}</span><span class="bd-pt2"><b>${esc(e.mot)}</b><small>${esc(e.placa)} · ${esc(veicN(e.veic))}${e.cli?' · '+esc(e.cli):''}</small>${e.obs?`<small class="bd-obs">Obs.: ${esc(e.obs)}</small>`:''}
       <small>${st.k==='pend'?'Chegou '+esc(hm(e.cheg))+' · esperando '+esc(ETN[st.etapa].toLowerCase())+' há '+esc(dur(st.min)):st.k==='fim'?'Finalizado '+esc(hm(e.et.fim)):'Desistiu '+esc(hm(e.des.em))+' · '+esc(e.des.motivo)}</small></span>
       ${pode()?`<span class="bd-pa">${st.k==='pend'?`<button type="button" class="bd-b0 sm" data-act="bd-et" data-v="${esc(e._id)}|fim">Saiu</button><button type="button" class="bd-lk" data-act="bd-des" data-v="${esc(e._id)}">Desistiu</button>`:''}<button type="button" class="bd-lk" data-act="bd-ed" data-v="${esc(e._id)}">Corrigir</button></span>`:''}</li>`; };
     return `<div class="bd-ptl"><section class="bd-phero"><div><p class="bd-eb">${esc(DSL[new Date().getDay()])}, ${esc(br(hoje()))}</p><h1>Caminhões</h1></div><div class="bd-pcnt"><div><b>${pat.length}</b><span>no pátio</span></div><div><b>${out.filter(e=>!e.des).length}</b><span>saíram</span></div></div>
@@ -573,6 +598,7 @@
     if(F&&t.id==='bd-f-placa'){ const v=t.value.toUpperCase().replace(/[^A-Z0-9-]/g,''); if(t.value!==v) t.value=v; F.placa=v; if(F.err&&F.err.id==='bd-f-placa'){ F.err=null; } clearTimeout(olhaPlaca._t); olhaPlaca._t=setTimeout(olhaPlaca,450); return; }
     if(F&&t.id==='bd-f-mot'){ F.mot=t.value; return; }
     if(F&&t.id==='bd-f-cli'){ F.cli=t.value; return; }
+    if(F&&t.id==='bd-f-obs'){ F.obs=t.value; return; }
     const etK=Object.keys(ETID).find(k=>ETID[k]===t.id);
     if(F&&(t.id==='bd-f-hora'||etK)){ let dg=t.value.replace(/\D/g,'').slice(0,4); if(dg.length>=3) dg=dg.slice(0,dg.length-2)+':'+dg.slice(-2); if(t.value!==dg) t.value=dg; if(etK){ F.ets=F.ets||{}; F.ets[etK]=dg; } else F.hora=dg; if(F.err&&(F.err.id===t.id)) F.err=null;
       if(t.id==='bd-f-hora'){ const b=document.querySelector('[data-act="bd-f-ok"]'); if(b&&!F.edit&&!F.salvando) b.textContent='Registrar chegada · '+(hmOk(dg)?dg.padStart(5,'0'):hm(new Date().toISOString())); } return; }
@@ -595,7 +621,7 @@
     if(ev.key==='Escape'&&B.ov){ B.ov=null; if(S.view!=='bdport') B.f=null; P.render(); } });
   document.addEventListener('click',async ev=>{ const b=ev.target.closest&&ev.target.closest('[data-act^="bd-"]'); if(!b) return; const a=b.dataset.act, v=b.dataset.v; if(b.tagName!=='A') ev.preventDefault();
     if(a==='bd-nova'){ if(!pode()) return P.toast('Seu acesso é só para ver.'); B.f=novoForm(); B.port.feito=null; if(S.view!=='bdport') B.ov={f:1}; P.render(); setTimeout(()=>{ const i=document.getElementById('bd-f-placa'); i&&i.focus(); },60); return; }
-    if(a==='bd-ed'){ const e=entDe(v); if(!e) return; B.f=novoForm({placa:e.placa,mot:e.mot,peds:(e.peds||[]).slice(),repId:e.repId||'',veic:e.veic||'',tipo:e.tipo||'carrega',cli:e.cli||'',edit:e._id,hora:hm(e.cheg),ets:Object.fromEntries(ETAPAS.map(([k])=>[k,hm((e.et||{})[k])]))}); B.ov={f:1}; P.render(); return; }
+    if(a==='bd-ed'){ const e=entDe(v); if(!e) return; B.f=novoForm({placa:e.placa,mot:e.mot,peds:(e.peds||[]).slice(),repId:e.repId||'',veic:e.veic||'',tipo:e.tipo||'carrega',cli:e.cli||'',edit:e._id,obs:e.obs||'',hora:hm(e.cheg),ets:Object.fromEntries(ETAPAS.map(([k])=>[k,hm((e.et||{})[k])]))}); B.ov={f:1}; P.render(); return; }
     if(a==='bd-ovx'||a==='bd-p-x'){ B.ov=null; B.f=null; P.render(); return; }
     if(a==='bd-f-px'&&B.f){ B.f.peds.splice(+v,1); olhaAg(); rr(); return; }
     if(a==='bd-f-rep'&&B.f){ B.f.repId=B.f.repId===v?'':v; B.f.repAbre=false; rr(); return; }
@@ -633,6 +659,10 @@
       try{ await solMuda(v,{quer:{dia:s.acao.dia||'',turno:s.acao.turno||''},acao:Object.assign({},s.acao,{feito:'aceito',em2:new Date().toISOString()})},'Novo dia pedido pelo representante: '+br(s.acao.dia)); }catch(e){ P.erro(e); } P.render(); return; }
     if(a==='bd-s-ano'){ const s=solDe(v); if(!s||!s.acao) return; try{ await solMuda(v,{acao:Object.assign({},s.acao,{feito:'recusado',em2:new Date().toISOString()})},'Pedido do representante recusado'); avisaRep(s.repId,'Pedido não aceito','O faturamento não conseguiu '+(s.acao.tipo==='cancelar'?'cancelar':'mudar o dia d')+'o pedido '+(s.peds||[]).join(', ')+'. Fale com o faturamento.'); }catch(e){ P.erro(e); } P.render(); return; }
     if(a==='bd-f-reag') return reagFalta(v,false); if(a==='bd-f-canc') return reagFalta(v,true);
+    if(a==='bd-imp'){ B.imp={txt:'',lst:null}; P.render(); setTimeout(()=>{ const t=document.getElementById('bd-imp-txt'); if(t) t.focus(); },50); return; }
+    if(a==='bd-impx'){ B.imp=null; P.render(); return; }
+    if(a==='bd-impver'){ const t=document.getElementById('bd-imp-txt'); B.imp={txt:t?t.value:'',lst:impLer(t?t.value:'')}; P.render(); return; }
+    if(a==='bd-impok') return impGrava();
     if(a==='bd-r-novo'){ B.edRep={}; P.render(); return; } if(a==='bd-r-x'){ B.edRep=null; P.render(); return; }
     if(a==='bd-r-ed'){ const r=repDe(v); if(r){ B.edRep={id:r.id,nome:r.nome,reg:r.reg,tel:r.tel,ct:r.ct||'',em:r.em||''}; B.colar=null; P.render(); } return; }
     if(a==='bd-r-colar'){ B.colar={txt:'',lst:null}; B.edRep=null; P.render(); setTimeout(()=>{ const t=document.getElementById('bd-r-txt'); if(t) t.focus(); },50); return; }
@@ -646,7 +676,7 @@
     if(a==='bd-a-salva') return salvaAjustes();
     if(a==='bd-rmes'){ const [y,m]=B.rel.mes.split('-').map(Number), d=new Date(y,m-1+(+v),1); B.rel.mes=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); B.rel.d=null; P.render(); return; }
     if(a==='bd-rprint'){ window.print(); return; }
-    if(a==='bd-rcsv'){ const R=B.rel.d; if(!R) return; baixar('diario-de-bordo-'+B.rel.mes+'.csv',[['Dia','Ordem','Motorista','Cliente','Representante','Pedidos','Placa','Veículo','Chegada','Agenda','Tipo','Mix','Faturado','Carregado','Finalizado','No pátio (min)','Desistente','Motivo']].concat(ordena(R.ent).sort((a,b)=>String(a.dia).localeCompare(String(b.dia))).map(e=>[br(e.dia),e.ord,e.mot,e.cli,e.repNome,(e.peds||[]).join(' '),e.placa,veicN(e.veic),hm(e.cheg),agTxt(e),e.tipo==='pit'?'PIT':'Carrega'].concat(ETAPAS.map(([k])=>hm((e.et||{})[k]))).concat([patioMin(e),e.des?hm(e.des.em):'',e.des?e.des.motivo:''])))); return; } });
+    if(a==='bd-rcsv'){ const R=B.rel.d; if(!R) return; baixar('diario-de-bordo-'+B.rel.mes+'.csv',[['Dia','Ordem','Motorista','Cliente','Representante','Pedidos','Placa','Veículo','Chegada','Agenda','Tipo','Mix','Faturado','Carregado','Finalizado','No pátio (min)','Desistente','Motivo','Observação']].concat(ordena(R.ent).sort((a,b)=>String(a.dia).localeCompare(String(b.dia))).map(e=>[br(e.dia),e.ord,e.mot,e.cli,e.repNome,(e.peds||[]).join(' '),e.placa,veicN(e.veic),hm(e.cheg),agTxt(e),e.tipo==='pit'?'PIT':'Carrega'].concat(ETAPAS.map(([k])=>hm((e.et||{})[k]))).concat([patioMin(e),e.des?hm(e.des.em):'',e.des?e.des.motivo:'',e.obs||''])))); return; } });
   /* TV: troca de aba sozinha (tocar numa aba segura ela por 2 min) */
   setInterval(()=>{ if(S.view!=='bordotv'){ if(document.body.classList.contains('bd-tvon')) document.body.classList.remove('bd-tvon'); B.tv.cheia=false; return; }
     const ag=Date.now(); if(ag-B.tv.fixo<120000) return; if(ag-B.tv.troca>=segTV()*1000){ B.tv.aba=B.tv.aba==='diario'?'agend':'diario'; B.tv.troca=ag; P.render(); } },1000);
@@ -789,5 +819,7 @@
   .bd-f4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}@media (max-width:560px){.bd-f4{grid-template-columns:1fr 1fr}}
 
   .bd-repsel{display:flex;align-items:center;gap:12px;border:2px solid var(--teal-strong,#163c52);border-radius:12px;padding:10px 12px;background:var(--teal-tint,#eaf3f6)}.bd-rst{flex:1;min-width:0}.bd-rst b{display:block}.bd-rst small{color:var(--muted);font-size:12px}.bd-repsel .bd-rdot{flex:none;width:16px;height:16px;border-radius:50%;border:5px solid var(--teal-strong,#163c52);background:#fff}
+
+  .bd-obs{display:block;color:#8a5a12!important;font-style:italic;max-width:340px;white-space:normal}
 </style>`);
 })();

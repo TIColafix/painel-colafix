@@ -219,9 +219,12 @@ service cloud.firestore {
     function carrosMot() { return liberado() && (acs().get('mods', []).hasAny(['motorista']) || acs().get('extras', []).hasAny(['motorista'])); }
     match /carrosv/{id} {
       allow read: if carrosOk() || (carrosMot() && resource.data.motUid == request.auth.uid);
-      allow create: if carrosOk() && (dono() || !soVer());
+      // 27/11: o vendedor pede a saída pelo celular (pedida, ainda não aberta) e entrega o carro (devol + devolPed + foto do painel); a portaria libera e recebe
+      allow create: if (carrosOk() && (dono() || !soVer()))
+        || (carrosMot() && request.resource.data.motUid == request.auth.uid && request.resource.data.get('pedida', false) == true && request.resource.data.get('aberta', true) == false);
       allow update: if (carrosOk() && (dono() || !soVer()))
-        || (carrosMot() && resource.data.motUid == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aceite', 'devol', 'comb']));
+        || (carrosMot() && resource.data.motUid == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aceite', 'devol', 'comb', 'devolPed', 'fotoPV']))
+        || (carrosMot() && resource.data.motUid == request.auth.uid && resource.data.get('pedida', false) == true && request.resource.data.pedida == false && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pedida', 'cancelada']));
       allow delete: if dono(); }  // só a dona apaga (limpeza dos testes)
     // CPF e nome do motorista (26/11): só o adm grava; leem o adm e o próprio motorista
     match /carrosp/{id} { allow read: if carrosAdm() || (carrosMot() && resource.data.uid == request.auth.uid); allow write: if carrosAdm(); }
@@ -233,7 +236,7 @@ service cloud.firestore {
       allow read: if carrosOk() || (carrosMot() && resource.data.por == request.auth.uid);
       allow create: if (carrosOk() || carrosMot()) && request.resource.data.por == request.auth.uid && request.resource.data.d is string && request.resource.data.d.size() < 900000;
       allow update: if false; allow delete: if dono(); }
-    match /carrosk/{id} { allow read: if carrosOk(); allow write: if carrosOk() && (dono() || !soVer()); }
+    match /carrosk/{id} { allow read: if carrosOk() || carrosMot(); allow write: if carrosOk() && (dono() || !soVer()); }
     // Atestado pelo link (27/11/2026, atestado.html): o funcionário, sem login, só CRIA o envio e as fotos (não lê nada);
     // o RH (rhOk) lê, marca como registrado/recusado e apaga as fotos depois de guardar o documento.
     match /rhatestrec/{id} {

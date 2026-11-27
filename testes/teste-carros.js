@@ -59,7 +59,7 @@ const H=require('./harness'); const res=[]; const ok=(n,c,d)=>{ res.push({n,ok:!
  const tf=await pb.evaluate(()=>(document.querySelector('.cv-feito')||{}).innerText||'');
  ok('Tela de confirmação da saída (placa, motorista, km, km sem registro)', /Saída registrada/.test(tf)&&/ABC1D23/.test(tf)&&/Carlos Bento/.test(tf)&&/45\.250/.test(tf)&&/20 km sem registro/.test(tf), tf.replace(/\n/g,' | '));
  if(process.env.SHOT) await pb.addStyleTag({content:'.cv-bar{position:static!important}'}); await pb.screenshot({path:'/home/claude/scripts/cv-feito.png',fullPage:true});
- ok('Saída com motorista de login fica aguardando aceite', vs[0].motUid==='uMOT'&&vs[0].precisaAceite===true&&vs[0].aceite==null&&/O Carlos recebeu o aviso para confirmar a saída/.test(tf));
+ ok('Saída com motorista de login fica aguardando aceite', vs[0].motUid==='uMOT'&&vs[0].precisaAceite===true&&vs[0].aceite==null&&/Peça para o Carlos abrir o painel no celular e confirmar a saída/.test(tf));
  await pb.click('[data-act="cv-feito"]'); await H.dorme(300);
  ok('Na portaria o carro mostra "Aguardando aceite do motorista"', await pb.evaluate(()=>/Aguardando aceite do motorista/.test(document.body.innerText)));
  /* ---------- motorista ---------- */
@@ -91,7 +91,7 @@ const H=require('./harness'); const res=[]; const ok=(n,c,d)=>{ res.push({n,ok:!
  await pm.click('[data-act="cv-ma-ok"]'); await H.dorme(900);
  let sm=await srv(pm); const ac=sm['carrosv/'+vid].aceite||{};
  ok('Aceite gravado: pegou, limpo, avaria com texto e foto, termo', ac.pegou&&ac.limpo===true&&ac.avaria===true&&ac.avariaTxt==='Risco na porta direita'&&ac.termo===true&&(ac.fotos||[]).length===1&&!!sm['carrosf/'+ac.fotos[0]]&&sm['carrosf/'+ac.fotos[0]].tipo==='saida', JSON.stringify(ac).slice(0,250));
- ok('Depois do aceite: "Você está com o carro" e histórico', await pm.evaluate(()=>/Você está com o carro/.test(document.body.innerText)&&/Histórico/.test(document.body.innerText)&&/em uso/.test(document.body.innerText)));
+ ok('Depois do aceite: "Você está com o carro" e histórico', await pm.evaluate(()=>/Você está com o carro/.test(document.body.innerText)&&/Histórico/.test(document.body.innerText)&&/Em uso/.test(document.body.innerText)));
  /* a portaria recebe o aceite */
  await pb.evaluate(x=>{ const o=JSON.parse(localStorage.getItem('__srv')); o.docs=x; localStorage.setItem('__srv',JSON.stringify(o)); },sm); await pb.reload(); await H.dorme(3500);
  const t1=await pb.evaluate(()=>document.body.innerText);
@@ -137,6 +137,18 @@ const H=require('./harness'); const res=[]; const ok=(n,c,d)=>{ res.push({n,ok:!
  const [dc]=await Promise.all([pa2.waitForEvent('download',{timeout:8000}).catch(()=>null),pa2.click('[data-act="cv-csv"]')]);
  let csv=''; if(dc){ const fp='/tmp/viag.csv'; await dc.saveAs(fp); csv=require('fs').readFileSync(fp,'utf8'); }
  ok('Planilha das viagens', dc&&/^viagens-carros-/.test(dc.suggestedFilename())&&/Placa;Modelo;Nº de frota;Motorista/.test(csv)&&/ABC1D23;Fiat Strada branca;12;Carlos Bento;123\.456\.789-09;/.test(csv)&&/;108;/.test(csv)&&/Nº de frota;Motorista;CPF do motorista/.test(csv), csv.slice(0,200));
+ /* ---------- dona apaga os dados de teste ---------- */
+ const A3=await H.abrir({viewport:{width:1366,height:900}}); const pd=A3.page; pd.on('pageerror',e=>erros.push(e.message)); await H.preparar(pd,{users:d.users,docs:await srv(pm)}); await pd.goto(H.BASE); await H.entrar(pd,'iasmyn','senha123'); await H.dorme(3000);
+ await pd.evaluate(()=>__T.go('carcad')); await H.dorme(1200);
+ ok('A dona vê "Apagar dados de teste"; o adm comum não', await pd.evaluate(()=>/Apagar dados de teste/.test(document.body.innerText))&&!(await pa2.evaluate(()=>{ __T.go('carcad'); return /Apagar dados de teste/.test(document.body.innerText); })));
+ await pd.click('[data-act="cv-lim"][data-v="viagens"]'); await H.dorme(200); await pd.fill('#cv-lim-tx','apaga'); await pd.click('[data-act="cv-lim-ok"]'); await H.dorme(300);
+ ok('Sem digitar APAGAR não apaga', await pd.evaluate(()=>/Digite APAGAR para confirmar/.test(document.body.innerText)));
+ await pd.fill('#cv-lim-tx','APAGAR'); await pd.click('[data-act="cv-lim-ok"]'); await H.dorme(1500);
+ let sd=await srv(pd); const sobra=Object.keys(sd).filter(k=>/^(carrosv|carrosf|carrosk|carrost)\//.test(k));
+ ok('Apaga viagens, fotos, km e termos; carros e motoristas ficam', !sobra.length&&sd['carros/cad'].carros.length===2&&sd['carros/cad'].mot.length===2&&Object.keys(sd).some(k=>k.startsWith('carrosp/')), sobra.join(','));
+ await pd.click('[data-act="cv-lim"][data-v="tudo"]'); await H.dorme(200); await pd.fill('#cv-lim-tx','APAGAR'); await pd.click('[data-act="cv-lim-ok"]'); await H.dorme(1500);
+ sd=await srv(pd); ok('"Tudo dos carros" apaga também carros, motoristas e CPFs', sd['carros/cad'].carros.length===0&&sd['carros/cad'].mot.length===0&&!Object.keys(sd).some(k=>k.startsWith('carrosp/')));
+ await A3.browser.close();
  ok('Sem erro de script', !erros.length, erros.join(' | '));
  await A.browser.close(); await B.browser.close(); await A2.browser.close(); await M.browser.close();
  const fl=res.filter(x=>!x.ok); console.log(fl.length?fl.length+' FALHOU':'tudo PASSOU'); process.exit(fl.length?1:0); })().catch(e=>{ console.error(e); process.exit(1); });

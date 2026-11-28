@@ -270,6 +270,24 @@
     if(t) return `<td class="bd-et"><button type="button" class="bd-ok" data-act="bd-et" data-v="${esc(e._id)}|${k}" title="${esc(ETN[k]+' por '+(po||'?')+' · tocar para desmarcar')}">${esc(hm(t))}</button></td>`;
     const ag=st.k==='pend'&&st.etapa===k;
     return `<td class="bd-et"><button type="button" class="${ag?(st.atr?'bd-atr':'bd-esp'):'bd-nx'}" data-act="bd-et" data-v="${esc(e._id)}|${k}" title="Marcar ${esc(ETN[k])} agora">${ag?(st.atr?'⚠ ':'')+esc(dur(st.min)):'marcar'}</button></td>`; }
+  /* 28/11/2026 ("melhorar os botões … para serem o mais funcional possível", layout aprovado no canvas):
+     Próximo passo = um botão que muda (Chamar motorista → Entrou · carregando → Carregando desde…); Pedido = dois botões colados
+     (o marcado fica colorido, tocar de novo desmarca); ⋯ = Motivo da demora, Desistiu, Corrigir (vermelho se passou do tempo sem motivo). */
+  function acoesLinha(e,st){ const id=esc(e._id), w=pode();
+    let px='';
+    if(st.k==='fim') px=`<span class="bd-pxf ok">Saiu ${esc(hm(e.et.fim))}</span>`;
+    else if(st.k==='des') px=`<span class="bd-pxf">Desistiu ${esc(hm(e.des.em))}</span>`;
+    else if(e.entrou) px=`<span class="bd-pxs">Carregando desde ${esc(hm(e.entrou.em))}</span>${w?`<button type="button" class="bd-pxu" data-act="bd-entrou" data-v="${id}">desfazer entrada</button>`:''}`;
+    else if(e.cham) px=w?`<button type="button" class="bd-px ent" data-act="bd-entrou" data-v="${id}">Entrou · carregando</button><button type="button" class="bd-pxu" data-act="bd-cham" data-v="${id}">Chamado ${esc(hm(e.cham.em))} · desfazer</button>`:`<span class="bd-pxs">Entrada liberada ${esc(hm(e.cham.em))}</span>`;
+    else px=w?`<button type="button" class="bd-px" data-act="bd-cham" data-v="${id}">📣 Chamar motorista</button>`:`<span class="bd-pxf">Aguardando</span>`;
+    const pd=st.k==='des'?'':w?`<div class="bd-seg2" role="group" aria-label="Situação do pedido"><button type="button" class="ok" aria-pressed="${e.pedSt==='ok'}" data-act="bd-ped" data-v="${id}|ok">${e.pedSt==='ok'?'✓ ':''}Pedido OK</button><button type="button" class="rep" aria-pressed="${e.pedSt==='rep'}" data-act="bd-ped" data-v="${id}|rep">Aguard. rep.</button></div>`
+      :`<span class="bd-pxf">${esc(e.pedSt==='ok'?'Pedido OK':e.pedSt==='rep'?'Aguardando representante':'—')}</span>`;
+    const alerta=st.k==='pend'&&st.atr&&!e.dem, aberto=B.menu===e._id;
+    const mn=w?`<div class="bd-mn"><button type="button" class="bd-mnb${alerta?' crit':''}" data-act="bd-mais" data-v="${id}" aria-expanded="${aberto}" aria-label="Mais ações${alerta?': falta o motivo da demora':''}">⋯</button>${aberto?`<div class="bd-mnl" role="menu">
+        ${st.k!=='des'?`<button type="button" role="menuitem" class="${alerta?'crit':''}" data-act="bd-dem" data-v="${id}">${e.dem?'Motivo da demora ✓ (mudar)':alerta?'⚠ Motivo da demora':'Motivo da demora'}</button>`:''}
+        ${st.k==='pend'?`<button type="button" role="menuitem" data-act="bd-des" data-v="${id}">Desistiu</button>`:''}
+        <button type="button" role="menuitem" data-act="bd-ed" data-v="${id}">Corrigir</button></div>`:''}</div>`:'';
+    return `<td class="bd-pxc">${px}</td><td class="bd-pdc">${pd}</td><td class="bd-mnc">${mn}</td>`; }
   function vDiario(){ iniciar(); if(!B.lido.dia) return '<section class="card"><div class="empty">Carregando o diário de bordo…</div></section>';
     const d=B.dia, xs=linhasDia(), live=d===B.diaLive; if(!live&&!B.outro) return topoDia(d)+'<section class="card"><div class="empty">Carregando o dia '+esc(br(d))+'…</div></section>';
     const K=kpis(xs), vs=ordena(vivos(xs)), f=B.filt;
@@ -291,8 +309,8 @@
         <td><span class="bd-tp ${e.des?'des':e.tipo}">${e.des?'Desistente':e.tipo==='pit'?'PIT':'Carrega'}</span>${e.des?`<small>${esc(e.des.motivo)}</small>`:''}</td>
         ${ETAPAS.map(([k])=>celEtapa(e,k,st)).join('')}
         <td class="bd-num bd-pt${st.atr?' atr':''}">${e.des?'saiu '+esc(hm(e.des.em)):esc(dur(pm))}</td>
-        <td class="bd-acts">${pode()&&st.k==='pend'?`<button type="button" class="bd-lk bd-cham${e.cham?' on':''}" data-act="bd-cham" data-v="${esc(e._id)}" title="${e.cham?'Tocar para desfazer':'A TV dos motoristas mostra ENTRADA LIBERADA'}">${e.entrou?'✓ Entrou '+esc(hm(e.entrou.em)):e.cham?'📣 Chamado '+esc(hm(e.cham.em)):'📣 Chamar motorista'}</button>${e.cham&&!e.entrou?`<button type="button" class="bd-lk bd-ent" data-act="bd-entrou" data-v="${esc(e._id)}" title="Marca que o motorista entrou: a TV dos motoristas mostra CARREGANDO">▶ Entrou · carregando</button>`:''}`:''}${pode()&&st.k!=='des'?(e.pedSt?`<button type="button" class="bd-lk bd-ped ${e.pedSt}" data-act="bd-ped" data-v="${esc(e._id)}|${e.pedSt}" title="Tocar para apagar">${e.pedSt==='ok'?'✓ Pedido OK':'⏳ Aguard. representante'}</button>`:`<button type="button" class="bd-lk" data-act="bd-ped" data-v="${esc(e._id)}|ok">Pedido OK</button><button type="button" class="bd-lk" data-act="bd-ped" data-v="${esc(e._id)}|rep">Aguard. rep.</button>`):''}${pode()&&st.k!=='des'?`<button type="button" class="bd-lk${st.atr&&!e.dem?' bd-lkw':''}" data-act="bd-dem" data-v="${esc(e._id)}">${e.dem?'Demora ✓':st.atr?'⚠ Motivo da demora':'Demora'}</button>`:''}${pode()&&st.k==='pend'?`<button type="button" class="bd-lk" data-act="bd-des" data-v="${esc(e._id)}">Desistiu</button>`:''}${pode()?`<button type="button" class="bd-lk" data-act="bd-ed" data-v="${esc(e._id)}">Corrigir</button>`:''}</td></tr>`; };
-    const tab=vs.length?`<div class="bd-tw"><table class="bd-tab"><thead><tr><th>#</th><th>Motorista · cliente</th><th>Placa · veículo</th><th>Chegada</th><th>Agenda</th><th>Tipo</th>${ETAPAS.map(([,n])=>`<th>${n}</th>`).join('')}<th class="r">No pátio</th><th><span class="sr">Ações</span></th></tr></thead><tbody>${rows.map(linha).join('')||'<tr><td colspan="13" class="bd-vz">Nada neste filtro.</td></tr>'}</tbody></table></div>
+        ${acoesLinha(e,st)}</tr>`; };
+    const tab=vs.length?`<div class="bd-tw"><table class="bd-tab"><thead><tr><th>#</th><th>Motorista · cliente</th><th>Placa · veículo</th><th>Chegada</th><th>Agenda</th><th>Tipo</th>${ETAPAS.map(([,n])=>`<th>${n}</th>`).join('')}<th class="r">No pátio</th><th>Próximo passo</th><th>Pedido</th><th><span class="sr">Mais ações</span></th></tr></thead><tbody>${rows.map(linha).join('')||'<tr><td colspan="15" class="bd-vz">Nada neste filtro.</td></tr>'}</tbody></table></div>
       <p class="bd-leg">Toque na etapa para marcar a hora${juntos()?' (Faturado preenche o Mix se estiver vazio; Finalizado preenche o Carregado). Para mudar uma hora, use Corrigir':''}. Laranja: esperando agora, com o tempo · vermelho: passou do tempo combinado (${ETAPAS.map(([k,n])=>n.toLowerCase()+' '+lim(k)+' min').join(', ')}) · verde: finalizado · cinza: desistente.</p>`
       :`<div class="bd-vz2"><b>${live?'Nenhum caminhão chegou ainda hoje.':'Nenhum caminhão neste dia.'}</b><span>${live?'A portaria registra a chegada pelo celular, ou use "+ Registrar chegada".':''}</span></div>`;
     return topoDia(d)+(B.imp&&live?impHtml():'')+kp+`<section class="card bd-card"><div class="bd-bar"><h2>Fila ${live?'de hoje':'do dia'}</h2>${ch('todos','Todos',vs.length)}${ch('patio','No pátio',K.pat.length)}${ch('fim','Finalizados',K.fim.length)}${ch('des','Desistentes',K.des.length)}
@@ -680,20 +698,51 @@
   function vPort(){ iniciarBase(); const so=portSolo(); try{ document.body.classList.toggle('cv-solo',so); }catch(e){}
     const corpo=portCorpo(); if(!so) return corpo;
     const bar=P.cvBar?P.cvBar('Portaria'):''; return `<div class="cv-app">${bar}<main class="cv-appc">${corpo}</main></div>`; }
+  /* 28/11/2026 (layout B escolhido): no computador (tela larga) o formulário de chegada fica sempre aberto à esquerda e a lista à direita,
+     com "Chamados para entrar" em destaque; no celular continua a lista com o botão "Registrar chegada". */
+  const portLarga=()=>{ try{ return window.innerWidth>=1100; }catch(e){ return false; } };
+  let _pLarga=portLarga(); window.addEventListener('resize',()=>{ const l=portLarga(); if(l===_pLarga) return; _pLarga=l; if(S.view==='bdport'){ if(!l&&B.f&&!B.f.edit&&!B.f.placa&&!B.f.mot) B.f=null; P.render(); } });
   function portCorpo(){ if(!B.lido.dia||!B.lido.cfg) return '<section class="card"><div class="empty">Carregando…</div></section>';
-    const Fd=B.port.feito;
-    if(Fd) return `<section class="bd-pf" role="status"><span class="bd-pfok" aria-hidden="true">✓</span><h1>Chegada registrada</h1><p class="bd-pfn">Nº <b>${Fd.ord}</b> no diário de bordo</p>${placaMini(Fd.placa)}<dl><div><dt>Motorista</dt><dd>${esc(Fd.mot)}</dd></div><div><dt>Hora</dt><dd>${esc(hm(Fd.cheg))}</dd></div><div><dt>Agenda</dt><dd>${esc(agTxt(Fd))}</dd></div>${Fd.cli?`<div><dt>Cliente</dt><dd>${esc(Fd.cli)}</dd></div>`:''}</dl><button type="button" class="bd-b1" data-act="bd-p-ok">Voltar</button><p class="bd-hint">Volta sozinho em alguns segundos</p></section>`;
-    if(B.f) return `<section class="bd-pcard"><div class="bd-ph"><button type="button" class="bd-lk" data-act="bd-p-x">‹ Caminhões</button><h1>${B.f.edit?'Corrigir registro':'Registrar chegada'}</h1></div>${formChegada(true)}</section>`;
-    if(B.ov&&B.ov.des){ const e=entDe(B.ov.des.id); if(e) return `<section class="bd-pcard">${desHtml(e)}</section>`; }
-    const vs=ordena(vivos(B.ent)), pat0=vs.filter(e=>estado(e).k==='pend'), chs=pat0.filter(e=>e.cham&&!e.entrou), pat=pat0.filter(e=>!(e.cham&&!e.entrou)), out=vs.filter(e=>estado(e).k!=='pend');
-    const card=e=>{ const st=estado(e); return `<li class="bd-pi2 ${st.k==='fim'?'fim':st.k==='des'?'des':st.atr?'atr':''}"><span class="bd-po">${e.ord}</span><span class="bd-pt2"><b>${esc(e.mot)}</b><small>${esc(e.placa)} · ${esc(veicN(e.veic))}${e.cli?' · '+esc(e.cli):''}</small>${e.obs?`<small class="bd-obs">Obs.: ${esc(e.obs)}</small>`:''}
-      ${ficou(e)?`<small class="bd-ficou">Ficou de ${esc(br(ficou(e)))}</small>`:''}${e.cham&&!e.entrou&&st.k==='pend'?`<small class="bd-pchm">📣 Chamado às ${esc(hm(e.cham.em))} · entrada liberada</small>`:e.entrou&&st.k==='pend'?`<small>Entrou às ${esc(hm(e.entrou.em))} · carregando</small>`:''}<small>${st.k==='pend'?'Chegou '+esc(hm(e.cheg))+' · esperando '+esc(ETN[st.etapa].toLowerCase())+' há '+esc(dur(st.min)):st.k==='fim'?'Finalizado '+esc(hm(e.et.fim)):'Desistiu '+esc(hm(e.des.em))+' · '+esc(e.des.motivo)}</small></span>
-      ${pode()?`<span class="bd-pa">${st.k==='pend'&&!e.entrou?`<button type="button" class="${e.cham?'bd-b1 ok':'bd-b0'} sm" data-act="bd-entrou" data-v="${esc(e._id)}">Entrou</button>`:''}${st.k==='pend'?`<button type="button" class="bd-b0 sm" data-act="bd-et" data-v="${esc(e._id)}|fim">Saiu</button><button type="button" class="bd-lk" data-act="bd-des" data-v="${esc(e._id)}">Desistiu</button>`:''}<button type="button" class="bd-lk" data-act="bd-ed" data-v="${esc(e._id)}">Corrigir</button></span>`:''}</li>`; };
+    const Fd=B.port.feito, larga=portLarga();
+    if(Fd&&!larga) return `<section class="bd-pf" role="status"><span class="bd-pfok" aria-hidden="true">✓</span><h1>Chegada registrada</h1><p class="bd-pfn">Nº <b>${Fd.ord}</b> no diário de bordo</p>${placaMini(Fd.placa)}<dl><div><dt>Motorista</dt><dd>${esc(Fd.mot)}</dd></div><div><dt>Hora</dt><dd>${esc(hm(Fd.cheg))}</dd></div><div><dt>Agenda</dt><dd>${esc(agTxt(Fd))}</dd></div>${Fd.cli?`<div><dt>Cliente</dt><dd>${esc(Fd.cli)}</dd></div>`:''}</dl><button type="button" class="bd-b1" data-act="bd-p-ok">Voltar</button><p class="bd-hint">Volta sozinho em alguns segundos</p></section>`;
+    if(B.f&&!larga) return `<section class="bd-pcard"><div class="bd-ph"><button type="button" class="bd-lk" data-act="bd-p-x">‹ Caminhões</button><h1>${B.f.edit?'Corrigir registro':'Registrar chegada'}</h1></div>${formChegada(true)}</section>`;
+    if(B.ov&&B.ov.des&&!larga){ const e=entDe(B.ov.des.id); if(e) return `<section class="bd-pcard">${desHtml(e)}</section>`; }
+    /* 28/11/2026 (layout C aprovado): lista com um botão grande por caminhão; quem tem ação sobe (chamados, carregando, aguardando).
+       No computador vira tabela; no celular cada linha vira um cartão. Busca filtra sem redesenhar. */
+    const vs=ordena(vivos(B.ent)), pat0=vs.filter(e=>estado(e).k==='pend'), out=vs.filter(e=>estado(e).k!=='pend');
+    const pr=e=>{ const k=mtSit(e).k; return k==='cham'?0:k==='carr'?1:2; };
+    const pat=pat0.slice().sort((a,b)=>pr(a)-pr(b)||(+a.ord||0)-(+b.ord||0)), chs=pat.filter(e=>pr(e)===0);
+    const bus=e=>esc(norm([e.placa,e.mot,e.cli].join(' ')));
+    const sit=e=>{ const st=estado(e), si=mtSit(e);
+      if(si.k==='cham') return `<span class="bd-st3 cham">ENTRADA LIBERADA ${esc(hm(e.cham.em))}</span><small class="bd-pchm">📣 Chamado às ${esc(hm(e.cham.em))} · entrada liberada</small>`;
+      if(si.k==='carr') return `<span class="bd-st3 carr">CARREGANDO${e.entrou?' · '+esc(dur(minDe(e.entrou.em))):''}</span>${e.entrou?`<small>Entrou às ${esc(hm(e.entrou.em))}</small>`:''}`;
+      return `<span class="bd-st3${st.atr?' atr':''}">AGUARDANDO · ${esc(dur(minDe(e.cheg)))}</span><small>Chegou ${esc(hm(e.cheg))} · esperando ${esc(ETN[st.etapa].toLowerCase())}</small>`; };
+    const acao=e=>{ if(!pode()) return ''; const id=esc(e._id), k=mtSit(e).k;
+      if(k==='cham') return `<button type="button" class="bd-ab1" data-act="bd-entrou" data-v="${id}">Entrou</button>`;
+      if(k==='carr') return `<button type="button" class="bd-ab1 ok" data-act="bd-et" data-v="${id}|fim">Saiu</button>`;
+      return `<button type="button" class="bd-ab0" data-act="bd-entrou" data-v="${id}">Entrou</button><button type="button" class="bd-ab0 sm" data-act="bd-des" data-v="${id}">Desistiu</button>`; };
+    const linha=e=>`<li class="bd-r3 ${mtSit(e).k}${estado(e).atr?' atr':''}" data-b="${bus(e)}"><span class="bd-po">${e.ord}</span>${placaMini(e.placa)}
+      <span class="bd-r3m"><b>${esc(e.mot)}</b><small>${esc([e.cli,veicN(e.veic)].filter(Boolean).join(' · '))}</small>${ficou(e)?`<small class="bd-ficou">Ficou de ${esc(br(ficou(e)))}</small>`:''}${e.obs?`<small class="bd-obs">Obs.: ${esc(e.obs)}</small>`:''}</span>
+      <span class="bd-r3s">${sit(e)}</span><span class="bd-r3a">${acao(e)}${pode()?`<button type="button" class="bd-lk" data-act="bd-ed" data-v="${esc(e._id)}">Corrigir</button>`:''}</span></li>`;
+    const saiu=e=>`<li class="bd-r3 sai${e.des?' des':''}" data-b="${bus(e)}"><span class="bd-po">${e.ord}</span>${placaMini(e.placa)}<span class="bd-r3m"><b>${esc(e.mot)}</b><small>${esc(e.cli||'')}</small></span>
+      <span class="bd-r3s"><small>${e.des?'Desistiu '+esc(hm(e.des.em))+' · '+esc(e.des.motivo):'Saiu '+esc(hm(e.et.fim))+' · '+esc(dur(patioMin(e)))+' no pátio'}</small></span><span class="bd-r3a">${pode()?`<button type="button" class="bd-lk" data-act="bd-ed" data-v="${esc(e._id)}">Corrigir</button>`:''}</span></li>`;
+    if(larga){ let novo=false; if(!B.f&&pode()){ B.f=novoForm(); novo=true; }
+      if(novo) setTimeout(()=>{ const a=document.activeElement; if(!a||a===document.body){ const i=document.getElementById('bd-f-placa'); if(i) i.focus(); } },80);
+      const desE=B.ov&&B.ov.des?entDe(B.ov.des.id):null, resto=pat.filter(e=>pr(e)!==0);
+      const esq=desE?`<section class="bd-pcard">${desHtml(desE)}</section>`:!pode()?'<p class="bd-hint">Seu acesso é só para ver.</p>'
+        :`${Fd?`<div class="bd-pok" role="status"><span aria-hidden="true">✓</span><div><b>Chegada registrada · nº ${Fd.ord}</b><small>${esc(Fd.placa)} · ${esc(Fd.mot)} · ${esc(hm(Fd.cheg))} · ${esc(agTxt(Fd))}</small></div></div>`:''}
+          <section class="bd-pcard bd-pform"><div class="bd-ph">${B.f.edit?'<button type="button" class="bd-lk" data-act="bd-p-x">‹ Cancelar</button>':''}<h1>${B.f.edit?'Corrigir registro':'Registrar chegada'}</h1></div>${formChegada(true)}</section>`;
+      return `<div class="bd-pwide"><aside class="bd-pwl">${esq}</aside><div class="bd-pwr">
+        <div class="bd-pwh"><div><p class="bd-eb">${esc(DSL[new Date().getDay()])}, ${esc(br(hoje()))}</p><h1>Caminhões</h1></div><div class="bd-pcnt"><div><b>${pat0.length}</b><span>no pátio</span></div><div><b>${out.filter(e=>!e.des).length}</b><span>saíram</span></div></div>
+          <label class="bd-pbus"><span class="sr">Buscar</span><input id="bd-pq" type="search" placeholder="Buscar placa ou motorista" autocomplete="off"></label></div>
+        ${chs.length?`<div class="bd-psec chm"><h2>Chamados para entrar <span>${chs.length}</span></h2><ul class="bd-pl3">${chs.map(linha).join('')}</ul></div>`:''}
+        <div class="bd-psec"><h2>No pátio <span>${resto.length}</span></h2>${resto.length?`<ul class="bd-pl3">${resto.map(linha).join('')}</ul>`:'<p class="bd-hint">Nenhum outro caminhão no pátio.</p>'}</div>
+        ${out.length?`<div class="bd-psec"><h2>Já saíram hoje <span>${out.length}</span></h2><ul class="bd-pl3">${out.slice().reverse().map(saiu).join('')}</ul></div>`:''}</div></div>`; }
     return `<div class="bd-ptl"><section class="bd-phero"><div><p class="bd-eb">${esc(DSL[new Date().getDay()])}, ${esc(br(hoje()))}</p><h1>Caminhões</h1></div><div class="bd-pcnt"><div><b>${pat0.length}</b><span>no pátio</span></div><div><b>${out.filter(e=>!e.des).length}</b><span>saíram</span></div></div>
       ${pode()?'<button type="button" class="bd-pbig" data-act="bd-nova"><span aria-hidden="true">+</span>Registrar chegada</button>':''}</section>
-      ${chs.length?`<div class="bd-psec chm"><h2>Chamados para entrar <span>${chs.length}</span></h2><ul class="bd-pl2">${chs.map(card).join('')}</ul></div>`:''}
-      <div class="bd-psec"><h2>No pátio <span>${pat.length}</span></h2>${pat.length?`<ul class="bd-pl2">${pat.map(card).join('')}</ul>`:'<p class="bd-hint">Nenhum caminhão no pátio.</p>'}</div>
-      ${out.length?`<div class="bd-psec"><h2>Já saíram hoje <span>${out.length}</span></h2><ul class="bd-pl2">${out.slice().reverse().map(card).join('')}</ul></div>`:''}</div>`; }
+      <label class="bd-pbus"><span class="sr">Buscar</span><input id="bd-pq" type="search" placeholder="Buscar placa ou motorista" autocomplete="off"></label>
+      <div class="bd-psec"><h2>No pátio <span>${pat0.length}</span></h2>${chs.length?`<p class="bd-pgr">Chamados para entrar · ${chs.length}</p>`:''}${pat.length?`<ul class="bd-pl3">${pat.map(linha).join('')}</ul>`:'<p class="bd-hint">Nenhum caminhão no pátio.</p>'}</div>
+      ${out.length?`<div class="bd-psec"><h2>Já saíram hoje <span>${out.length}</span></h2><ul class="bd-pl3">${out.slice().reverse().map(saiu).join('')}</ul></div>`:''}</div>`; }
   P.bordoPort=vPort;
 
   /* ---------- redesenhar sem perder o campo em que a pessoa está digitando ---------- */
@@ -731,13 +780,19 @@
     if(t.id==='bd-n-ped'&&B.nova){ const n=pedLimpo(t.value); if(n.length){ B.nova.peds=[...new Set(B.nova.peds.concat(n))]; t.value=''; rr(); } return; } });
   document.addEventListener('paste',ev=>{ const t=ev.target; if(!t||(t.id!=='bd-f-ped'&&t.id!=='bd-n-ped')) return; const tx=(ev.clipboardData||window.clipboardData).getData('text'); if(!pedLimpo(tx).length) return; ev.preventDefault();
     if(t.id==='bd-f-ped'){ addPeds(tx); } else { B.nova.peds=[...new Set(B.nova.peds.concat(pedLimpo(tx)))]; } rr(); });
+  document.addEventListener('input',ev=>{ const t=ev.target; if(!t||t.id!=='bd-pq') return; const q=norm(t.value).trim().split(/\s+/).filter(Boolean);
+    document.querySelectorAll('.bd-pl3 li[data-b]').forEach(li=>{ li.hidden=q.length&&!q.every(w=>li.dataset.b.includes(w)); }); });
   document.addEventListener('keydown',ev=>{ const t=ev.target; if(!t||!t.id) return;
     if(ev.key==='Enter'&&(t.id==='bd-f-ped'||t.id==='bd-n-ped')){ ev.preventDefault(); if(t.value.trim()){ if(t.id==='bd-f-ped') addPeds(t.value); else B.nova.peds=[...new Set(B.nova.peds.concat(pedLimpo(t.value)))]; t.value=''; rr(); } return; }
     if(ev.key==='Backspace'&&!t.value&&t.id==='bd-f-ped'&&B.f&&B.f.peds.length){ B.f.peds.pop(); olhaAg(); rr(); return; }
     if(ev.key==='Escape'&&B.ov){ B.ov=null; if(S.view!=='bdport') B.f=null; P.render(); } });
+  document.addEventListener('click',ev=>{ if(B.menu&&!(ev.target.closest&&ev.target.closest('.bd-mn'))){ B.menu=null; P.render(); } },true);
+  document.addEventListener('keydown',ev=>{ if(ev.key==='Escape'&&B.menu){ B.menu=null; P.render(); } });
   document.addEventListener('click',async ev=>{ const b=ev.target.closest&&ev.target.closest('[data-act^="bd-"]'); if(!b) return; const a=b.dataset.act, v=b.dataset.v; if(b.tagName!=='A') ev.preventDefault();
     if(a==='bd-nova'){ if(!pode()) return P.toast('Seu acesso é só para ver.'); B.f=novoForm(); B.port.feito=null; if(S.view!=='bdport') B.ov={f:1}; P.render(); setTimeout(()=>{ const i=document.getElementById('bd-f-placa'); i&&i.focus(); },60); return; }
     if(a==='bd-ed'){ const e=entDe(v); if(!e) return; B.f=novoForm({placa:e.placa,mot:e.mot,peds:(e.peds||[]).slice(),repId:e.repId||'',veic:e.veic||'',tipo:e.tipo||'carrega',cli:e.cli||'',edit:e._id,obs:e.obs||'',hora:hm(e.cheg),ets:Object.fromEntries(ETAPAS.map(([k])=>[k,hm((e.et||{})[k])]))}); B.ov={f:1}; P.render(); return; }
+    if(a==='bd-mais'){ B.menu=B.menu===v?null:v; P.render(); return; }
+    if(B.menu&&(a==='bd-dem'||a==='bd-des'||a==='bd-ed')) B.menu=null;
     if(a==='bd-cham') return chamar(v);
     if(a==='bd-entrou') return entrou(v);
     if(a==='bd-ped'){ const [id,k]=String(v).split('|'); return pedSt(id,k); }
@@ -972,6 +1027,32 @@
   .mt-bd{display:inline-block;padding:.08em .5em;border-radius:.3em;font-size:.82em!important;color:#fff}
   .mt-bd.m-ag{background:#5a6b75}.mt-bd.m-cham{background:#d4a000;color:#1d2b33;animation:mtnv 1s steps(2,end) infinite}.mt-bd.m-carr{background:#1f5f99}.mt-tab tr.chm{background:#fff6cc}
   .mt-pd{font-size:.75em;font-weight:800;white-space:normal!important;line-height:1.1}.mt-pd.ok{color:#17694a}.mt-pd.rep{color:#a35a00}.mt-cham.ent{background:#d4a000;color:#1d2b33;animation:mtchent 1s steps(2,end) infinite}@keyframes mtchent{50%{background:#ffd84d}}
+  .bd-pxc,.bd-pdc{min-width:190px}.bd-mnc{width:1%}
+  .bd-px{font:inherit;width:100%;min-height:44px;border:0;border-radius:10px;background:#143F54;color:#fff;font-size:14px;font-weight:700;padding:0 12px;cursor:pointer;white-space:nowrap}.bd-px.ent{background:#1F5F99}
+  .bd-pxu{display:block;font:inherit;font-size:11.5px;font-weight:600;color:#8A6326;background:none;border:0;padding:3px 0 0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+  .bd-pxs{display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:10px;background:var(--teal-tint,#E3ECF0);color:#143F54;font-size:13px;font-weight:700;padding:0 10px;white-space:nowrap}
+  .bd-pxf{font-size:13px;color:var(--muted);font-weight:600;white-space:nowrap}.bd-pxf.ok{color:#3F7D5C}
+  .bd-seg2{display:flex;border:1.5px solid var(--line);border-radius:10px;overflow:hidden;min-width:190px}.bd-seg2 button{font:inherit;flex:1;min-height:42px;border:0;background:var(--surface);color:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;padding:0 8px}
+  .bd-seg2 button+button{border-left:1.5px solid var(--line)}.bd-seg2 .ok[aria-pressed=true]{background:#E2EEE6;color:#3F7D5C;font-weight:800}.bd-seg2 .rep[aria-pressed=true]{background:#F5ECD6;color:#8A6326;font-weight:800}
+  .bd-mn{position:relative}.bd-mnb{font:inherit;min-width:44px;min-height:44px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);color:inherit;font-size:20px;line-height:1;cursor:pointer}.bd-mnb.crit{background:#A2453D;border-color:#A2453D;color:#fff}
+  .bd-mnl{position:absolute;right:0;top:calc(100% + 4px);z-index:30;min-width:220px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(20,63,84,.18);padding:6px;display:flex;flex-direction:column}
+  .bd-mnl button{font:inherit;text-align:left;min-height:42px;border:0;border-radius:8px;background:none;color:inherit;font-size:14px;padding:0 12px;cursor:pointer}.bd-mnl button:hover{background:var(--teal-wash,#EEF4F6)}.bd-mnl button.crit{color:#A2453D;font-weight:700}
+  .bd-pbus{display:flex;margin:0 0 12px}.bd-pbus input{font:inherit;width:100%;min-height:46px;border:1.5px solid var(--line);border-radius:12px;padding:0 14px;font-size:15px;background:var(--surface);color:inherit}
+  .bd-pgr{margin:0 0 6px;font-size:13px;font-weight:700;color:#8A6326}
+  .bd-pl3{list-style:none;margin:0 0 14px;padding:0;display:flex;flex-direction:column;gap:8px}
+  .bd-r3{display:grid;grid-template-columns:auto auto minmax(0,1fr);grid-template-areas:"o p m" "s s s" "a a a";gap:8px 10px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+  .bd-r3>.bd-po{grid-area:o}.bd-r3>.bd-pl,.bd-r3>span:nth-child(2){grid-area:p}.bd-r3m{grid-area:m;display:flex;flex-direction:column;min-width:0}.bd-r3m small,.bd-r3s small{display:block;font-size:12px;color:var(--muted)}
+  .bd-r3s{grid-area:s;display:flex;flex-direction:column;gap:2px;align-items:flex-start}.bd-r3a{grid-area:a;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .bd-r3.cham{background:#FBF4E3;border-color:#D2A857}.bd-r3.atr{box-shadow:inset 4px 0 0 #c0392b}.bd-r3.sai{background:color-mix(in srgb,var(--ok) 7%,var(--surface))}.bd-r3.des{opacity:.6}
+  .bd-st3{display:inline-block;font-size:13px;font-weight:800;color:#fff;background:#5a6b75;border-radius:8px;padding:5px 10px}.bd-st3.cham{background:#D2A857;color:#1A1A1A}.bd-st3.carr{background:#1F5F99}.bd-st3.atr{background:#A2453D}
+  .bd-ab1,.bd-ab0{font:inherit;flex:1;min-height:56px;border:0;border-radius:12px;background:#143F54;color:#fff;font-size:18px;font-weight:800;cursor:pointer;padding:0 18px}.bd-ab1.ok{background:#3F7D5C}
+  .bd-ab0{min-height:48px;background:var(--surface);color:inherit;border:1.5px solid var(--line);font-size:15px;font-weight:700}.bd-ab0.sm{flex:0 0 auto;font-size:13px;font-weight:600}
+  .bd-pwide{display:grid;grid-template-columns:400px minmax(0,1fr);gap:20px;align-items:start}.bd-pwl{position:sticky;top:64px;display:flex;flex-direction:column;gap:10px}
+  .bd-pwh{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:12px}.bd-pwh h1{margin:0;font-size:24px}.bd-pwh .bd-eb{margin:0}.bd-pwh .bd-pbus{flex:1 1 220px;margin:0}
+  .bd-pok{display:flex;gap:12px;align-items:center;background:#E2EEE6;color:#3F7D5C;border-radius:12px;padding:10px 14px}.bd-pok>span{font-size:22px;font-weight:800}.bd-pok small{display:block;color:#33464f;font-size:12.5px}
+  .bd-psec.chm{background:#F5ECD6;border:2px solid #D2A857;border-radius:14px;padding:10px 12px;margin-bottom:12px}.bd-psec.chm h2{color:#8A6326}.bd-psec.chm .bd-pl3{margin:0}
+  @media (min-width:900px){.bd-r3{grid-template-columns:48px 140px minmax(0,1fr) 230px 300px;grid-template-areas:"o p m s a";padding:12px 16px}.bd-r3a{justify-content:flex-end;flex-wrap:nowrap}.bd-r3.sai{padding:8px 16px}}
+  @media (min-width:1100px){.bd-pwide .bd-r3{grid-template-columns:44px 120px minmax(0,1fr) 230px;grid-template-areas:"o p m a" "o p s a";padding:10px 14px}.bd-pwide .bd-r3s{flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px 8px}.bd-pwide .bd-r3a{justify-content:flex-end}}
   .bd-ficou{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;color:#8a4a08;background:#fdecd6;border-radius:999px;padding:1px 8px}.bd-cham.on{color:#8a5a00;font-weight:700}.bd-ent{color:#1f5f99;font-weight:700}.bd-ped.ok{color:#17694a;font-weight:700}.bd-ped.rep{color:#a35a00;font-weight:700}
   .bd-psec.chm h2{color:#8a5a00}.bd-pchm{color:#8a5a00!important;font-weight:700}
   .mt-bd.s-mix{background:#5a6b75}.mt-bd.s-fat{background:#c77a12}.mt-bd.s-carr{background:#1f5f99}.mt-bd.s-fim{background:#6b4e9b}

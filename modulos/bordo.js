@@ -364,7 +364,7 @@
   P.bordoMot=vMot; P.bordoSol=vSol;
   function mtCabe(){ try{ if(!MTV()) return; tvCabeTopo(); const tb=document.querySelector('.bd-tvb .mt-tab'); if(!tb) return; const ft=document.querySelector('.bd-tvf');
       const alt=()=>window.innerHeight-tb.getBoundingClientRect().top-(ft?ft.offsetHeight:0)-14; tb.querySelectorAll('tbody tr.tvx').forEach(r=>{ r.classList.remove('tvx'); r.hidden=false; });
-      let fs=1.9; tb.style.fontSize=fs+'em'; while(tb.offsetHeight>alt()&&fs>0.45){ fs=Math.round((fs-0.05)*100)/100; tb.style.fontSize=fs+'em'; }
+      let fs=1.9; tb.style.fontSize=fs+'em'; semCorte(tb); while(tb.offsetHeight>alt()&&fs>0.45){ fs=Math.round((fs-0.05)*100)/100; tb.style.fontSize=fs+'em'; } semCorte(tb);
       const cand=[...tb.querySelectorAll('tbody tr.fim')]; while(tb.offsetHeight>alt()&&cand.length){ const r=cand.shift(); r.hidden=true; r.classList.add('tvx'); } }catch(e){ console.warn('[bordo] tv motoristas',e); } }
 
   setInterval(()=>{ if(MTV()) P.rerender(); },30000);
@@ -373,11 +373,17 @@
   function tvCabeTopo(){ const hd=document.querySelector('.bd-tvh'), k=document.querySelector('.bd-tvh .bd-tvk'); if(!hd||!k) return; [...k.children].forEach(c=>c.hidden=false);
     let f=1.15; k.style.fontSize=f+'em'; while((k.scrollWidth>k.clientWidth+1||hd.scrollWidth>hd.clientWidth+1)&&f>0.8){ f=Math.round((f-0.05)*100)/100; k.style.fontSize=f+'em'; }
     const cs=[...k.children]; while((k.scrollWidth>k.clientWidth+1||hd.scrollWidth>hd.clientWidth+1)&&cs.length>1){ cs.pop().hidden=true; } }
+  /* 28/11/2026 ("pode abreviar ou diminuir, mas não deixe cortado"): na TV nada fica com "…".
+     Nomes de empresa são abreviados (texto inteiro no title); célula que não cabe diminui a letra só dela (até 65%) e, se ainda não couber, quebra em 2 linhas. */
+  const ABR=[[/\brepresenta(ç|c)(õ|o)es\b/gi,'Repr.'],[/\brepresentante(s)?\b/gi,'Repr.'],[/\bcom(é|e)rcio\b/gi,'Com.'],[/\bdistribuidora\b/gi,'Distr.'],[/\bmateriais\b/gi,'Mat.'],[/\bconstru(ç|c)(ã|a)o\b/gi,'Constr.'],[/\btransportes?\b/gi,'Transp.'],[/\bind(ú|u)stria\b/gi,'Ind.'],[/\bengenharia\b/gi,'Eng.'],[/\bservi(ç|c)os\b/gi,'Serv.'],[/\s*\b(ltda|eireli|epp)\.?(?=\s|$)/gi,''],[/\s*\b(s\/a|s\.a\.)(?=\s|$)/gi,''],[/\s+-\s*me$/i,'']];
+  const abrev=t=>{ let x=String(t||''); ABR.forEach(([r,v])=>{ x=x.replace(r,v); }); return x.replace(/\s{2,}/g,' ').trim()||String(t||''); };
+  function semCorte(tb){ const cs=[...tb.querySelectorAll('th,td')]; cs.forEach(c=>{ c.style.fontSize=''; c.classList.remove('qb'); });
+    const sobra=c=>c.scrollWidth>c.clientWidth+1; cs.forEach(c=>{ if(!c.offsetParent||!sobra(c)) return; let f=1; while(sobra(c)&&f>0.65){ f=Math.round((f-0.05)*100)/100; c.style.fontSize=f+'em'; } if(sobra(c)) c.classList.add('qb'); }); }
   function tvCabe(){ try{ if(S.view!=='bordotv') return; tvCabeTopo(); const tb=document.querySelector('.bd-tvb .bd-tvtab'); if(!tb) return; const box=document.querySelector('.bd-tv'); const ft=document.querySelector('.bd-tvf');
       const so=box&&box.classList.contains('so'); const alt=()=>{ const top=tb.getBoundingClientRect().top; const fh=ft?ft.offsetHeight:0; return (so?window.innerHeight:Math.max(window.innerHeight,600))-top-fh-14; };
       tb.querySelectorAll('tbody tr.tvx').forEach(r=>{ r.classList.remove('tvx'); r.hidden=false; }); const note=document.querySelector('.bd-tvb .bd-tvmais'); if(note){ note.hidden=true; note.textContent=''; }
       let fs=1.15; tb.style.fontSize=fs+'em'; const MIN=0.62; let lim=alt(); if(note&&tb.offsetHeight>lim) lim-=note.offsetHeight||30;
-      while(tb.offsetHeight>alt()&&fs>MIN){ fs=Math.round((fs-0.03)*100)/100; tb.style.fontSize=fs+'em'; }
+      semCorte(tb); while(tb.offsetHeight>alt()&&fs>MIN){ fs=Math.round((fs-0.03)*100)/100; tb.style.fontSize=fs+'em'; } semCorte(tb);
       if(tb.offsetHeight>alt()){ const cand=[...tb.querySelectorAll('tbody tr.fim, tbody tr.des')]; let n=0; const lim2=()=>alt()-(note?Math.max(28,note.offsetHeight):0);
         while(tb.offsetHeight>lim2()&&cand.length){ const r=cand.shift(); r.hidden=true; r.classList.add('tvx'); n++; }
         if(n&&note){ note.hidden=false; note.textContent=n+' finalizado'+(n>1?'s':'')+' escondido'+(n>1?'s':'')+' para caber na tela'; } } }catch(e){ console.warn('[bordo] tv',e); } }
@@ -392,7 +398,7 @@
     if(!vs.length) return {k,h:'<p class="bd-tvvz">Nenhum caminhão chegou ainda hoje.</p>',f:''};
     const cel=(e,kk,st)=>{ const t=(e.et||{})[kk]; if(e.des) return '<td></td>'; if(t) return `<td>${esc(hm(t))}</td>`; if(st.k==='pend'&&st.etapa===kk) return `<td class="${st.atr?'atr':'pend'}">${st.atr?'⚠ ':''}${esc(dur(st.min))}</td>`; return '<td class="nx"></td>'; };
     const linha=e=>{ const st=estado(e), cls=st.k==='fim'?'fim':st.k==='des'?'des':st.atr?'al':'';
-      return `<tr class="${cls}"><td class="b">${e.ord}</td><td class="l b">${esc(e.mot)}</td><td class="l">${esc(e.cli||'')}</td><td class="l">${esc(e.repNome||'')}</td><td class="b pl">${esc(e.placa)}</td><td>${esc(hm(e.cheg))}</td><td class="ag ${e.agKind||'sem'}">${esc(e.agKind==='antecipado'?'Antecipado · '+br(e.agData):e.agKind==='atrasado'?'Atrasado · '+br(e.agData):e.agKind==='agendado'?'Agendado':'Sem agenda')}</td><td class="b">${e.des?'Desistente · '+esc(e.des.motivo):e.tipo==='pit'?'PIT':'Carrega'}</td>${ETAPAS.map(([kk])=>cel(e,kk,st)).join('')}<td class="l">${esc(veicN(e.veic))}</td>${demCel(e,st)}</tr>`; };
+      return `<tr class="${cls}"><td class="b">${e.ord}</td><td class="l b" title="${esc(e.mot)}">${esc(e.mot)}</td><td class="l" title="${esc(e.cli||'')}">${esc(abrev(e.cli||''))}</td><td class="l" title="${esc(e.repNome||'')}">${esc(abrev(e.repNome||''))}</td><td class="b pl">${esc(e.placa)}</td><td>${esc(hm(e.cheg))}</td><td class="ag ${e.agKind||'sem'}">${esc(e.agKind==='antecipado'?'Antec. · '+br(e.agData):e.agKind==='atrasado'?'Atras. · '+br(e.agData):e.agKind==='agendado'?'Agendado':'Sem agenda')}</td><td class="b"${e.des?` title="${esc('Desistente · '+e.des.motivo)}"`:''}>${e.des?'Desist. · '+esc(e.des.motivo):e.tipo==='pit'?'PIT':'Carrega'}</td>${ETAPAS.map(([kk])=>cel(e,kk,st)).join('')}<td class="l">${esc(veicN(e.veic))}</td>${demCel(e,st)}</tr>`; };
     /* 28/11/2026 ("o motivo da demora tem que aparecer aqui"): coluna Motivo da demora na TV; atrasado sem motivo marcado aparece em vermelho */
     const demCel=(e,st)=>{ if(e.dem&&e.dem.motivo){ const t=e.dem.motivo+(e.dem.obs?' · '+e.dem.obs:''); return `<td class="l dem" title="${esc(t)}">${esc(t)}</td>`; } if(st.k==='pend'&&st.atr) return '<td class="l demsem">⚠ Sem motivo</td>'; return '<td></td>'; };
     const cg='<colgroup><col style="width:3.5%"><col style="width:12%"><col style="width:11%"><col style="width:8%"><col style="width:7%"><col style="width:5%"><col style="width:8%"><col style="width:6%"><col style="width:5%"><col style="width:5.5%"><col style="width:6%"><col style="width:5.5%"><col style="width:5%"><col style="width:12.5%"></colgroup>';
@@ -895,7 +901,7 @@
   .bd-tvb{flex:1;padding:1em 1.4em 0}.bd-tvvz{font-size:2em;color:#5d6e77;text-align:center;padding:3em 0}
   .bd-tvtab{width:100%;border-collapse:collapse;font-size:1.15em;font-variant-numeric:tabular-nums}.bd-tvtab.fixa{table-layout:fixed}.bd-tvtab.fixa th,.bd-tvtab.fixa td{overflow:hidden;text-overflow:ellipsis}.bd-tvtab.fixa thead th{white-space:normal;line-height:1.1}.bd-tvtab th,.bd-tvtab td{border:1px solid #c9d4da;padding:.42em .6em;text-align:center;white-space:nowrap}.bd-tvtab .l{text-align:left}.bd-tvtab .b{font-weight:700}
   .bd-tvtab thead tr{background:#163c52;color:#fff;font-size:.85em}.bd-tvtab tr.fim{background:#c9ecd6}.bd-tvtab tr.des{background:#d5dadd;color:#6b7a83}.bd-tvtab tr.al{background:#fbe9e8;box-shadow:inset .5em 0 0 #8f1d19}
-  .bd-tvtab td.pend{background:#e64640;color:#fff;font-weight:700}.bd-tvtab td.atr{background:#8f1d19;color:#fff;font-weight:700}.bd-tvtab td.nx{color:#9fb1bb}.bd-tvtab td.dem{color:#8f1d19;font-weight:700}.bd-tvtab td.demsem{color:#8f1d19;font-weight:700;font-style:italic}.bd-tvtab .pl{letter-spacing:.05em}
+  .bd-tvtab td.pend{background:#e64640;color:#fff;font-weight:700}.bd-tvtab td.atr{background:#8f1d19;color:#fff;font-weight:700}.bd-tvtab td.nx{color:#9fb1bb}.bd-tvtab .qb,.mt-tab .qb{white-space:normal!important;overflow-wrap:anywhere;text-overflow:clip!important;line-height:1.1}.bd-tvtab td.dem{color:#8f1d19;font-weight:700}.bd-tvtab td.demsem{color:#8f1d19;font-weight:700;font-style:italic}.bd-tvtab .pl{letter-spacing:.05em}
   .bd-tvtab td.ag.antecipado{background:#efe7fb;color:#5b3a99;font-weight:700}.bd-tvtab td.ag.sem{color:#8a4a08;font-weight:700}.bd-tvtab td.ag.atrasado{color:#8f1d19;font-weight:700}
   .bd-tvtab tr.dia td{background:#e3ecf1;color:#163c52;font-weight:700;font-size:1.05em}.bd-tvtab tr.fatr{background:#fdecd6}.bd-tvtab td.okt{color:#17694a;font-weight:700}.bd-tvtab td.st.ok{color:#17694a;font-weight:700}.bd-tvtab td.st.fat{color:#8a4a08;font-weight:700}.bd-tvtab td.st.mut,.bd-tvtab td.mut{color:#5d6e77}.bd-tvtab td.st.atr{background:#8f1d19;color:#fff}
   .bd-tvmais{font-size:1em;color:#5d6e77;margin:.5em 0 0}

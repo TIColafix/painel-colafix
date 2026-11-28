@@ -39,8 +39,9 @@ const H=require('./harness'); const res=[]; const ok=(n,c,d)=>{ res.push({n,ok:!
  /* ---------- porteiro ---------- */
  const B=await H.abrir({viewport:{width:390,height:844}}); const pb=B.page; pb.on('pageerror',e=>erros.push(e.message));
  await H.preparar(pb,{users:d.users,docs:await srv(pa)}); await pb.goto(H.BASE); await H.entrar(pb,'portaria','por123'); await H.dorme(2500);
+ const v00=await pb.evaluate(()=>__T.S().view); await pb.evaluate(()=>__T.go('portaria')); await H.dorme(800);
  const v0=await pb.evaluate(()=>({v:__T.S().view,t:document.body.innerText,nav:[...document.querySelectorAll('[data-go]')].map(b=>b.dataset.go)}));
- ok('Porteiro entra direto na Portaria e vê os carros na empresa', v0.v==='portaria'&&/Portaria/.test(v0.t)&&/Na empresa/.test(v0.t)&&/ABC1D23/.test(v0.t), v0.v);
+ ok('Porteiro abre no Carregamento da expedição e, na Frota, vê os carros na empresa', v00==='bdport'&&v0.v==='portaria'&&/Portaria/.test(v0.t)&&/Na empresa/.test(v0.t)&&/ABC1D23/.test(v0.t), v0.v);
  const so=await pb.evaluate(()=>{ const vis=e=>!!(e&&e.offsetParent!==null&&getComputedStyle(e).display!=='none'); return {solo:document.body.classList.contains('cv-solo'),bar:vis(document.querySelector('.cv-bar')),top:vis(document.querySelector('header.top')),side:vis(document.querySelector('.side')),nav:vis(document.querySelector('.bottomnav')),sair:/Sair/.test((document.querySelector('.cv-bar')||{}).innerText||''),cam:__carros.cam}; });
  ok('Modo celular: tela inteira só da portaria (barra própria com logo, hora e Sair; sem menu nem barra do painel) e tenta ligar a câmera sozinha', so.solo&&so.bar&&!so.top&&!so.side&&!so.nav&&so.sair&&(so.cam.on||!!so.cam.erro), JSON.stringify(so));
  ok('Porteiro não vê o cadastro nem as viagens', !v0.nav.includes('carcad')&&!v0.nav.includes('carviag'), v0.nav.join(','));

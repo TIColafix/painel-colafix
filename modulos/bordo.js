@@ -269,7 +269,8 @@
     if(e.des) return `<td class="bd-et"><span class="bd-ex">—</span></td>`;
     if(t) return `<td class="bd-et"><button type="button" class="bd-ok" data-act="bd-et" data-v="${esc(e._id)}|${k}" title="${esc(ETN[k]+' por '+(po||'?')+' · tocar para desmarcar')}">${esc(hm(t))}</button></td>`;
     const ag=st.k==='pend'&&st.etapa===k;
-    return `<td class="bd-et"><button type="button" class="${ag?(st.atr?'bd-atr':'bd-esp'):'bd-nx'}" data-act="bd-et" data-v="${esc(e._id)}|${k}" title="Marcar ${esc(ETN[k])} agora">${ag?(st.atr?'⚠ ':'')+esc(dur(st.min)):'marcar'}</button></td>`; }
+    return `<td class="bd-et"><button type="button" class="${ag?(st.atr?'bd-atr':'bd-esp'):'bd-nx'}" data-act="bd-et" data-v="${esc(e._id)}|${k}" title="Marcar ${esc(ETN[k])} agora">${ag?`<span class="bd-etn">${esc(ETQ[k])}</span><small class="bd-ett">${st.atr?'⚠ ':''}${esc(dur(st.min))}</small>`:'marcar'}</button></td>`; }
+  const ETQ={mix:'Mix pronto',fat:'Faturou',carr:'Carregou',fim:'Saiu'};
   /* 28/11/2026 ("melhorar os botões … para serem o mais funcional possível", layout aprovado no canvas):
      Próximo passo = um botão que muda (Chamar motorista → Entrou · carregando → Carregando desde…); Pedido = dois botões colados
      (o marcado fica colorido, tocar de novo desmarca); ⋯ = Motivo da demora, Desistiu, Corrigir (vermelho se passou do tempo sem motivo). */
@@ -279,7 +280,7 @@
     else if(st.k==='des') px=`<span class="bd-pxf">Desistiu ${esc(hm(e.des.em))}</span>`;
     else if(e.entrou) px=`<span class="bd-pxs">Carregando desde ${esc(hm(e.entrou.em))}</span>${w?`<button type="button" class="bd-pxu" data-act="bd-entrou" data-v="${id}">desfazer entrada</button>`:''}`;
     else if(e.cham) px=w?`<button type="button" class="bd-px ent" data-act="bd-entrou" data-v="${id}">Entrou · carregando</button><button type="button" class="bd-pxu" data-act="bd-cham" data-v="${id}">Chamado ${esc(hm(e.cham.em))} · desfazer</button>`:`<span class="bd-pxs">Entrada liberada ${esc(hm(e.cham.em))}</span>`;
-    else px=w?`<button type="button" class="bd-px" data-act="bd-cham" data-v="${id}">📣 Chamar motorista</button>`:`<span class="bd-pxf">Aguardando</span>`;
+    else px=w?`<button type="button" class="bd-px" data-act="bd-cham" data-v="${id}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>Chamar motorista</button>`:`<span class="bd-pxf">Aguardando</span>`;
     const pd=st.k==='des'?'':w?`<div class="bd-seg2" role="group" aria-label="Situação do pedido"><button type="button" class="ok" aria-pressed="${e.pedSt==='ok'}" data-act="bd-ped" data-v="${id}|ok">${e.pedSt==='ok'?'✓ ':''}Pedido OK</button><button type="button" class="rep" aria-pressed="${e.pedSt==='rep'}" data-act="bd-ped" data-v="${id}|rep">Aguard. rep.</button></div>`
       :`<span class="bd-pxf">${esc(e.pedSt==='ok'?'Pedido OK':e.pedSt==='rep'?'Aguardando representante':'—')}</span>`;
     const alerta=st.k==='pend'&&st.atr&&!e.dem, aberto=B.menu===e._id;
@@ -700,7 +701,7 @@
     const bar=P.cvBar?P.cvBar('Portaria'):''; return `<div class="cv-app">${bar}<main class="cv-appc">${corpo}</main></div>`; }
   /* 28/11/2026 (layout B escolhido): no computador (tela larga) o formulário de chegada fica sempre aberto à esquerda e a lista à direita,
      com "Chamados para entrar" em destaque; no celular continua a lista com o botão "Registrar chegada". */
-  const portLarga=()=>{ try{ return window.innerWidth>=1100; }catch(e){ return false; } };
+  const portLarga=()=>false; /* 28/11/2026: a usuária preferiu o layout C também no computador (o B fica no código, desligado) */
   let _pLarga=portLarga(); window.addEventListener('resize',()=>{ const l=portLarga(); if(l===_pLarga) return; _pLarga=l; if(S.view==='bdport'){ if(!l&&B.f&&!B.f.edit&&!B.f.placa&&!B.f.mot) B.f=null; P.render(); } });
   function portCorpo(){ if(!B.lido.dia||!B.lido.cfg) return '<section class="card"><div class="empty">Carregando…</div></section>';
     const Fd=B.port.feito, larga=portLarga();
@@ -738,7 +739,7 @@
         ${chs.length?`<div class="bd-psec chm"><h2>Chamados para entrar <span>${chs.length}</span></h2><ul class="bd-pl3">${chs.map(linha).join('')}</ul></div>`:''}
         <div class="bd-psec"><h2>No pátio <span>${resto.length}</span></h2>${resto.length?`<ul class="bd-pl3">${resto.map(linha).join('')}</ul>`:'<p class="bd-hint">Nenhum outro caminhão no pátio.</p>'}</div>
         ${out.length?`<div class="bd-psec"><h2>Já saíram hoje <span>${out.length}</span></h2><ul class="bd-pl3">${out.slice().reverse().map(saiu).join('')}</ul></div>`:''}</div></div>`; }
-    return `<div class="bd-ptl"><section class="bd-phero"><div><p class="bd-eb">${esc(DSL[new Date().getDay()])}, ${esc(br(hoje()))}</p><h1>Caminhões</h1></div><div class="bd-pcnt"><div><b>${pat0.length}</b><span>no pátio</span></div><div><b>${out.filter(e=>!e.des).length}</b><span>saíram</span></div></div>
+    return `<div class="bd-ptl"><section class="bd-phero"><div><p class="bd-eb">${esc(DSL[new Date().getDay()])}, ${esc(br(hoje()))}</p><h1>Carregamento da expedição</h1></div><div class="bd-pcnt"><div><b>${pat0.length}</b><span>no pátio</span></div><div><b>${out.filter(e=>!e.des).length}</b><span>saíram</span></div></div>
       ${pode()?'<button type="button" class="bd-pbig" data-act="bd-nova"><span aria-hidden="true">+</span>Registrar chegada</button>':''}</section>
       <label class="bd-pbus"><span class="sr">Buscar</span><input id="bd-pq" type="search" placeholder="Buscar placa ou motorista" autocomplete="off"></label>
       <div class="bd-psec"><h2>No pátio <span>${pat0.length}</span></h2>${chs.length?`<p class="bd-pgr">Chamados para entrar · ${chs.length}</p>`:''}${pat.length?`<ul class="bd-pl3">${pat.map(linha).join('')}</ul>`:'<p class="bd-hint">Nenhum caminhão no pátio.</p>'}</div>
@@ -1027,8 +1028,8 @@
   .mt-bd{display:inline-block;padding:.08em .5em;border-radius:.3em;font-size:.82em!important;color:#fff}
   .mt-bd.m-ag{background:#5a6b75}.mt-bd.m-cham{background:#d4a000;color:#1d2b33;animation:mtnv 1s steps(2,end) infinite}.mt-bd.m-carr{background:#1f5f99}.mt-tab tr.chm{background:#fff6cc}
   .mt-pd{font-size:.75em;font-weight:800;white-space:normal!important;line-height:1.1}.mt-pd.ok{color:#17694a}.mt-pd.rep{color:#a35a00}.mt-cham.ent{background:#d4a000;color:#1d2b33;animation:mtchent 1s steps(2,end) infinite}@keyframes mtchent{50%{background:#ffd84d}}
-  .bd-pxc,.bd-pdc{min-width:190px}.bd-mnc{width:1%}
-  .bd-px{font:inherit;width:100%;min-height:44px;border:0;border-radius:10px;background:#143F54;color:#fff;font-size:14px;font-weight:700;padding:0 12px;cursor:pointer;white-space:nowrap}.bd-px.ent{background:#1F5F99}
+  .bd-pxc,.bd-pdc{min-width:190px}.bd-etn{display:block;font-weight:700;line-height:1.1}.bd-ett{display:block;font-size:11.5px;line-height:1.1;opacity:.9}.bd-mnc{width:1%}
+  .bd-px{font:inherit;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;border:1.5px solid var(--line);border-radius:999px;background:var(--surface);color:var(--teal-strong,#143F54);font-size:13px;font-weight:600;padding:0 14px;cursor:pointer;white-space:nowrap}.bd-px:hover{border-color:var(--teal,#1B5C7A);background:var(--teal-wash,#EEF4F6)}.bd-px.ent{color:#1F5F99;border-color:#9DBCDC}
   .bd-pxu{display:block;font:inherit;font-size:11.5px;font-weight:600;color:#8A6326;background:none;border:0;padding:3px 0 0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
   .bd-pxs{display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:10px;background:var(--teal-tint,#E3ECF0);color:#143F54;font-size:13px;font-weight:700;padding:0 10px;white-space:nowrap}
   .bd-pxf{font-size:13px;color:var(--muted);font-weight:600;white-space:nowrap}.bd-pxf.ok{color:#3F7D5C}

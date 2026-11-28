@@ -1,6 +1,6 @@
 /* Diário de bordo · pedidos de 28/11/2026 (faturamento). Dados inventados.
    1. Caminhão que não carregou ontem passa para hoje como nº 1, com as etapas já feitas e "Ficou de 27/11".
-   2. "Chamar motorista" (faturamento) → TV dos motoristas: PODE ENTRAR PARA CARREGAR (faixa); portaria dá "Entrou" → CARREGANDO.
+   2. "Chamar motorista" (faturamento) → TV dos motoristas: ENTRADA LIBERADA (faixa); portaria dá "Entrou" → CARREGANDO.
    3. TV dos motoristas sem a hora: coluna Pedido com "Pedido OK" / "Aguardando representante" (o faturamento marca).
    Roda num sábado 28/11/2026 09:30 (DATA pode trocar). SHOT=1 salva as telas em /tmp. */
 process.env.DATA=process.env.DATA||'2026-11-28T09:30';
@@ -38,6 +38,7 @@ const SHOT=!!process.env.SHOT, shot=async(p,n)=>{ if(SHOT) await p.screenshot({p
  ok('Chamar motorista grava o chamado', !!(s['bordo/b-hj1'].cham||{}).em&&!s['bordo/b-hj1'].entrou);
  ok('Situação do pedido: OK e Aguardando representante', s['bordo/b-hj1'].pedSt==='ok'&&s['bordo/b-hj2'].pedSt==='rep');
  ok('Botão mostra "Chamado HH:MM"', await pb.evaluate(()=>/Chamado \d\d:\d\d/.test((document.querySelector('[data-act="bd-cham"][data-v="b-hj1"]')||{}).textContent||'')));
+ ok('Depois de chamar, o Diário mostra "Entrou · carregando" (escritório também pode marcar)', await pb.evaluate(()=>!!document.querySelector('[data-act="bd-entrou"][data-v="b-hj1"]')));
  await shot(pb,'escritorio');
  /* ---------- TV dos motoristas ---------- */
  const T=await H.abrir({viewport:{width:1920,height:1080}}); const pt=T.page; pt.on('pageerror',e=>erros.push('tv: '+e.message));
@@ -45,7 +46,7 @@ const SHOT=!!process.env.SHOT, shot=async(p,n)=>{ if(SHOT) await p.screenshot({p
  await pt.evaluate(()=>{ if(window.__T&&__T.S().view!=='bordomot') __T.go('bordomot'); }); await H.dorme(1200);
  const tv=await pt.evaluate(()=>({th:[...document.querySelectorAll('.mt-tab thead th')].map(t=>t.textContent),rows:[...document.querySelectorAll('.mt-tab tbody tr')].map(r=>r.className+'='+r.innerText.replace(/\s+/g,' ')),faixa:[...document.querySelectorAll('.mt-cham')].map(x=>x.innerText.replace(/\s+/g,' '))}));
  ok('TV dos motoristas sem a coluna Hora, com Pedido', !tv.th.includes('Hora')&&tv.th.includes('Pedido'), tv.th.join('|'));
- ok('Chamado: PODE ENTRAR PARA CARREGAR na linha e na faixa', tv.rows.some(r=>/ABC1D23/.test(r)&&/PODE ENTRAR PARA CARREGAR/.test(r)&&/Pedido OK/.test(r))&&tv.faixa.some(f=>/ABC1D23/.test(f)&&/PODE ENTRAR/.test(f)), JSON.stringify(tv).slice(0,500));
+ ok('Chamado: ENTRADA LIBERADA na linha e na faixa', tv.rows.some(r=>/ABC1D23/.test(r)&&/ENTRADA LIBERADA/.test(r)&&/Pedido OK/.test(r))&&tv.faixa.some(f=>/ABC1D23/.test(f)&&/ENTRADA LIBERADA/.test(f)), JSON.stringify(tv).slice(0,500));
  ok('Não chamado: AGUARDANDO e Aguardando representante', tv.rows.some(r=>/DEF4G56/.test(r)&&/AGUARDANDO/.test(r)&&/Aguardando representante/.test(r)));
  ok('Ficou de ontem aparece em 1º na TV', /IXA1B22/.test(tv.rows[0]||''), tv.rows[0]);
  await shot(pt,'tv-chamado');
@@ -54,7 +55,7 @@ const SHOT=!!process.env.SHOT, shot=async(p,n)=>{ if(SHOT) await p.screenshot({p
  await H.preparar(pa,{users:d.users,docs:await srv(pb)}); await pa.goto(H.BASE); await H.entrar(pa,'portaria','por123'); await H.dorme(2600);
  await pa.click('.cv-sw button[data-go="bdport"]'); await H.dorme(900);
  const p0=await pa.evaluate(()=>document.body.innerText);
- ok('Portaria: bloco "Chamados para entrar" com o Marcelo', /Chamados para entrar/.test(p0)&&/Chamado às \d\d:\d\d · pode entrar/.test(p0), p0.slice(0,300));
+ ok('Portaria: bloco "Chamados para entrar" com o Marcelo', /Chamados para entrar/.test(p0)&&/Chamado às \d\d:\d\d · entrada liberada/.test(p0), p0.slice(0,300));
  await pa.click('[data-act="bd-entrou"][data-v="b-hj1"]'); await H.dorme(600);
  s=await srv(pa);
  ok('Entrou grava a entrada', !!(s['bordo/b-hj1'].entrou||{}).em);

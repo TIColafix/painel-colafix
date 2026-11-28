@@ -1242,6 +1242,6 @@
   function materialDir(q){ return compDados(q,A.abertos).slice(0,6).map(o=>{ const sd=saldoTotal(o.cod); return {cod:o.cod,desc:o.desc,un:o.un,pp:o.pp,ag:o.ag,es:o.es,fat:o.fat,dias:o.dias,ped:o.ids.size,estoque:sd.fonte?sd.q:null,sobra:sd.fonte?sd.q-o.ag:null}; }); }
   P.agendResumo={ resumo:resumoDir, pedido:pedidoDir, cliente:clienteDir, material:materialDir, lido:()=>!!A.lido.a };
   P.registrarModulo({ id:'agend', nome:'Agendamentos', ic:'agendar',
-    telas:{ agendamentos:{ nome:'Agendamentos', mob:'Agendar', render:vTela }, agcal:{ nome:'Calendário', mob:'Calendário', render:vCal } },
+    telas:{ agendamentos:{ nome:'Agendamentos', mob:'Agendar', render:vTela }, agsol:{ nome:'Solicitações dos representantes', mob:'Solicitações', render:()=>P.bordoSol?P.bordoSol():'<section class="card"><div class="empty">Carregando…</div></section>' }, agcal:{ nome:'Calendário', mob:'Calendário', render:vCal } },
     iniciar:carregar });
 })();

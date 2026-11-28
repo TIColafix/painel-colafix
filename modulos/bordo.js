@@ -42,7 +42,7 @@
   const eu=()=>(S.nomes||{})[S.uid]||P.nomeDe(S.uid)||'';
   const novoId=p=>(p||'')+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
   const pode=()=>!P.soVer();
-  const adm=()=>P.dono()||(P.viewOk('bordosol')&&!P.soVer());
+  const adm=()=>P.dono()||((P.viewOk('bordosol')||P.viewOk('agsol'))&&!P.soVer());
   const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
   const plN=p=>String(p||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   const pedLimpo=s=>(String(s||'').match(/\d{4,8}/g)||[]);
@@ -69,7 +69,7 @@
     setTimeout(()=>sincroniza(),3500); }
   const escritorio=()=>iniEsc&&P.viewOk('bordo')&&pode();
   function tique(){ if(hoje()!==B.diaLive){ const era=B.diaLive; ouvirDia(); if(B.dia===era) B.dia=B.diaLive; }
-    if(escritorio()) sincroniza(); const v=S.view; if(v==='bordo'||v==='bordotv'||v==='bdport') P.rerender(); }
+    if(escritorio()) sincroniza(); const v=S.view; if(v==='bordo'||v==='bordotv'||v==='bdport'||v==='bordomot'||v==='bdmot') P.rerender(); }
   const entDe=id=>B.ent.find(e=>e._id===id)||((B.outro||[]).find(e=>e._id===id));
   const solDe=id=>B.sol.find(s=>s._id===id);
   const agDe=id=>B.ag.find(a=>a._id===id);
@@ -227,7 +227,7 @@
         ${rsel&&!F.repAbre?`<div class="bd-repsel"><span class="bd-rdot on" aria-hidden="true"></span><span class="bd-rst"><b>${esc(rsel.nome)}</b><small>${esc([rsel.reg,rsel.ct&&rsel.ct!==rsel.nome?'Contato: '+rsel.ct:''].filter(Boolean).join(' · '))}</small></span><button type="button" class="bd-b0 sm" data-act="bd-f-reptroca">Trocar</button></div>`
         :rs.length?`<div class="bd-replst"><input id="bd-f-repq" class="bd-repq" autocomplete="off" placeholder="Buscar representante" aria-label="Buscar representante">
           <div class="bd-reps" role="radiogroup" aria-label="Representante">${rs.map(r=>`<button type="button" class="bd-rep" role="radio" aria-checked="${r.id===F.repId}" data-act="bd-f-rep" data-v="${esc(r.id)}" data-b="${esc(norm(r.nome+' '+(r.reg||'')+' '+(r.ct||'')))}"><span class="bd-rdot" aria-hidden="true"></span><span class="bd-rn">${esc(r.nome)}</span><small>${esc(r.reg||'')}</small></button>`).join('')}</div></div>`
-          :'<p class="bd-hint">Nenhum representante cadastrado (Solicitações › Representantes).</p>'}${rsel?'':''}</div>
+          :'<p class="bd-hint">Nenhum representante cadastrado (Agendamentos › Solicitações dos representantes › Representantes).</p>'}${rsel?'':''}</div>
       <fieldset class="bd-fs"><legend>Veículo</legend><div class="bd-seg">${VEICS.map(([k,n])=>`<button type="button" data-act="bd-f-veic" data-v="${k}" aria-pressed="${F.veic===k}">${esc(n)}</button>`).join('')}</div>${eB('bd-f-veic')}</fieldset>
       <fieldset class="bd-fs"><legend>Tipo</legend><div class="bd-seg two"><button type="button" data-act="bd-f-tipo" data-v="carrega" aria-pressed="${F.tipo==='carrega'}">Carrega</button><button type="button" data-act="bd-f-tipo" data-v="pit" aria-pressed="${F.tipo==='pit'}">PIT</button></div></fieldset>
       <div class="bd-facts">${F.edit?`<button type="button" class="bd-b0" data-act="bd-apaga" data-v="${esc(F.edit)}">Apagar registro</button>`:''}<button type="button" class="bd-b1 ok" data-act="bd-f-ok"${F.salvando?' disabled':''}>${F.salvando?'Gravando…':F.edit?'Salvar correção':'Registrar chegada · '+(hmOk(F.hora)?String(F.hora).trim().padStart(5,'0'):hm(new Date().toISOString()))}</button></div></div>`; }
@@ -258,16 +258,16 @@
       <div><span>Etapa mais lenta</span><b class="warn">${K.lenta?esc(K.lenta.n):'—'}</b><small>${K.lenta?esc(dur(K.lenta.m))+' em média':'sem etapas marcadas'}</small></div></section>`;
     const ch=(k,n,c)=>`<button type="button" class="bd-fc" data-act="bd-filt" data-v="${k}" aria-pressed="${f===k}">${n} <b>${c}</b></button>`;
     const linha=e=>{ const st=estado(e), pm=patioMin(e), cls=st.k==='fim'?'fim':st.k==='des'?'des':st.atr?'atr':'';
-      return `<tr class="${cls}" data-b="${esc(norm([e.mot,e.cli,e.placa,e.repNome,(e.peds||[]).join(' '),e.obs||''].join(' ')))}">
+      return `<tr class="${cls}" data-b="${esc(norm([e.mot,e.cli,e.placa,e.repNome,(e.peds||[]).join(' '),e.obs||'',(e.dem||{}).motivo||'',(e.dem||{}).obs||''].join(' ')))}">
         <td class="bd-ord">${e.ord}</td>
-        <td><b class="bd-nm">${esc(e.mot)}</b><small>${esc(e.cli||'—')}${e.repNome?' · '+esc(e.repNome):''}</small>${e.obs?`<small class="bd-obs" title="${esc(e.obs)}">Obs.: ${esc(e.obs)}</small>`:''}</td>
+        <td><b class="bd-nm">${esc(e.mot)}</b><small>${esc(e.cli||'—')}${e.repNome?' · '+esc(e.repNome):''}</small>${e.obs?`<small class="bd-obs" title="${esc(e.obs)}">Obs.: ${esc(e.obs)}</small>`:''}${e.dem?`<small class="bd-dem" title="${esc(e.dem.obs||'')}">Demora: ${esc(e.dem.motivo)}${e.dem.obs?' · '+esc(e.dem.obs):''}</small>`:''}</td>
         <td>${placaMini(e.placa)}<small>${esc(veicN(e.veic))}</small></td>
         <td class="bd-num">${esc(hm(e.cheg))}</td>
         <td><span class="bd-ag ${e.agKind||'sem'}">${esc(agTxt(e))}</span>${(e.peds||[]).length?`<small>${esc((e.peds||[]).join(', '))}</small>`:''}</td>
         <td><span class="bd-tp ${e.des?'des':e.tipo}">${e.des?'Desistente':e.tipo==='pit'?'PIT':'Carrega'}</span>${e.des?`<small>${esc(e.des.motivo)}</small>`:''}</td>
         ${ETAPAS.map(([k])=>celEtapa(e,k,st)).join('')}
         <td class="bd-num bd-pt${st.atr?' atr':''}">${e.des?'saiu '+esc(hm(e.des.em)):esc(dur(pm))}</td>
-        <td class="bd-acts">${pode()&&st.k==='pend'?`<button type="button" class="bd-lk" data-act="bd-des" data-v="${esc(e._id)}">Desistiu</button>`:''}${pode()?`<button type="button" class="bd-lk" data-act="bd-ed" data-v="${esc(e._id)}">Corrigir</button>`:''}</td></tr>`; };
+        <td class="bd-acts">${pode()&&st.k!=='des'?`<button type="button" class="bd-lk${st.atr&&!e.dem?' bd-lkw':''}" data-act="bd-dem" data-v="${esc(e._id)}">${e.dem?'Demora ✓':st.atr?'⚠ Motivo da demora':'Demora'}</button>`:''}${pode()&&st.k==='pend'?`<button type="button" class="bd-lk" data-act="bd-des" data-v="${esc(e._id)}">Desistiu</button>`:''}${pode()?`<button type="button" class="bd-lk" data-act="bd-ed" data-v="${esc(e._id)}">Corrigir</button>`:''}</td></tr>`; };
     const tab=vs.length?`<div class="bd-tw"><table class="bd-tab"><thead><tr><th>#</th><th>Motorista · cliente</th><th>Placa · veículo</th><th>Chegada</th><th>Agenda</th><th>Tipo</th>${ETAPAS.map(([,n])=>`<th>${n}</th>`).join('')}<th class="r">No pátio</th><th><span class="sr">Ações</span></th></tr></thead><tbody>${rows.map(linha).join('')||'<tr><td colspan="13" class="bd-vz">Nada neste filtro.</td></tr>'}</tbody></table></div>
       <p class="bd-leg">Toque na etapa para marcar a hora${juntos()?' (Faturado preenche o Mix se estiver vazio; Finalizado preenche o Carregado). Para mudar uma hora, use Corrigir':''}. Laranja: esperando agora, com o tempo · vermelho: passou do tempo combinado (${ETAPAS.map(([k,n])=>n.toLowerCase()+' '+lim(k)+' min').join(', ')}) · verde: finalizado · cinza: desistente.</p>`
       :`<div class="bd-vz2"><b>${live?'Nenhum caminhão chegou ainda hoje.':'Nenhum caminhão neste dia.'}</b><span>${live?'A portaria registra a chegada pelo celular, ou use "+ Registrar chegada".':''}</span></div>`;
@@ -303,17 +303,26 @@
   function placaMini(p){ p=plN(p); return `<span class="bd-pl" aria-label="Placa ${esc(p)}">${esc(p)}</span>`; }
   function ovHtml(){ const O=B.ov; if(!O) return '';
     if(O.f&&B.f) return `<div class="bd-ov" role="dialog" aria-modal="true" aria-label="${B.f.edit?'Corrigir registro':'Registrar chegada'}"><div class="bd-ovb"><div class="bd-ovh"><h2>${B.f.edit?'Corrigir registro':'Registrar chegada'}</h2><button type="button" class="bd-x" data-act="bd-ovx" aria-label="Fechar">×</button></div>${formChegada(false)}</div></div>`;
+    if(O.dem){ const e=entDe(O.dem.id); if(!e) return ''; return `<div class="bd-ov" role="dialog" aria-modal="true" aria-label="Motivo da demora"><div class="bd-ovb sm">${demHtml(e)}</div></div>`; }
     if(O.des){ const e=entDe(O.des.id); if(!e) return ''; return `<div class="bd-ov" role="dialog" aria-modal="true" aria-label="Marcar desistente"><div class="bd-ovb sm">${desHtml(e)}</div></div>`; }
     if(O.email) return `<div class="bd-ov" role="dialog" aria-modal="true" aria-label="Colar email"><div class="bd-ovb"><div class="bd-ovh"><h2>Colar o email do representante</h2><button type="button" class="bd-x" data-act="bd-ovx" aria-label="Fechar">×</button></div>
       <p class="bd-hint">Copie o email inteiro no Outlook (Ctrl+A, Ctrl+C) e cole aqui. O painel acha os pedidos, o representante, o cliente e a hora do email.</p><textarea id="bd-em-tx" class="bd-ta2" rows="10" placeholder="Cole o email aqui"></textarea><div class="bd-facts"><button type="button" class="bd-b1" data-act="bd-em-ok">Ler o email</button></div></div></div>`;
     return ''; }
+  /* 27/11/2026 · motivo da demora (a expedição marca e pode colar uma observação) */
+  const DEMS=['Aguardando produção','Falta de material','Aguardando liberação financeira','Aguardando nota fiscal','Fila de carregamento','Falta de pessoal','Veículo inadequado','Ajuste no pedido / carga parcial','Problema no sistema','Outro'];
+  function demHtml(e){ const D=B.ov.dem, st=estado(e);
+    return `<div class="bd-ovh"><div><h2>Motivo da demora</h2><p class="bd-sub">Nº ${e.ord} · ${esc(e.mot)} · ${esc(e.placa)} · chegou ${esc(hm(e.cheg))} · ${esc(dur(patioMin(e)))} no pátio${st.k==='pend'&&st.etapa?' · esperando '+esc(ETN[st.etapa].toLowerCase()):''}</p></div><button type="button" class="bd-x" data-act="bd-ovx" aria-label="Fechar">×</button></div>
+      <fieldset class="bd-fs"><legend>Por que está demorando?</legend><div class="bd-mots" role="radiogroup">${DEMS.map(m=>`<button type="button" class="bd-rep" role="radio" aria-checked="${D.motivo===m}" data-act="bd-demm" data-v="${esc(m)}"><span class="bd-rdot" aria-hidden="true"></span><span class="bd-rn">${esc(m)}</span></button>`).join('')}</div></fieldset>
+      <label class="bd-lb">Observação <small>(pode colar um texto)</small><textarea id="bd-dem-obs" class="bd-in" rows="4" maxlength="600" placeholder="Ex.: aguardando o lote 5012 da Linha 1; financeiro liberou às 14h">${esc(D.obs||'')}</textarea></label>
+      ${D.err?`<p class="bd-err" role="alert">${esc(D.err)}</p>`:''}
+      <div class="bd-facts">${e.dem?`<button type="button" class="bd-lk" data-act="bd-demx" data-v="${esc(e._id)}">Apagar o motivo</button>`:''}<button type="button" class="bd-b0" data-act="bd-ovx">Voltar</button><button type="button" class="bd-b1" data-act="bd-demok" data-v="${esc(e._id)}">Salvar</button></div>`; }
   function desHtml(e){ const D=B.ov.des;
     return `<div class="bd-ovh"><div><h2>Marcar como desistente</h2><p class="bd-sub">${esc(e.mot)} · ${esc(e.placa)} · chegou ${esc(hm(e.cheg))} · ${esc(dur(patioMin(e)))} no pátio</p></div><button type="button" class="bd-x" data-act="bd-ovx" aria-label="Fechar">×</button></div>
       <fieldset class="bd-fs"><legend>Por que ele foi embora?</legend><div class="bd-mots" role="radiogroup">${MOTIVOS.map(m=>`<button type="button" class="bd-rep" role="radio" aria-checked="${D.motivo===m}" data-act="bd-dmot" data-v="${esc(m)}"><span class="bd-rdot" aria-hidden="true"></span><span class="bd-rn">${esc(m)}</span></button>`).join('')}</div></fieldset>
       <label class="bd-lb">Observação <small>opcional</small><input id="bd-dobs" class="bd-in" maxlength="200" value="${esc(D.obs||'')}" placeholder="Ex.: esperou o mix e não liberou"></label>${D.err?`<p class="bd-err" role="alert">${esc(D.err)}</p>`:''}
       <div class="bd-facts"><button type="button" class="bd-b0" data-act="bd-ovx">Voltar</button><button type="button" class="bd-b1 mut" data-act="bd-dok" data-v="${esc(e._id)}">Marcar desistente</button></div>`; }
   function csvDia(){ const xs=ordena(vivos(linhasDia())); if(!xs.length) return P.toast('Nada neste dia.');
-    const L=[['Ordem','Motorista','Cliente','Representante','Pedidos','Placa','Veículo','Chegada','Agenda','Tipo','Mix','Faturado','Carregado','Finalizado','No pátio (min)','Desistente','Motivo','Observação']].concat(xs.map(e=>[e.ord,e.mot,e.cli,e.repNome,(e.peds||[]).join(' '),e.placa,veicN(e.veic),hm(e.cheg),agTxt(e),e.tipo==='pit'?'PIT':'Carrega'].concat(ETAPAS.map(([k])=>hm((e.et||{})[k]))).concat([patioMin(e),e.des?hm(e.des.em):'',e.des?e.des.motivo:'',e.obs||''])));
+    const L=[['Ordem','Motorista','Cliente','Representante','Pedidos','Placa','Veículo','Chegada','Agenda','Tipo','Mix','Faturado','Carregado','Finalizado','No pátio (min)','Desistente','Motivo','Observação','Motivo da demora','Obs. da demora']].concat(xs.map(e=>[e.ord,e.mot,e.cli,e.repNome,(e.peds||[]).join(' '),e.placa,veicN(e.veic),hm(e.cheg),agTxt(e),e.tipo==='pit'?'PIT':'Carrega'].concat(ETAPAS.map(([k])=>hm((e.et||{})[k]))).concat([patioMin(e),e.des?hm(e.des.em):'',e.des?e.des.motivo:'',e.obs||'',(e.dem||{}).motivo||'',(e.dem||{}).obs||''])));
     baixar('diario-de-bordo-'+B.dia+'.csv',L); }
   function baixar(nome,L){ const t='﻿'+L.map(r=>r.map(c=>{ c=c==null?'':String(c); return /[;"\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c; }).join(';')).join('\r\n');
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([t],{type:'text/csv;charset=utf-8'})); a.download=nome; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500); }
@@ -321,13 +330,44 @@
   /* ---------- tela da TV (aba Diário de bordo + aba Agendados, trocam sozinhas) ---------- */
   const tvSolo=()=>{ try{ const A=S.acs; if(!A||!A.pronto||S.view!=='bordotv') return false; if(B.tv.cheia) return true; if(/[?&]tv=bordo\b/.test(location.search)) return true; return (A.doc||{}).perfil==='tvbordo'; }catch(e){ return false; } };
   const segTV=()=>Math.max(10,+B.cfg.tvSeg||30);
-  function vTV(){ iniciar(); setTimeout(tvCabe,0); setTimeout(tvCabe,400); const so=tvSolo(); try{ document.body.classList.toggle('bd-tvon',so); }catch(e){}
+  function vTV(){ iniciar(); Promise.resolve().then(tvCabe); setTimeout(tvCabe,400); const so=tvSolo(); try{ document.body.classList.toggle('bd-tvon',so); }catch(e){}
     const ab=B.tv.aba, ag=new Date(), rel=String(ag.getHours()).padStart(2,'0')+':'+String(ag.getMinutes()).padStart(2,'0');
     const corpo=ab==='agend'?tvAgend():tvDiario();
     return `<div class="bd-tv${so?' so':''}"><header class="bd-tvh"><div class="bd-tvlogo"><img src="icons/logo-colafix-escuro.png" alt="Colafix"></div>
       <nav class="bd-tvt" aria-label="Telas da TV"><button type="button" data-act="bd-tvaba" data-v="diario" aria-pressed="${ab==='diario'}">Diário de bordo</button><button type="button" data-act="bd-tvaba" data-v="agend" aria-pressed="${ab==='agend'}">Agendados</button></nav>
       <span class="bd-tvd">${esc(br(B.diaLive))}</span><div class="bd-tvk">${corpo.k}</div><div class="bd-tvc" data-rtv-clk>${rel}</div>${document.fullscreenElement?'':`<button type="button" class="bd-tvfs" data-act="bd-tvcheia" title="Ocupa a tela toda (ou aperte F11). Esc para sair.">⛶ Tela cheia</button>`}</header>
       <div class="bd-tvb">${corpo.h}</div><footer class="bd-tvf">${corpo.f}<span class="r">Troca de aba sozinha a cada ${segTV()} s · atualiza sozinho</span></footer></div>`; }
+  /* 27/11/2026 · TV dos motoristas ("uma tela para deixar lá com os freteiros"): só a fila de hoje, letra grande, sem cliente nem
+     representante. Cada caminhão: nº, placa, primeiro nome, em que etapa está (Mix · Faturado · Carregado · Liberado) e há quanto tempo
+     espera. Quem mudou de etapa nos últimos 3 minutos pisca em amarelo. Liberado fica 20 minutos com "pode sair" e some.
+     Abre por ?tv=motoristas (login da TV do diário ou qualquer login com o diário). */
+  const MTV=()=>S.view==='bordomot'||S.view==='bdmot';
+  const MT_ST=[['mix','Aguardando o mix'],['fat','Aguardando o faturamento'],['carr','Aguardando o carregamento'],['fim','Carregado · aguarde a liberação']];
+  function vMot(){ iniciar(); const so=/[?&]tv=motoristas\b/.test(location.search)||B.tv.cheia||((S.acs&&S.acs.doc||{}).perfil==='tvbordo'); try{ document.body.classList.toggle('bd-tvon',so); }catch(e){}
+    Promise.resolve().then(mtCabe); setTimeout(mtCabe,400);
+    const ag=Date.now(), rel=String(new Date().getHours()).padStart(2,'0')+':'+String(new Date().getMinutes()).padStart(2,'0');
+    const xs=ordena(vivos(B.ent)).filter(e=>{ const st=estado(e); if(st.k==='des'||st.k==='rem') return false; if(st.k==='fim') return ag-new Date(e.et.fim).getTime()<20*60000; return true; });
+    const nome=n=>{ const w=String(n||'').trim().split(/\s+/)[0]||''; return w.charAt(0)+w.slice(1).toLowerCase(); };
+    const ult=e=>{ const ts=[e.cheg].concat(ETAPAS.map(([k])=>(e.et||{})[k])).filter(Boolean).sort(); return ts[ts.length-1]; };
+    const linha=e=>{ const st=estado(e), et=e.et||{}, novo=ag-new Date(ult(e)).getTime()<180000&&!!Object.values(et).some(Boolean);
+      const prox=(MT_ST.find(([k])=>!et[k])||[''])[0], txt=st.k==='fim'?'✓ LIBERADO · PODE SAIR':(MT_ST.find(([k])=>!et[k])||[0,''])[1], cls=st.k==='fim'?'lib':'s-'+prox, demora=st.k==='pend'&&st.atr;
+      const passos=ETAPAS.map(([k,n])=>`<span class="mt-p${et[k]?' ok':st.k==='pend'&&st.etapa===k?' ag':''}">${et[k]?'✓ ':''}${k==='fim'?'Liberado':n}</span>`).join('');
+      return `<tr class="${st.k==='fim'?'fim':''}${novo?' novo':''}"><td class="mt-n">${e.ord}</td><td class="mt-pl"><span class="mt-plc">${esc(plN(e.placa))}</span></td><td class="mt-nm">${esc(nome(e.mot))}</td>
+        <td class="mt-st"><b class="mt-bd ${cls}">${esc(txt)}</b>${novo&&st.k!=='fim'?'<i class="mt-novo">AGORA</i>':''}<span class="mt-ps">${passos}</span></td><td class="mt-t${demora?' dem':''}">${st.k==='fim'?'saiu '+esc(hm(et.fim)):'chegou '+esc(hm(e.cheg))+'<small>há '+esc(dur(minDe(e.cheg)))+'</small>'}</td></tr>`; };
+    const cham=xs.filter(e=>estado(e).k==='fim'&&ag-new Date(e.et.fim).getTime()<180000);
+    const corpo=xs.length?`<table class="mt-tab"><colgroup><col style="width:6%"><col style="width:16%"><col style="width:16%"><col style="width:46%"><col style="width:16%"></colgroup><thead><tr><th>Nº</th><th>Placa</th><th>Motorista</th><th>Situação</th><th>Hora</th></tr></thead><tbody>${xs.map(linha).join('')}</tbody></table><p class="bd-tvmais" hidden></p>`
+      :'<p class="mt-vz">Nenhum caminhão na fila agora.</p>';
+    return `<div class="bd-tv mt${so?' so':''}"><header class="bd-tvh"><div class="bd-tvlogo"><img src="icons/logo-colafix-escuro.png" alt="Colafix"></div><h1 class="mt-h">Fila de carregamento</h1>
+      <span class="bd-tvd">${esc(br(B.diaLive))}</span><div class="bd-tvk"><span>Na fila <b>${xs.filter(e=>estado(e).k==='pend').length}</b></span></div><div class="bd-tvc">${rel}</div>${document.fullscreenElement?'':`<button type="button" class="bd-tvfs" data-act="bd-tvcheia">⛶ Tela cheia</button>`}</header>
+      ${cham.length?`<div class="mt-cham" role="status"><span class="mt-chi">📣</span>${cham.map(e=>`<span class="mt-chx"><span class="mt-plc">${esc(plN(e.placa))}</span> ${esc(nome(e.mot))} · <b>PODE SAIR</b></span>`).join('')}</div>`:''}
+      <div class="bd-tvb">${corpo}</div><footer class="bd-tvf"><span>Acompanhe pela sua placa. A ordem é a da chegada. Quando aparecer <b>Liberado</b>, pode sair.</span><span class="r">Atualiza sozinho</span></footer></div>`; }
+  P.bordoMot=vMot; P.bordoSol=vSol;
+  function mtCabe(){ try{ if(!MTV()) return; tvCabeTopo(); const tb=document.querySelector('.bd-tvb .mt-tab'); if(!tb) return; const ft=document.querySelector('.bd-tvf');
+      const alt=()=>window.innerHeight-tb.getBoundingClientRect().top-(ft?ft.offsetHeight:0)-14; tb.querySelectorAll('tbody tr.tvx').forEach(r=>{ r.classList.remove('tvx'); r.hidden=false; });
+      let fs=1.9; tb.style.fontSize=fs+'em'; while(tb.offsetHeight>alt()&&fs>0.45){ fs=Math.round((fs-0.05)*100)/100; tb.style.fontSize=fs+'em'; }
+      const cand=[...tb.querySelectorAll('tbody tr.fim')]; while(tb.offsetHeight>alt()&&cand.length){ const r=cand.shift(); r.hidden=true; r.classList.add('tvx'); } }catch(e){ console.warn('[bordo] tv motoristas',e); } }
+
+  setInterval(()=>{ if(MTV()) P.rerender(); },30000);
   /* 27/11/2026 · "tem que sempre caber na tela": na TV a tabela diminui a letra até caber na altura (largura fixa, texto longo vira "…");
      se nem com a letra mínima couber, esconde os finalizados mais antigos e avisa quantos. */
   function tvCabeTopo(){ const hd=document.querySelector('.bd-tvh'), k=document.querySelector('.bd-tvh .bd-tvk'); if(!hd||!k) return; [...k.children].forEach(c=>c.hidden=false);
@@ -341,7 +381,8 @@
       if(tb.offsetHeight>alt()){ const cand=[...tb.querySelectorAll('tbody tr.fim, tbody tr.des')]; let n=0; const lim2=()=>alt()-(note?Math.max(28,note.offsetHeight):0);
         while(tb.offsetHeight>lim2()&&cand.length){ const r=cand.shift(); r.hidden=true; r.classList.add('tvx'); n++; }
         if(n&&note){ note.hidden=false; note.textContent=n+' finalizado'+(n>1?'s':'')+' escondido'+(n>1?'s':'')+' para caber na tela'; } } }catch(e){ console.warn('[bordo] tv',e); } }
-  window.addEventListener('resize',()=>{ clearTimeout(tvCabe._t); tvCabe._t=setTimeout(tvCabe,150); });
+  /* 27/11 21h ("fica se tremendo"): o ajuste roda antes da tela ser pintada (microtarefa) e só refaz no resize se o tamanho mudou de verdade */
+  let _tvTam=''; window.addEventListener('resize',()=>{ const t=innerWidth+'x'+innerHeight; if(t===_tvTam) return; _tvTam=t; clearTimeout(tvCabe._t); tvCabe._t=setTimeout(()=>{ tvCabe(); mtCabe(); },150); });
   document.addEventListener('fullscreenchange',()=>setTimeout(tvCabe,200));
   const lg=(c,t)=>`<span><i style="background:${c}"></i>${t}</span>`;
   function tvDiario(){ if(!B.lido.dia) return {k:'',h:'<p class="bd-tvvz">Carregando…</p>',f:''};
@@ -387,13 +428,27 @@
     const p2=lib?(s.carregado?`<span class="bd-pi ok">Carregado ${esc(hm(s.carregado))}</span>`:s.chegou?`<span class="bd-pi info">Chegou ${esc(hm(s.chegou))}</span>`:s.lib.noPrazo===false?'<span class="bd-pi">Confirmado fora do prazo</span>':'<span class="bd-pi">Confirmado no prazo</span>'):`<span class="bd-pi">Carregar até ${esc(dsem(s.prazoCarr)+' '+br(s.prazoCarr))}</span>`;
     const F=B.libF[s._id], ac=s.acao&&!s.acao.feito?s.acao:null;
     const acts=!pode()?'':F?formLib(s,F):s.st==='recebido'?`<button type="button" class="bd-b1 sm" data-act="bd-s-av" data-v="${esc(s._id)}">Avaliar</button><button type="button" class="bd-lk" data-act="bd-s-canc" data-v="${esc(s._id)}">Cancelar</button>`
-      :s.st==='avaliacao'?`<button type="button" class="bd-b1 sm" data-act="bd-s-lib" data-v="${esc(s._id)}">Liberar e marcar horário</button><button type="button" class="bd-b0 sm" data-act="bd-s-volta" data-v="${esc(s._id)}">Voltar</button><button type="button" class="bd-lk" data-act="bd-s-canc" data-v="${esc(s._id)}">Cancelar</button>`
+      :s.st==='avaliacao'?`${avalHtml(s)}<button type="button" class="bd-lk" data-act="bd-s-lib" data-v="${esc(s._id)}">Marcar o dia aqui</button><button type="button" class="bd-lk" data-act="bd-s-volta" data-v="${esc(s._id)}">Voltar</button><button type="button" class="bd-lk" data-act="bd-s-canc" data-v="${esc(s._id)}">Cancelar</button>`
       :`<button type="button" class="bd-b0 sm" data-act="bd-s-copia" data-v="${esc(s._id)}">Copiar resposta</button><button type="button" class="bd-lk" data-act="bd-s-lib" data-v="${esc(s._id)}">Mudar dia</button><button type="button" class="bd-lk" data-act="bd-s-canc" data-v="${esc(s._id)}">Cancelar</button>`;
     return `<article class="bd-cd${atr?' atr':vh?' hoje':''}" id="bd-cd-${esc(s._id)}"><div class="bd-cdh"><b>${esc(s.cli||'Cliente não informado')}</b><small>${esc(s.repNome||'sem representante')}</small></div>
       <div class="bd-cdp">${esc((s.peds||[]).join(' · '))}</div><div class="bd-cdi">${s.origem==='link'?'Pelo link do representante':s.origem==='email'?'Email':'Pelo painel'} · ${esc(br(diaDe(s.recebido))+' '+hm(s.recebido))}${s.quer&&s.quer.dia?' · pediu '+esc(dsem(s.quer.dia)+' '+br(s.quer.dia))+(s.quer.turno?' '+esc(s.quer.turno):''):''}${s.veic?' · '+esc(veicN(s.veic)):''}</div>
       ${s.obs?`<div class="bd-cdo">“${esc(s.obs)}”</div>`:''}<div class="bd-pis">${p1}${p2}</div>
       ${ac?`<div class="bd-acao"><b>${ac.tipo==='cancelar'?'O representante pediu para cancelar':'O representante pediu para reagendar'+(ac.dia?' para '+esc(dsem(ac.dia)+' '+br(ac.dia))+(ac.turno?' ('+esc(ac.turno)+')':''):'')}</b>${ac.motivo?`<span>${esc(ac.motivo)}</span>`:''}${pode()?`<div><button type="button" class="bd-b1 sm" data-act="bd-s-aok" data-v="${esc(s._id)}">${ac.tipo==='cancelar'?'Cancelar o agendamento':'Mudar o dia'}</button><button type="button" class="bd-lk" data-act="bd-s-ano" data-v="${esc(s._id)}">Recusar</button></div>`:''}</div>`:''}
       <div class="bd-cda">${acts}</div></article>`; }
+  /* 27/11/2026 (faturamento): a solicitação fica dentro do módulo Agendamentos. Avaliar leva ao Agendamentos para importar o PDF
+     do pedido e escolher o dia lá; com o dia escolhido, volta aqui (ou na faixa do Agendamentos) para Confirmar ao representante. */
+  const agsLocal=peds=>{ const ps=(peds||[]).map(p=>String(p).replace(/\D/g,'')).filter(Boolean); return (B.ag||[]).filter(x=>x.status!=='cancelado'&&pedsDe(x).some(p=>ps.includes(p))); };
+  function avalInfo(s){ const ags=agsLocal(s.peds), comItens=ags.filter(x=>(x.itens||[]).length), comDia=ags.find(x=>x.data&&x.status==='agendado');
+    if(!ags.length) return {k:'imp',t:'Falta importar o pedido no Agendamentos (PDF do Focco)'};
+    if(!comDia) return {k:'dia',t:'Pedido importado. Escolha o dia no Agendamentos'+(comItens.length?'':' (sem itens: importe o PDF para ter o saldo)')};
+    return {k:'ok',t:'Dia escolhido no Agendamentos: '+dsem(comDia.data)+' '+br(comDia.data)+(comDia.hora?' às '+comDia.hora:''),dia:comDia.data,hora:comDia.hora||'',veic:comDia.veiculo||''}; }
+  function avalHtml(s,curto){ const I=avalInfo(s), ir=P.viewOk('agendamentos')&&S.view!=='agendamentos';
+    return `<div class="bd-avl ${I.k}"><span>${I.k==='ok'?'✓ ':''}${esc(I.t)}</span><div>${I.k==='ok'&&pode()?`<button type="button" class="bd-b1 sm ok" data-act="bd-s-conf" data-v="${esc(s._id)}">Confirmar ao representante</button>`:''}${ir&&!curto?`<button type="button" class="bd-b0 sm" data-act="bd-s-irag" data-v="${esc(s._id)}">${I.k==='imp'?'Importar o pedido':'Abrir no Agendamentos'}</button>`:''}</div></div>`; }
+  /* faixa no alto do Agendamentos com as solicitações em avaliação */
+  function faixaAval(){ try{ if(!B.lido.sol) return ''; const xs=(B.sol||[]).filter(s=>s.st==='avaliacao'&&s.aberto!==false); if(!xs.length) return '';
+      return `<section class="card bd-fx"><div class="bd-fxh"><b>Solicitações em avaliação · ${xs.length}</b><button type="button" class="bd-lk" data-go="agsol">Ver todas as solicitações</button></div>${xs.map(s=>`<div class="bd-fxi${B.avalFoco===s._id?' foco':''}"><div><b>${esc(s.cli||'Cliente não informado')}</b> · pedido${(s.peds||[]).length>1?'s':''} ${esc((s.peds||[]).join(', '))}<small>${esc(s.repNome||'sem representante')}${s.quer&&s.quer.dia?' · pediu '+esc(dsem(s.quer.dia)+' '+br(s.quer.dia))+(s.quer.turno?' '+esc(s.quer.turno):''):''}${s.prazoConf?' · confirmar até '+esc(hm(s.prazoConf))+' de '+esc(br(diaDe(s.prazoConf))):''}</small></div>${avalHtml(s,true)}</div>`).join('')}</section>`; }catch(e){ return ''; } }
+  { const t=setInterval(()=>{ try{ const f=S.extViews&&S.extViews.agendamentos; if(typeof f!=='function') return; clearInterval(t); if(f._bdfx) return;
+      const w=function(){ const h=f.apply(this,arguments); try{ if(P.viewOk('agsol')){ iniciar(); const fx=faixaAval(); if(!fx) return h; const i=h.indexOf('ag-head'), j=i>=0?h.indexOf('<section',i):-1; return j>=0?h.slice(0,j)+fx+h.slice(j):fx+h; } }catch(e){} return h; }; w._bdfx=1; S.extViews.agendamentos=w; }catch(e){ clearInterval(t); } },500); }
   function formLib(s,F){ const d0=F.dia||'';
     return `<div class="bd-lib"><label class="bd-lb">Dia<input type="date" id="bd-l-dia-${esc(s._id)}" class="bd-in" value="${esc(d0)}" min="${esc(hoje())}"></label><label class="bd-lb">Horário<input type="time" id="bd-l-hora-${esc(s._id)}" class="bd-in" value="${esc(F.hora||'')}"></label>
       <label class="bd-lb">Veículo<select id="bd-l-veic-${esc(s._id)}" class="bd-in"><option value="">—</option>${VEICS.map(([k,n])=>`<option value="${k}"${(F.veic||s.veic)===k?' selected':''}>${esc(n)}</option>`).join('')}</select></label>
@@ -491,8 +546,8 @@
     try{ await P.db().collection('bordosol').doc(id).set(d); B.sol=B.sol.filter(s=>s._id!==id).concat([Object.assign({_id:id},d)]); B.nova=null; P.toast('Solicitação adicionada em Recebido.'); }catch(e){ P.erro(e); } P.render(); }
   async function solMuda(id,o,t){ const s=solDe(id); if(!s) return; const em=new Date().toISOString(); o=Object.assign({},o,{alterado:em}); if(t) o.hist=(s.hist||[]).concat([{em,por:eu(),t}]).slice(-40);
     await P.db().collection('bordosol').doc(id).update(o); Object.assign(s,o); }
-  async function liberar(id){ const s=solDe(id), F=B.libF[id]; if(!s||!F) return; const v=x=>(document.getElementById('bd-l-'+x+'-'+id)||{}).value||'';
-    F.dia=v('dia'); F.hora=v('hora'); F.veic=v('veic'); if(!F.dia){ F.err='Escolha o dia.'; P.render(); return; } if(F.dia<hoje()){ F.err='O dia já passou.'; P.render(); return; }
+  async function liberar(id,pre){ const s=solDe(id); if(pre) B.libF[id]=Object.assign({},pre); const F=B.libF[id]; if(!s||!F) return; const v=x=>(document.getElementById('bd-l-'+x+'-'+id)||{}).value||'';
+    if(!pre){ F.dia=v('dia'); F.hora=v('hora'); F.veic=v('veic'); } if(!F.dia){ F.err='Escolha o dia.'; P.render(); return; } if(F.dia<hoje()){ F.err='O dia já passou.'; P.render(); return; }
     try{ const agora=new Date().toISOString(), ags=await agsDosPeds(s.peds||[]); let agId;
       if(ags.length){ for(const x of ags){ const o={data:F.dia,status:'agendado',aberto:true}; if(F.hora) o.hora=F.hora; if(F.veic&&!x.veiculo) o.veiculo=F.veic; if(s.repNome) o.rep=s.repNome;
           if(x.data&&x.data!==F.dia) o.reag=(x.reag||[]).concat([{de:x.data,para:F.dia,motivo:'Solicitação do representante',em:agora}]).slice(-20);
@@ -572,6 +627,8 @@
       <div class="bd-r2"><section class="card"><h2>Onde o caminhão espera</h2><p class="bd-sub">Tempo médio entre uma etapa e a seguinte</p>${D.et.map(o=>bar(o.k==='mix'?'Chegada → Mix':o.k==='fat'?'Mix → Faturado':o.k==='carr'?'Faturado → Carregado':'Carregado → Finalizado',(o.m||0)/mx*100,esc(dur(o.m)),lenta&&o.k===lenta.k?'#e9a24a':'')).join('')}
         ${lenta&&tot?`<p class="bd-nota">A espera ${lenta.k==='mix'?'pelo mix':'pelo '+esc(lenta.n.toLowerCase())} é ${Math.round(lenta.m/tot*100)}% do tempo no pátio.</p>`:''}</section>
         <section class="card"><h2>Por que desistiram</h2><p class="bd-sub">${D.des} desistência${D.des===1?'':'s'} no mês</p>${Object.entries(D.mot).sort((a,b)=>b[1]-a[1]).map(([k,n])=>bar(k,n/mxm*100,n,'#6b7a83')).join('')||'<p class="bd-sub">Nenhuma.</p>'}</section></div>
+      ${(()=>{ const dm={}; (B.rel.d.ent||[]).forEach(e=>{ if(e.dem&&e.dem.motivo) dm[e.dem.motivo]=(dm[e.dem.motivo]||0)+1; }); const es=Object.entries(dm).sort((a,b)=>b[1]-a[1]); const mx=es.length?es[0][1]:1;
+        return `<section class="card"><h2>Motivos de demora</h2><p class="bd-sub">${es.reduce((t,x)=>t+x[1],0)} caminhão(ões) com motivo marcado pela expedição</p>${es.map(([k,n])=>bar(k,n/mx*100,n,'#93413f')).join('')||'<p class="bd-sub">Nenhum motivo marcado neste mês.</p>'}</section>`; })()}
       <section class="card"><h2>Horário das chegadas</h2><p class="bd-sub">Média de caminhões chegando por hora, nos dias com movimento</p><div class="bd-hrs">${Object.entries(D.hrs).map(([h,n])=>`<div><b>${(n/D.nd).toLocaleString('pt-BR',{maximumFractionDigits:1})}</b><i style="height:${n/mxh*100}%"${n/mxh>=.7?' class="pk"':''}></i><span>${String(h).padStart(2,'0')}h</span></div>`).join('')}</div></section>
       <div class="bd-r2">${tab('Por representante',D.reps.map(o=>`<tr><td><b>${esc(o.n)}</b></td><td class="r">${o.c}</td><td class="r">${esc(dur(o.m))}</td><td class="r">${o.d}</td></tr>`).join(''),['Representante','Cargas','Tempo médio','Desistências'])}
         ${tab('Clientes: espera e faltas',D.clis.map(o=>`<tr><td><b>${esc(o.n)}</b></td><td class="r">${o.c}</td><td class="r">${esc(dur(o.m))}</td><td class="r">${o.d}</td><td class="r${o.f>=2?' bd-crit':''}">${o.f}</td></tr>`).join(''),['Cliente','Cargas','Tempo médio','Desistências','Faltas'])}</div>`; }
@@ -603,10 +660,10 @@
   P.registrarAviso(()=>{ if(!iniEsc||!P.viewOk('bordo')) return []; const xs=[], ag=Date.now();
     const atr=vivos(B.ent).filter(e=>{ const s=estado(e); return s.k==='pend'&&s.atr; }); if(atr.length) xs.push({nivel:'warn',rotulo:'Diário de bordo',titulo:atr.length+(atr.length>1?' caminhões passaram do tempo combinado':' caminhão passou do tempo combinado'),texto:atr.slice(0,3).map(e=>'nº '+e.ord+' '+e.mot+' ('+ETN[estado(e).etapa].toLowerCase()+')').join(', '),go:'bordo'});
     const pend=B.sol.filter(s=>s.aberto!==false&&s.st!=='liberado'&&s.st!=='cancelado'&&s.prazoConf), at=pend.filter(s=>ag>new Date(s.prazoConf).getTime()), vh=pend.filter(s=>ag<=new Date(s.prazoConf).getTime()&&diaDe(s.prazoConf)===hoje());
-    if(at.length) xs.push({nivel:'crit',rotulo:'Solicitações',titulo:at.length+(at.length>1?' solicitações passaram do prazo de confirmação':' solicitação passou do prazo de confirmação'),texto:at.slice(0,3).map(s=>(s.cli||(s.peds||[]).join(','))+' ('+s.repNome+')').join(', '),go:'bordosol'});
-    if(vh.length) xs.push({nivel:'warn',rotulo:'Solicitações',titulo:vh.length+(vh.length>1?' solicitações vencem hoje às 12:00':' solicitação vence hoje às 12:00'),texto:vh.slice(0,3).map(s=>(s.cli||(s.peds||[]).join(','))).join(', '),go:'bordosol'});
-    const ac=B.sol.filter(s=>s.acao&&!s.acao.feito); if(ac.length) xs.push({nivel:'warn',rotulo:'Solicitações',titulo:ac.length+(ac.length>1?' pedidos de representantes para reagendar ou cancelar':' pedido de representante para reagendar ou cancelar'),texto:ac.slice(0,3).map(s=>s.repNome+': '+(s.acao.tipo==='cancelar'?'cancelar':'reagendar')).join(', '),go:'bordosol'});
-    const fs=B.falta.filter(f=>!f.acao); if(fs.length) xs.push({nivel:'warn',rotulo:'Agendamentos',titulo:fs.length+(fs.length>1?' cargas não compareceram':' carga não compareceu'),texto:fs.slice(0,3).map(f=>f.cli+' ('+br(f.dia)+')').join(', '),go:'bordosol'});
+    if(at.length) xs.push({nivel:'crit',rotulo:'Solicitações',titulo:at.length+(at.length>1?' solicitações passaram do prazo de confirmação':' solicitação passou do prazo de confirmação'),texto:at.slice(0,3).map(s=>(s.cli||(s.peds||[]).join(','))+' ('+s.repNome+')').join(', '),go:(P.viewOk('agsol')?'agsol':'bordosol')});
+    if(vh.length) xs.push({nivel:'warn',rotulo:'Solicitações',titulo:vh.length+(vh.length>1?' solicitações vencem hoje às 12:00':' solicitação vence hoje às 12:00'),texto:vh.slice(0,3).map(s=>(s.cli||(s.peds||[]).join(','))).join(', '),go:(P.viewOk('agsol')?'agsol':'bordosol')});
+    const ac=B.sol.filter(s=>s.acao&&!s.acao.feito); if(ac.length) xs.push({nivel:'warn',rotulo:'Solicitações',titulo:ac.length+(ac.length>1?' pedidos de representantes para reagendar ou cancelar':' pedido de representante para reagendar ou cancelar'),texto:ac.slice(0,3).map(s=>s.repNome+': '+(s.acao.tipo==='cancelar'?'cancelar':'reagendar')).join(', '),go:(P.viewOk('agsol')?'agsol':'bordosol')});
+    const fs=B.falta.filter(f=>!f.acao); if(fs.length) xs.push({nivel:'warn',rotulo:'Agendamentos',titulo:fs.length+(fs.length>1?' cargas não compareceram':' carga não compareceu'),texto:fs.slice(0,3).map(f=>f.cli+' ('+br(f.dia)+')').join(', '),go:(P.viewOk('agsol')?'agsol':'bordosol')});
     return xs; });
 
   /* ---------- eventos ---------- */
@@ -638,6 +695,12 @@
   document.addEventListener('click',async ev=>{ const b=ev.target.closest&&ev.target.closest('[data-act^="bd-"]'); if(!b) return; const a=b.dataset.act, v=b.dataset.v; if(b.tagName!=='A') ev.preventDefault();
     if(a==='bd-nova'){ if(!pode()) return P.toast('Seu acesso é só para ver.'); B.f=novoForm(); B.port.feito=null; if(S.view!=='bdport') B.ov={f:1}; P.render(); setTimeout(()=>{ const i=document.getElementById('bd-f-placa'); i&&i.focus(); },60); return; }
     if(a==='bd-ed'){ const e=entDe(v); if(!e) return; B.f=novoForm({placa:e.placa,mot:e.mot,peds:(e.peds||[]).slice(),repId:e.repId||'',veic:e.veic||'',tipo:e.tipo||'carrega',cli:e.cli||'',edit:e._id,obs:e.obs||'',hora:hm(e.cheg),ets:Object.fromEntries(ETAPAS.map(([k])=>[k,hm((e.et||{})[k])]))}); B.ov={f:1}; P.render(); return; }
+    if(a==='bd-dem'){ const e=entDe(v); if(!e) return; B.ov={dem:{id:v,motivo:(e.dem||{}).motivo||'',obs:(e.dem||{}).obs||''}}; P.render(); return; }
+    if(a==='bd-demm'&&B.ov&&B.ov.dem){ const t=document.getElementById('bd-dem-obs'); if(t) B.ov.dem.obs=t.value; B.ov.dem.motivo=v; B.ov.dem.err=null; P.render(); return; }
+    if((a==='bd-demok'||a==='bd-demx')&&B.ov&&B.ov.dem){ const e=entDe(v); if(!e) return; const D=B.ov.dem, t=document.getElementById('bd-dem-obs'); if(t) D.obs=t.value;
+      if(a==='bd-demok'&&!D.motivo){ D.err='Escolha o motivo.'; P.render(); return; }
+      const st=estado(e), dem=a==='bd-demx'?null:{motivo:D.motivo,obs:String(D.obs||'').trim().slice(0,600),etapa:st.k==='pend'?(st.etapa||''):'',por:eu(),em:new Date().toISOString()};
+      try{ await P.db().collection('bordo').doc(v).update({dem}); e.dem=dem; B.ov=null; P.toast(dem?'Motivo da demora salvo: '+dem.motivo+'.':'Motivo apagado.'); }catch(er){ P.erro(er); } P.render(); return; }
     if(a==='bd-ovx'||a==='bd-p-x'){ B.ov=null; B.f=null; P.render(); return; }
     if(a==='bd-f-px'&&B.f){ B.f.peds.splice(+v,1); olhaAg(); rr(); return; }
     if(a==='bd-f-rep'&&B.f){ B.f.repId=B.f.repId===v?'':v; B.f.repAbre=false; rr(); return; }
@@ -663,7 +726,9 @@
     if(a==='bd-n-px'&&B.nova){ B.nova.peds.splice(+v,1); rr(); return; }
     if(a==='bd-n-ok') return novaSol();
     if(!pode()&&/^bd-(s-|f-reag|f-canc|r-|a-)/.test(a)&&a!=='bd-r-tp'){ P.toast('Seu acesso é só para ver.'); return; }
-    if(a==='bd-s-av'){ try{ await solMuda(v,{st:'avaliacao'},'Em avaliação'); }catch(e){ P.erro(e); } P.render(); return; }
+    if(a==='bd-s-av'){ try{ await solMuda(v,{st:'avaliacao'},'Em avaliação'); }catch(e){ P.erro(e); } B.avalFoco=v; if(P.viewOk('agendamentos')){ P.go('agendamentos'); P.toast('Importe o PDF do pedido e escolha o dia. Depois confirme na faixa do alto.'); } else P.render(); return; }
+    if(a==='bd-s-irag'){ B.avalFoco=v; P.go('agendamentos'); return; }
+    if(a==='bd-s-conf'){ const s=solDe(v); if(!s) return; const I=avalInfo(s); if(I.k!=='ok') return P.toast(I.t); return liberar(v,{dia:I.dia,hora:I.hora,veic:I.veic}); }
     if(a==='bd-s-volta'){ try{ await solMuda(v,{st:'recebido'},'Voltou para Recebido'); }catch(e){ P.erro(e); } P.render(); return; }
     if(a==='bd-s-lib'){ const s=solDe(v); if(!s) return; B.libF[v]={dia:(s.lib&&s.lib.dia)||(s.quer&&s.quer.dia&&s.quer.dia>=hoje()?s.quer.dia:'')||s.prazoCarr||'',hora:(s.lib&&s.lib.hora)||(s.quer&&s.quer.turno==='tarde'?'13:30':s.quer&&s.quer.turno==='manhã'?'08:00':''),veic:(s.lib&&s.lib.veic)||s.veic||''}; P.render(); return; }
     if(a==='bd-s-libx'){ delete B.libF[v]; P.render(); return; }
@@ -692,12 +757,12 @@
     if(a==='bd-a-salva') return salvaAjustes();
     if(a==='bd-rmes'){ const [y,m]=B.rel.mes.split('-').map(Number), d=new Date(y,m-1+(+v),1); B.rel.mes=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); B.rel.d=null; P.render(); return; }
     if(a==='bd-rprint'){ window.print(); return; }
-    if(a==='bd-rcsv'){ const R=B.rel.d; if(!R) return; baixar('diario-de-bordo-'+B.rel.mes+'.csv',[['Dia','Ordem','Motorista','Cliente','Representante','Pedidos','Placa','Veículo','Chegada','Agenda','Tipo','Mix','Faturado','Carregado','Finalizado','No pátio (min)','Desistente','Motivo','Observação']].concat(ordena(R.ent).sort((a,b)=>String(a.dia).localeCompare(String(b.dia))).map(e=>[br(e.dia),e.ord,e.mot,e.cli,e.repNome,(e.peds||[]).join(' '),e.placa,veicN(e.veic),hm(e.cheg),agTxt(e),e.tipo==='pit'?'PIT':'Carrega'].concat(ETAPAS.map(([k])=>hm((e.et||{})[k]))).concat([patioMin(e),e.des?hm(e.des.em):'',e.des?e.des.motivo:'',e.obs||''])))); return; } });
+    if(a==='bd-rcsv'){ const R=B.rel.d; if(!R) return; baixar('diario-de-bordo-'+B.rel.mes+'.csv',[['Dia','Ordem','Motorista','Cliente','Representante','Pedidos','Placa','Veículo','Chegada','Agenda','Tipo','Mix','Faturado','Carregado','Finalizado','No pátio (min)','Desistente','Motivo','Observação','Motivo da demora','Obs. da demora']].concat(ordena(R.ent).sort((a,b)=>String(a.dia).localeCompare(String(b.dia))).map(e=>[br(e.dia),e.ord,e.mot,e.cli,e.repNome,(e.peds||[]).join(' '),e.placa,veicN(e.veic),hm(e.cheg),agTxt(e),e.tipo==='pit'?'PIT':'Carrega'].concat(ETAPAS.map(([k])=>hm((e.et||{})[k]))).concat([patioMin(e),e.des?hm(e.des.em):'',e.des?e.des.motivo:'',e.obs||'',(e.dem||{}).motivo||'',(e.dem||{}).obs||''])))); return; } });
   /* TV: troca de aba sozinha (tocar numa aba segura ela por 2 min) */
-  setInterval(()=>{ if(S.view!=='bordotv'){ if(document.body.classList.contains('bd-tvon')) document.body.classList.remove('bd-tvon'); B.tv.cheia=false; return; }
+  setInterval(()=>{ if(MTV()) return; if(S.view!=='bordotv'){ if(document.body.classList.contains('bd-tvon')) document.body.classList.remove('bd-tvon'); B.tv.cheia=false; return; }
     const ag=Date.now(); if(ag-B.tv.fixo<120000) return; if(ag-B.tv.troca>=segTV()*1000){ B.tv.aba=B.tv.aba==='diario'?'agend':'diario'; B.tv.troca=ag; P.render(); } },1000);
   /* 27/11/2026: o navegador só deixa ocupar a tela toda depois de um clique: na TV sozinha, o primeiro clique em qualquer lugar já põe em tela cheia */
-  document.addEventListener('click',ev=>{ try{ if(S.view!=='bordotv'||document.fullscreenElement||!document.body.classList.contains('bd-tvon')) return; if(ev.target.closest&&ev.target.closest('[data-act="bd-tvcheia"]')) return;
+  document.addEventListener('click',ev=>{ try{ if((S.view!=='bordotv'&&!MTV())||document.fullscreenElement||!document.body.classList.contains('bd-tvon')) return; if(ev.target.closest&&ev.target.closest('[data-act="bd-tvcheia"]')) return;
     document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().then(()=>P.render()).catch(()=>{}); }catch(e){} },true);
   document.addEventListener('fullscreenchange',()=>{ try{ if(S.view==='bordotv') P.render(); }catch(e){} });
   document.addEventListener('fullscreenchange',()=>{ if(!document.fullscreenElement&&B.tv.cheia){ B.tv.cheia=false; P.render(); } });
@@ -706,22 +771,29 @@
      e a TV abre numa aba nova (?tv=bordo) para levar ao monitor. No celular continuam as abas de baixo. */
   const comSide=f=>function(){ const h=f.apply(this,arguments); try{ window.__bdSide&&window.__bdSide(); }catch(e){} return h; };
   function tvUrl(){ return location.pathname+'?tv=bordo'; }
-  const BD_SIDE=[['bordo','Diário de bordo'],['bordosol','Solicitações de agendamento'],['bordotv','TV do diário'],['bordorel','Relatório do mês']];
-  function bdSide(){ try{ const nl=document.getElementById('navlist'); if(!nl) return; const old=nl.querySelector('.bd-side'); if(old) old.remove();
+  const BD_SIDE=[['bordo','Diário de bordo'],['bordotv','TV do diário'],['bordomot','TV dos motoristas'],['bordorel','Relatório do mês']];
+  /* 27/11 21h ("o diário fica se tremendo"): não tira e põe de novo a lista quando nada mudou, e não desliga a classe que esconde
+     as abas de cima enquanto o painel ainda está redesenhando a lateral (era isso que fazia as abas aparecerem e sumirem a cada atualização). */
+  function bdSide(){ try{ const nl=document.getElementById('navlist'); if(!nl) return; const old=nl.querySelector('.bd-side');
       const b=nl.querySelector('[data-mod="bordo"]')||nl.querySelector('.navbtn[data-go="bordo"]'); const vs=BD_SIDE.filter(([v])=>P.viewOk(v));
-      document.body.classList.toggle('bd-side-on',!!b&&vs.length>1&&!document.body.classList.contains('bd-tvon')); if(!b||vs.length<2) return;
-      const h=vs.map(([v,n])=>v==='bordotv'?`<a class="navbtn gxg-si" href="${esc(tvUrl())}" target="_blank" rel="noopener" title="Abre numa aba nova"><span>${esc(n)} ↗</span></a>`
-        :`<button class="navbtn gxg-si" data-go="${v}" ${S.view===v?'aria-current="page"':''}><span>${esc(n)}</span></button>`).join('');
-      b.insertAdjacentHTML('afterend',`<div class="gxg-sub bd-side">${h}</div>`); }catch(e){ console.warn('[bordo] lateral',e); } }
+      const tv=document.body.classList.contains('bd-tvon'), quer=!!b&&vs.length>1&&!tv;
+      if(quer){ if(!document.body.classList.contains('bd-side-on')) document.body.classList.add('bd-side-on'); }
+      else if((tv||nl.children.length>0)&&document.body.classList.contains('bd-side-on')) document.body.classList.remove('bd-side-on');
+      if(!b||vs.length<2){ if(old) old.remove(); return; }
+      const h=vs.map(([v,n])=>v==='bordomot'?`<a class="navbtn gxg-si" href="${esc(location.pathname+'?tv=motoristas')}" target="_blank" rel="noopener" title="Abre numa aba nova: para a tela da sala dos motoristas"><span>${esc(n)} ↗</span></a>`:v==='bordotv'?`<a class="navbtn gxg-si" href="${esc(tvUrl())}" target="_blank" rel="noopener" title="Abre numa aba nova"><span>${esc(n)} ↗</span></a>`
+        :`<button class="navbtn gxg-si" data-go="${v}"${S.view===v?' aria-current="page"':''}><span>${esc(n)}</span></button>`).join('');
+      if(old&&old.previousElementSibling===b&&old.__h===h) return; if(old) old.remove();
+      b.insertAdjacentHTML('afterend',`<div class="gxg-sub bd-side">${h}</div>`); const nv=b.nextElementSibling; if(nv) nv.__h=h; }catch(e){ console.warn('[bordo] lateral',e); } }
   /* a lateral é refeita pelo painel a cada desenho: observa o #navlist e põe as telas de novo (sem laço: só quando falta) */
   { let _bs=0; const bsAgenda=()=>{ if(_bs) return; _bs=setTimeout(()=>{ _bs=0; const nl=document.getElementById('navlist'); if(!nl) return; const sub=nl.querySelector('.bd-side');
       const ok=sub&&[...sub.querySelectorAll('[data-go]')].every(x=>(x.getAttribute('aria-current')==='page')===(x.dataset.go===S.view)); if(!ok||!nl.querySelector('[data-mod="bordo"]')!==!sub) bdSide(); },0); };
     const liga=()=>{ const nl=document.getElementById('navlist'); if(!nl||!window.MutationObserver){ setTimeout(liga,500); return; } new MutationObserver(bsAgenda).observe(nl,{childList:true}); bsAgenda(); };
     liga(); window.__bdSide=bsAgenda; }
-  P.registrarModulo({ id:'bordo', nome:'Diário de bordo', ic:'caminhao', telas:{ bordo:{nome:'Diário de bordo',mob:'Diário',render:comSide(vDiario)}, bordosol:{nome:'Solicitações de agendamento',mob:'Solicitações',render:comSide(vSol)}, bordotv:{nome:'TV do diário',mob:'TV',render:comSide(vTV)}, bordorel:{nome:'Relatório do mês',mob:'Relatório',render:comSide(vRel)} }, iniciar });
+  P.registrarModulo({ id:'bordo', nome:'Diário de bordo', ic:'caminhao', telas:{ bordo:{nome:'Diário de bordo',mob:'Diário',render:comSide(vDiario)}, bordosol:{nome:'Solicitações de agendamento',mob:'Solicitações',render:comSide(vSol),menu:false}, bordotv:{nome:'TV do diário',mob:'TV',render:comSide(vTV)}, bordorel:{nome:'Relatório do mês',mob:'Relatório',render:comSide(vRel)}, bordomot:{nome:'TV dos motoristas',mob:'Motoristas',render:comSide(vMot),menu:false} }, iniciar });
   P.registrarPerfil('faturamento',{ nome:'Faturamento e expedição', mods:['bordo','agend'], pos:5, desc:'Para o pessoal do faturamento/expedição: diário de bordo (registrar chegada, marcar Mix/Faturado e Carregado/Finalizado, desistentes), solicitações dos representantes, agendamentos, TV e relatório do mês.' });
   P.registrarPerfil('tvbordo',{ nome:'TV do diário de bordo', mods:['bordo'], soVer:true, pos:5, desc:'Para a TV ou o monitor da expedição: mostra o diário de bordo e os agendados em tela inteira, trocando de aba sozinho. Só acompanha, não grava nada.' });
   { let foi=false; const t=setInterval(()=>{ try{ const A=S.acs; if(!A||!A.pronto) return; clearInterval(t); const d=A.doc||{};
+      if(!foi&&/[?&]tv=motoristas\b/.test(location.search)){ const v=P.viewOk('bordomot')?'bordomot':P.viewOk('bdmot')?'bdmot':''; if(v){ foi=true; P.go(v); return; } }
       if(!foi&&((!A.dono&&d.perfil==='tvbordo')||/[?&]tv=bordo\b/.test(location.search))&&P.viewOk('bordotv')){ foi=true; P.go('bordotv'); } }catch(e){ clearInterval(t); } },400); }
 
   document.head.insertAdjacentHTML('beforeend',`<style id="bd-css">
@@ -837,5 +909,39 @@
   .bd-repsel{display:flex;align-items:center;gap:12px;border:2px solid var(--teal-strong,#163c52);border-radius:12px;padding:10px 12px;background:var(--teal-tint,#eaf3f6)}.bd-rst{flex:1;min-width:0}.bd-rst b{display:block}.bd-rst small{color:var(--muted);font-size:12px}.bd-repsel .bd-rdot{flex:none;width:16px;height:16px;border-radius:50%;border:5px solid var(--teal-strong,#163c52);background:#fff}
 
   .bd-obs{display:block;color:#8a5a12!important;font-style:italic;max-width:340px;white-space:normal}
+
+  .bd-tv.mt .mt-h{font-size:2em;margin:0 0 .35em;white-space:nowrap}
+  .mt-tab{width:100%;border-collapse:collapse;table-layout:fixed;font-size:1.9em;font-variant-numeric:tabular-nums}.mt-tab th{background:#163c52;color:#fff;font-size:.5em;font-weight:600;padding:.5em;text-align:left}
+  .mt-tab td{border-bottom:2px solid #dde4e8;padding:.35em .5em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}.mt-n{font-weight:800;text-align:center;color:#163c52}
+  .mt-plc{display:inline-block;border:.08em solid #1d2b33;border-top:.28em solid #2647a5;border-radius:.18em;padding:0 .3em;font-weight:800;letter-spacing:.06em;background:#fff}
+  .mt-nm{font-weight:700}.mt-st b{display:block;font-size:.85em}.mt-ps{display:flex;gap:.35em;margin-top:.15em}.mt-p{font-size:.42em;padding:.2em .6em;border-radius:1em;background:#eef2f4;color:#7a8a93;font-weight:700}
+  .mt-p.ok{background:#c9ecd6;color:#17694a}.mt-p.ag{background:#163c52;color:#fff}.mt-t{font-size:.7em;color:#33464f}.mt-t small{display:block;font-size:.75em;color:#7a8a93}
+  .mt-tab tr.fim{background:#c9ecd6}.mt-tab tr.fim .mt-st b{color:#17694a}
+  @keyframes mtpisca{0%,100%{background:#fff3c4}50%{background:#ffe27a}}.mt-tab tr.novo{animation:mtpisca 1.6s ease-in-out infinite}
+  @media (prefers-reduced-motion:reduce){.mt-tab tr.novo{animation:none;background:#fff3c4}}
+  .mt-vz{font-size:2.4em;text-align:center;color:#5d6e77;margin:3em 0}
+
+  /* 27/11/2026 · "mais visual, tem que chamar atenção, pode ficar piscando" */
+  .mt-st b.mt-bd{display:inline-block}.mt-p{font-size:.5em!important}
+  .mt-bd{display:inline-block;padding:.08em .5em;border-radius:.3em;font-size:.82em!important;color:#fff}
+  .mt-bd.s-mix{background:#5a6b75}.mt-bd.s-fat{background:#c77a12}.mt-bd.s-carr{background:#1f5f99}.mt-bd.s-fim{background:#6b4e9b}
+  .mt-bd.lib{background:#12804f;animation:mtlib 1.2s linear infinite}
+  @keyframes mtlib{0%,49%{background:#12804f;color:#fff}50%,100%{background:#ffd400;color:#1d2b33}}
+  .mt-tab tr.fim{background:#bdf0cf!important;animation:mtfim 1.2s ease-in-out infinite}@keyframes mtfim{0%,100%{background:#bdf0cf}50%{background:#7fe0a3}}
+  .mt-novo{display:inline-block;margin-left:.4em;font-style:normal;font-size:.42em;font-weight:800;background:#ffd400;color:#1d2b33;padding:.2em .6em;border-radius:1em;vertical-align:middle;animation:mtnv .8s steps(2,end) infinite}@keyframes mtnv{50%{opacity:.15}}
+  .mt-tab tr.novo{animation:mtpisca2 .9s ease-in-out infinite}@keyframes mtpisca2{0%,100%{background:#fff3c4}50%{background:#ffd84d}}
+  .mt-t.dem{color:#b3261e;font-weight:800}.mt-t.dem small{color:#b3261e;animation:mtnv 1s steps(2,end) infinite}
+  .mt-cham{display:flex;align-items:center;gap:1em;flex-wrap:wrap;margin:.6em 1.4em 0;padding:.5em 1em;border-radius:.5em;font-size:2.1em;font-weight:800;color:#fff;background:#12804f;animation:mtcham 1s steps(2,end) infinite}
+  @keyframes mtcham{0%{background:#12804f}50%{background:#0a5c38}}.mt-chx{white-space:nowrap}.mt-cham .mt-plc{color:#1d2b33;font-size:.85em}.mt-chi{font-size:1em}
+  .bd-tvtab td.atr{animation:tvatr 1s steps(2,end) infinite}@keyframes tvatr{50%{background:#e64640}}
+  .bd-tvtab td.pend{animation:tvpend 2s ease-in-out infinite}@keyframes tvpend{50%{background:#f07a75}}
+
+  .bd-avl{flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;border-radius:10px;padding:8px 10px;font-size:13px;font-weight:600;margin-bottom:6px;background:#fdf1dc;color:#7a4b06}.bd-avl.dia{background:#e8f0f8;color:#1f4f7a}.bd-avl.ok{background:#dcf3e5;color:#17694a}.bd-avl>div{display:flex;gap:6px;flex-wrap:wrap}
+  .bd-fx{margin-bottom:14px;border:2px solid #e7b04a}.bd-fxh{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}.bd-fxi{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}.bd-fxi small{display:block;color:var(--muted);font-size:12px}.bd-fxi.foco{background:#fffbe6;margin:0 -10px;padding:8px 10px;border-radius:8px}.bd-fxi .bd-avl{margin:0}
+  @media (max-width:760px){.bd-fxi{grid-template-columns:1fr}}
+
+  html:has(body.bd-tvon),body.bd-tvon{overflow:hidden}
+
+  .bd-dem{display:block;color:#93413f!important;font-weight:600;max-width:360px;white-space:normal}.bd-lkw{color:#b3261e!important;font-weight:700}
 </style>`);
 })();

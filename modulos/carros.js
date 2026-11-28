@@ -172,7 +172,7 @@ Eu, {NOME}, CPF {CPF}, declaro que estou ciente e de acordo com as regras abaixo
      logo, relógio, quem está e Sair; a câmera liga sozinha na tela inicial (como o celular do almox). A dona vê com ?portaria=1. */
   const soloDe=(tela,perfil)=>{ try{ const A=S.acs; if(!A||!A.pronto||S.view!==tela) return false; if(A.dono) return new RegExp('[?&]'+perfil+'=1').test(location.search); return (A.doc||{}).perfil===perfil; }catch(e){ return false; } };
   const solo=()=>soloDe('portaria','portaria');
-  function appBar(tit){ const nm=eu(), ag=new Date(), sw=P.viewOk('bdport')?`<nav class="cv-sw" aria-label="Portaria"><button type="button" data-go="portaria" aria-pressed="${S.view==='portaria'}">Carros</button><button type="button" data-go="bdport" aria-pressed="${S.view==='bdport'}">Caminhões</button></nav>`:''; return `<div class="cv-bar" role="banner"><img src="${LOGO_ESC}" alt="Colafix"><span class="cv-bart">${esc(tit)}</span>${sw}<span class="cv-clk" data-rtv-clk>${String(ag.getHours()).padStart(2,'0')}:${String(ag.getMinutes()).padStart(2,'0')}</span>
+  function appBar(tit){ const nm=eu(), ag=new Date(), sw=P.viewOk('bdport')?`<nav class="cv-sw" aria-label="Portaria"><button type="button" data-go="portaria" aria-pressed="${S.view==='portaria'}">Carros</button><button type="button" data-go="bdport" aria-pressed="${S.view==='bdport'}">Caminhões</button></nav>`:''; return `<div class="cv-bar" role="banner"><img src="${LOGO_ESC}" alt="Colafix"><span class="cv-bart">${esc(tit)}</span>${sw}${P.viewOk('bdmot')?`<a class="cv-tvm" href="${esc(location.pathname+'?tv=motoristas')}" target="_blank" rel="noopener" title="Abre a TV dos motoristas numa aba nova: leve para a tela da sala dos motoristas">TV dos motoristas ↗</a>`:''}<span class="cv-clk" data-rtv-clk>${String(ag.getHours()).padStart(2,'0')}:${String(ag.getMinutes()).padStart(2,'0')}</span>
       <button type="button" class="cv-sair" data-act="cv-sair" aria-label="Sair da conta ${esc(nm)}"><span class="cv-av" aria-hidden="true">${esc(ini(nm))}</span><span>${Date.now()-_sairConf<4000?'Toque de novo para sair':'Sair'}</span></button></div>`; }
   let _autoCam=true, _sairConf=0;
   function vPortaria(){ const so=solo(); try{ document.body.classList.toggle('cv-solo',so); }catch(e){}
@@ -578,7 +578,7 @@ Eu, {NOME}, CPF {CPF}, declaro que estou ciente e de acordo com as regras abaixo
 
   /* ---------- módulos e cargo ---------- */
   P.cvBar=appBar; /* a tela Caminhões (modulos/bordo.js, 27/11) usa a mesma barra no celular da portaria */
-  P.registrarModulo({ id:'portaria', nome:'Portaria · carros', ic:'portaria', telas:{ portaria:{nome:'Portaria',mob:'Portaria',render:vPortaria}, bdport:{nome:'Caminhões',mob:'Caminhões',render:()=>P.bordoPort?P.bordoPort():'<section class="card"><div class="empty">Carregando…</div></section>'} }, iniciar:carregar });
+  P.registrarModulo({ id:'portaria', nome:'Portaria · carros', ic:'portaria', telas:{ portaria:{nome:'Portaria',mob:'Portaria',render:vPortaria}, bdport:{nome:'Caminhões',mob:'Caminhões',render:()=>P.bordoPort?P.bordoPort():'<section class="card"><div class="empty">Carregando…</div></section>'}, bdmot:{nome:'TV dos motoristas',mob:'TV',menu:false,render:()=>P.bordoMot?P.bordoMot():'<section class="card"><div class="empty">Carregando…</div></section>'} }, iniciar:carregar });
   P.registrarModulo({ id:'carros', nome:'Carros', ic:'carro', telas:{ carviag:{nome:'Viagens',render:vViagens}, carcad:{nome:'Carros e motoristas',render:vCad} }, iniciar:carregar });
   P.registrarModulo({ id:'motorista', nome:'Motorista · carros', ic:'carro', telas:{ motorista:{nome:'Minhas viagens',mob:'Viagens',render:vMotorista} }, iniciar:carregarMot });
   P.registrarPerfil('motorista',{ nome:'Motorista (carros)', mods:['motorista'], pos:6, desc:'Para o celular do vendedor/motorista: escaneia o QR do carro e pede a saída (km, foto do painel, estado do carro e termo), devolve o carro na volta (km, foto do painel, abastecimento, avaria, limpeza) e vê o histórico. A portaria só libera e recebe.' });
@@ -847,5 +847,8 @@ Eu, {NOME}, CPF {CPF}, declaro que estou ciente e de acordo com as regras abaixo
     .cv-ptl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 22px;align-items:start}.cv-ptl>*{grid-column:1/-1}.cv-ptl>.cv-sec{grid-column:auto}
     .cv-ptl .cv-grid{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
     .cv-appc .cv-feito,.cv-appc .cv-flh,.cv-appc .cv-fl{max-width:640px;margin-left:auto;margin-right:auto}}
+
+  .cv-tvm{display:none;color:#fff;text-decoration:none;font-weight:700;font-size:13px;border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:6px 12px;white-space:nowrap;margin-left:auto}.cv-tvm:hover{background:rgba(255,255,255,.12)}
+  @media (hover:hover) and (pointer:fine) and (min-width:900px){.cv-tvm{display:inline-block}.cv-tvm+.cv-clk{margin-left:12px}}
 </style>`);
 })();

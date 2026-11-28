@@ -61,7 +61,18 @@
   function iniciarBase(){ if(iniBase||!P.db()) return; iniBase=true;
     ouvir('cfg',()=>P.db().doc('config/bordo'),g=>{ B.cfg=g&&g.exists?g.data()||{}:{}; B.lido.cfg=true; P.rerender(); });
     ouvirDia(); setInterval(tique,30000); }
-  function ouvirDia(){ B.diaLive=hoje(); if(!B.dia) B.dia=B.diaLive; ouvir('dia',()=>P.db().collection('bordo').where('dia','==',B.diaLive).limit(300),s=>{ B.ent=docs(s); B.lido.dia=true; P.rerender(); }); }
+  /* 28/11/2026 ("se a pessoa não carregou em um dia ela tem que ficar para o próximo dia ser a primeira"): lê também os caminhões
+     dos últimos 7 dias que ficaram no pátio (sem finalizar nem desistir) e mostra junto; quem grava (portaria/escritório) muda o dia
+     deles para hoje (ficouDe guarda o dia original) e renumera pela chegada, então eles ficam no topo, com as etapas já feitas. */
+  const junta=()=>{ const h=B.entH||[], ids=new Set(h.map(e=>e._id)); B.ent=(B.antes||[]).filter(e=>!ids.has(e._id)).concat(h); };
+  function ouvirDia(){ B.diaLive=hoje(); if(!B.dia) B.dia=B.diaLive; const d0=B.diaLive;
+    ouvir('dia',()=>P.db().collection('bordo').where('dia','==',d0).limit(300),s=>{ B.entH=docs(s); junta(); B.lido.dia=true; P.rerender(); puxaOntem(); });
+    ouvir('antes',()=>P.db().collection('bordo').where('dia','>=',addD(d0,-7)).where('dia','<',d0).limit(300),s=>{ B.antes=docs(s).filter(e=>{ const k=estado(e).k; return k==='pend'; }); junta(); P.rerender(); puxaOntem(); }); }
+  let _pux=false;
+  async function puxaOntem(){ if(_pux||!pode()||!P.db()||!B.lido.dia) return; const h=B.diaLive, xs=vivos(B.ent).filter(e=>e.dia<h&&estado(e).k==='pend'); if(!xs.length) return; _pux=true;
+    try{ for(const e of xs){ const fd=(e.ficouDe||[]).concat(e.ficouDe&&e.ficouDe.includes(e.dia)?[]:[e.dia]).slice(-10); await P.db().collection('bordo').doc(e._id).update({dia:h,ficouDe:fd}); e.dia=h; e.ficouDe=fd; }
+      await renumera(h); }catch(er){ console.warn('[bordo] ficou de ontem',er&&er.code); } finally{ _pux=false; } }
+  const ficou=e=>{ const f=e.ficouDe||[]; return f.length?f[0]:(e.dia&&e.dia<B.diaLive?e.dia:''); };
   function iniciar(){ iniciarBase(); if(iniEsc||!P.db()) return; iniEsc=true;
     ouvir('ag',()=>P.db().collection('agendamentos').where('aberto','==',true).limit(600),s=>{ B.ag=docs(s); B.lido.ag=true; P.rerender(); });
     ouvir('sol',()=>P.db().collection('bordosol').where('aberto','==',true).limit(300),s=>{ B.sol=docs(s); B.lido.sol=true; P.rerender(); });
@@ -177,6 +188,19 @@
           if(k==='fim'&&x.aberto) await gravaAg(x,{status:'carregado',aberto:false,fechadoEm:agora,carregadoEm:agora,carregadoDia:hoje()},'Carregado às '+hm(agora)+' (diário de bordo nº '+e.ord+')'); }catch(er){ console.warn('[bordo] agendamento',er); } } }
       P.toast(on?nomeMk+' às '+hm(agora)+' · '+e.mot:nomeMk+(mk.length>1?' desmarcados.':' desmarcado.')); if(escritorio()) sincroniza(); }
     catch(er){ P.erro(er); } P.render(); }
+  /* 28/11/2026 (faturamento): "Chamar motorista" (cham) → a TV dos motoristas mostra PODE ENTRAR PARA CARREGAR; a portaria dá ok
+     de que ele entrou (entrou) → CARREGANDO; Finalizado → FINALIZADO. Situação do pedido marcada pelo faturamento (pedSt 'ok'|'rep'). */
+  async function grava1(id,o,msg){ const e=entDe(id); if(!e) return; if(!pode()) return P.toast('Seu acesso é só para ver.');
+    try{ await P.db().collection('bordo').doc(id).update(o); Object.assign(e,o); if(msg) P.toast(msg); }catch(er){ P.erro(er); } P.render(); }
+  const marca=()=>({em:new Date().toISOString(),por:eu()});
+  function chamar(id){ const e=entDe(id); if(!e) return; if(e.cham){ if(!confirm('Desfazer o chamado de '+e.mot+'? A TV volta para AGUARDANDO.')) return; return grava1(id,{cham:null,entrou:null},'Chamado desfeito.'); }
+    return grava1(id,{cham:marca()},e.mot+' chamado · a TV dos motoristas avisa PODE ENTRAR.'); }
+  function entrou(id){ const e=entDe(id); if(!e) return; if(e.entrou){ if(!confirm('Desfazer a entrada de '+e.mot+'?')) return; return grava1(id,{entrou:null},'Entrada desfeita.'); }
+    return grava1(id,{entrou:marca(),cham:e.cham||marca()},e.mot+' entrou · a TV mostra CARREGANDO.'); }
+  function pedSt(id,v){ const e=entDe(id); if(!e) return; const nv=e.pedSt===v?null:v; return grava1(id,{pedSt:nv,pedStEm:nv?new Date().toISOString():null,pedStPor:nv?eu():null},nv==='ok'?'Pedido OK.':nv==='rep'?'Aguardando representante.':'Situação do pedido apagada.'); }
+  /* situação para a TV dos motoristas */
+  function mtSit(e){ const st=estado(e), et=e.et||{}; if(st.k==='fim') return {k:'fim',t:'FINALIZADO · PODE SAIR'}; if(e.entrou||et.carr) return {k:'carr',t:'CARREGANDO'}; if(e.cham) return {k:'cham',t:'PODE ENTRAR PARA CARREGAR'}; return {k:'ag',t:'AGUARDANDO'}; }
+  const pedTxt=e=>e.pedSt==='rep'?{k:'rep',t:'Aguardando representante'}:(e.pedSt==='ok'||(e.et||{}).fat)?{k:'ok',t:'Pedido OK'}:{k:'',t:'—'};
   async function desistir(id){ const e=entDe(id), D=B.ov&&B.ov.des; if(!e||!D) return; if(!D.motivo){ D.err='Escolha o motivo.'; P.render(); return; }
     try{ const des={em:new Date().toISOString(),motivo:D.motivo,obs:String(D.obs||'').trim().slice(0,200),por:eu()}; await P.db().collection('bordo').doc(id).update({des}); e.des=des; B.ov=null; P.toast(e.mot+' marcado como desistente.'); }
     catch(er){ P.erro(er); } P.render(); }
@@ -260,14 +284,14 @@
     const linha=e=>{ const st=estado(e), pm=patioMin(e), cls=st.k==='fim'?'fim':st.k==='des'?'des':st.atr?'atr':'';
       return `<tr class="${cls}" data-b="${esc(norm([e.mot,e.cli,e.placa,e.repNome,(e.peds||[]).join(' '),e.obs||'',(e.dem||{}).motivo||'',(e.dem||{}).obs||''].join(' ')))}">
         <td class="bd-ord">${e.ord}</td>
-        <td><b class="bd-nm">${esc(e.mot)}</b><small>${esc(e.cli||'—')}${e.repNome?' · '+esc(e.repNome):''}</small>${e.obs?`<small class="bd-obs" title="${esc(e.obs)}">Obs.: ${esc(e.obs)}</small>`:''}${e.dem?`<small class="bd-dem" title="${esc(e.dem.obs||'')}">Demora: ${esc(e.dem.motivo)}${e.dem.obs?' · '+esc(e.dem.obs):''}</small>`:''}</td>
+        <td><b class="bd-nm">${esc(e.mot)}</b>${ficou(e)?`<span class="bd-ficou">Ficou de ${esc(br(ficou(e)))}</span>`:''}<small>${esc(e.cli||'—')}${e.repNome?' · '+esc(e.repNome):''}</small>${e.obs?`<small class="bd-obs" title="${esc(e.obs)}">Obs.: ${esc(e.obs)}</small>`:''}${e.dem?`<small class="bd-dem" title="${esc(e.dem.obs||'')}">Demora: ${esc(e.dem.motivo)}${e.dem.obs?' · '+esc(e.dem.obs):''}</small>`:''}</td>
         <td>${placaMini(e.placa)}<small>${esc(veicN(e.veic))}</small></td>
         <td class="bd-num">${esc(hm(e.cheg))}</td>
         <td><span class="bd-ag ${e.agKind||'sem'}">${esc(agTxt(e))}</span>${(e.peds||[]).length?`<small>${esc((e.peds||[]).join(', '))}</small>`:''}</td>
         <td><span class="bd-tp ${e.des?'des':e.tipo}">${e.des?'Desistente':e.tipo==='pit'?'PIT':'Carrega'}</span>${e.des?`<small>${esc(e.des.motivo)}</small>`:''}</td>
         ${ETAPAS.map(([k])=>celEtapa(e,k,st)).join('')}
         <td class="bd-num bd-pt${st.atr?' atr':''}">${e.des?'saiu '+esc(hm(e.des.em)):esc(dur(pm))}</td>
-        <td class="bd-acts">${pode()&&st.k!=='des'?`<button type="button" class="bd-lk${st.atr&&!e.dem?' bd-lkw':''}" data-act="bd-dem" data-v="${esc(e._id)}">${e.dem?'Demora ✓':st.atr?'⚠ Motivo da demora':'Demora'}</button>`:''}${pode()&&st.k==='pend'?`<button type="button" class="bd-lk" data-act="bd-des" data-v="${esc(e._id)}">Desistiu</button>`:''}${pode()?`<button type="button" class="bd-lk" data-act="bd-ed" data-v="${esc(e._id)}">Corrigir</button>`:''}</td></tr>`; };
+        <td class="bd-acts">${pode()&&st.k==='pend'?`<button type="button" class="bd-lk bd-cham${e.cham?' on':''}" data-act="bd-cham" data-v="${esc(e._id)}" title="${e.cham?'Tocar para desfazer':'A TV dos motoristas mostra PODE ENTRAR PARA CARREGAR'}">${e.entrou?'✓ Entrou '+esc(hm(e.entrou.em)):e.cham?'📣 Chamado '+esc(hm(e.cham.em)):'📣 Chamar motorista'}</button>`:''}${pode()&&st.k!=='des'?(e.pedSt?`<button type="button" class="bd-lk bd-ped ${e.pedSt}" data-act="bd-ped" data-v="${esc(e._id)}|${e.pedSt}" title="Tocar para apagar">${e.pedSt==='ok'?'✓ Pedido OK':'⏳ Aguard. representante'}</button>`:`<button type="button" class="bd-lk" data-act="bd-ped" data-v="${esc(e._id)}|ok">Pedido OK</button><button type="button" class="bd-lk" data-act="bd-ped" data-v="${esc(e._id)}|rep">Aguard. rep.</button>`):''}${pode()&&st.k!=='des'?`<button type="button" class="bd-lk${st.atr&&!e.dem?' bd-lkw':''}" data-act="bd-dem" data-v="${esc(e._id)}">${e.dem?'Demora ✓':st.atr?'⚠ Motivo da demora':'Demora'}</button>`:''}${pode()&&st.k==='pend'?`<button type="button" class="bd-lk" data-act="bd-des" data-v="${esc(e._id)}">Desistiu</button>`:''}${pode()?`<button type="button" class="bd-lk" data-act="bd-ed" data-v="${esc(e._id)}">Corrigir</button>`:''}</td></tr>`; };
     const tab=vs.length?`<div class="bd-tw"><table class="bd-tab"><thead><tr><th>#</th><th>Motorista · cliente</th><th>Placa · veículo</th><th>Chegada</th><th>Agenda</th><th>Tipo</th>${ETAPAS.map(([,n])=>`<th>${n}</th>`).join('')}<th class="r">No pátio</th><th><span class="sr">Ações</span></th></tr></thead><tbody>${rows.map(linha).join('')||'<tr><td colspan="13" class="bd-vz">Nada neste filtro.</td></tr>'}</tbody></table></div>
       <p class="bd-leg">Toque na etapa para marcar a hora${juntos()?' (Faturado preenche o Mix se estiver vazio; Finalizado preenche o Carregado). Para mudar uma hora, use Corrigir':''}. Laranja: esperando agora, com o tempo · vermelho: passou do tempo combinado (${ETAPAS.map(([k,n])=>n.toLowerCase()+' '+lim(k)+' min').join(', ')}) · verde: finalizado · cinza: desistente.</p>`
       :`<div class="bd-vz2"><b>${live?'Nenhum caminhão chegou ainda hoje.':'Nenhum caminhão neste dia.'}</b><span>${live?'A portaria registra a chegada pelo celular, ou use "+ Registrar chegada".':''}</span></div>`;
@@ -348,20 +372,29 @@
     const ag=Date.now(), rel=String(new Date().getHours()).padStart(2,'0')+':'+String(new Date().getMinutes()).padStart(2,'0');
     const xs=ordena(vivos(B.ent)).filter(e=>{ const st=estado(e); if(st.k==='des'||st.k==='rem') return false; if(st.k==='fim') return ag-new Date(e.et.fim).getTime()<20*60000; return true; });
     const nome=n=>{ const w=String(n||'').trim().split(/\s+/)[0]||''; return w.charAt(0)+w.slice(1).toLowerCase(); };
-    const ult=e=>{ const ts=[e.cheg].concat(ETAPAS.map(([k])=>(e.et||{})[k])).filter(Boolean).sort(); return ts[ts.length-1]; };
-    const linha=e=>{ const st=estado(e), et=e.et||{}, novo=ag-new Date(ult(e)).getTime()<180000&&!!Object.values(et).some(Boolean);
-      const prox=(MT_ST.find(([k])=>!et[k])||[''])[0], txt=st.k==='fim'?'✓ LIBERADO · PODE SAIR':(MT_ST.find(([k])=>!et[k])||[0,''])[1], cls=st.k==='fim'?'lib':'s-'+prox, demora=st.k==='pend'&&st.atr;
-      const passos=ETAPAS.map(([k,n])=>`<span class="mt-p${et[k]?' ok':st.k==='pend'&&st.etapa===k?' ag':''}">${et[k]?'✓ ':''}${k==='fim'?'Liberado':n}</span>`).join('');
-      return `<tr class="${st.k==='fim'?'fim':''}${novo?' novo':''}"><td class="mt-n">${e.ord}</td><td class="mt-pl"><span class="mt-plc">${esc(plN(e.placa))}</span></td><td class="mt-nm">${esc(nome(e.mot))}</td>
-        <td class="mt-st"><b class="mt-bd ${cls}">${esc(txt)}</b>${novo&&st.k!=='fim'?'<i class="mt-novo">AGORA</i>':''}<span class="mt-ps">${passos}</span></td><td class="mt-t${demora?' dem':''}">${st.k==='fim'?'saiu '+esc(hm(et.fim)):'chegou '+esc(hm(e.cheg))+'<small>há '+esc(dur(minDe(e.cheg)))+'</small>'}</td></tr>`; };
+    const ult=e=>{ const ts=[e.cheg,(e.cham||{}).em,(e.entrou||{}).em].concat(ETAPAS.map(([k])=>(e.et||{})[k])).filter(Boolean).sort(); return ts[ts.length-1]; };
+    /* 28/11/2026: AGUARDANDO → PODE ENTRAR PARA CARREGAR → CARREGANDO → FINALIZADO; sem a hora, no lugar a situação do pedido */
+    const PASSOS=[['ag','Aguardando'],['cham','Pode entrar'],['carr','Carregando'],['fim','Finalizado']], ORD={ag:0,cham:1,carr:2,fim:3};
+    const linha=e=>{ const si=mtSit(e), pd=pedTxt(e), novo=ag-new Date(ult(e)).getTime()<180000&&ult(e)!==e.cheg;
+      const passos=PASSOS.map(([k,n])=>`<span class="mt-p${ORD[k]<ORD[si.k]||si.k==='fim'?' ok':k===si.k?' ag':''}">${ORD[k]<ORD[si.k]||si.k==='fim'?'✓ ':''}${n}</span>`).join('');
+      return `<tr class="${si.k==='fim'?'fim':si.k==='cham'?'chm':''}${novo&&si.k!=='fim'?' novo':''}"><td class="mt-n">${e.ord}</td><td class="mt-pl"><span class="mt-plc">${esc(plN(e.placa))}</span></td><td class="mt-nm">${esc(nome(e.mot))}</td>
+        <td class="mt-st"><b class="mt-bd m-${si.k}${si.k==='fim'?' lib':''}">${si.k==='fim'?'✓ ':si.k==='cham'?'📣 ':''}${esc(si.t)}</b>${novo&&si.k!=='fim'?'<i class="mt-novo">AGORA</i>':''}<span class="mt-ps">${passos}</span></td><td class="mt-pd ${pd.k}">${esc(pd.t)}</td></tr>`; };
     const cham=xs.filter(e=>estado(e).k==='fim'&&ag-new Date(e.et.fim).getTime()<180000);
-    const corpo=xs.length?`<table class="mt-tab"><colgroup><col style="width:6%"><col style="width:16%"><col style="width:16%"><col style="width:46%"><col style="width:16%"></colgroup><thead><tr><th>Nº</th><th>Placa</th><th>Motorista</th><th>Situação</th><th>Hora</th></tr></thead><tbody>${xs.map(linha).join('')}</tbody></table><p class="bd-tvmais" hidden></p>`
+    const chamE=xs.filter(e=>mtSit(e).k==='cham'&&ag-new Date(e.cham.em).getTime()<180000); bipeChamado(chamE);
+    const corpo=xs.length?`<table class="mt-tab"><colgroup><col style="width:5%"><col style="width:15%"><col style="width:14%"><col style="width:46%"><col style="width:20%"></colgroup><thead><tr><th>Nº</th><th>Placa</th><th>Motorista</th><th>Situação</th><th>Pedido</th></tr></thead><tbody>${xs.map(linha).join('')}</tbody></table><p class="bd-tvmais" hidden></p>`
       :'<p class="mt-vz">Nenhum caminhão na fila agora.</p>';
     return `<div class="bd-tv mt${so?' so':''}"><header class="bd-tvh"><div class="bd-tvlogo"><img src="icons/logo-colafix-escuro.png" alt="Colafix"></div><h1 class="mt-h">Fila de carregamento</h1>
       <span class="bd-tvd">${esc(br(B.diaLive))}</span><div class="bd-tvk"><span>Na fila <b>${xs.filter(e=>estado(e).k==='pend').length}</b></span></div><div class="bd-tvc">${rel}</div>${document.fullscreenElement?'':`<button type="button" class="bd-tvfs" data-act="bd-tvcheia">⛶ Tela cheia</button>`}</header>
-      ${cham.length?`<div class="mt-cham" role="status"><span class="mt-chi">📣</span>${cham.map(e=>`<span class="mt-chx"><span class="mt-plc">${esc(plN(e.placa))}</span> ${esc(nome(e.mot))} · <b>PODE SAIR</b></span>`).join('')}</div>`:''}
-      <div class="bd-tvb">${corpo}</div><footer class="bd-tvf"><span>Acompanhe pela sua placa. A ordem é a da chegada. Quando aparecer <b>Liberado</b>, pode sair.</span><span class="r">Atualiza sozinho</span></footer></div>`; }
+      ${chamE.length?`<div class="mt-cham ent" role="status"><span class="mt-chi">📣</span>${chamE.map(e=>`<span class="mt-chx"><span class="mt-plc">${esc(plN(e.placa))}</span> ${esc(nome(e.mot))} · <b>PODE ENTRAR PARA CARREGAR</b></span>`).join('')}</div>`:''}
+      ${cham.length?`<div class="mt-cham" role="status"><span class="mt-chi">✓</span>${cham.map(e=>`<span class="mt-chx"><span class="mt-plc">${esc(plN(e.placa))}</span> ${esc(nome(e.mot))} · <b>FINALIZADO · PODE SAIR</b></span>`).join('')}</div>`:''}
+      <div class="bd-tvb">${corpo}</div><footer class="bd-tvf"><span>Acompanhe pela sua placa. Quando aparecer <b>PODE ENTRAR</b>, venha para o carregamento. Quando aparecer <b>FINALIZADO</b>, pode sair.</span><span class="r">Atualiza sozinho</span></footer></div>`; }
   P.bordoMot=vMot; P.bordoSol=vSol;
+  /* bipe quando alguém é chamado (o navegador só deixa tocar som depois de um clique/tecla na TV, ex.: o botão Tela cheia) */
+  let _ac=null; const _bip=new Set(); const abreSom=()=>{ try{ if(!_ac){ const C=window.AudioContext||window.webkitAudioContext; if(C) _ac=new C(); } if(_ac&&_ac.state==='suspended') _ac.resume(); }catch(e){} };
+  document.addEventListener('click',abreSom,true); document.addEventListener('keydown',abreSom,true);
+  function bipeChamado(xs){ const novos=xs.filter(e=>!_bip.has(e._id+e.cham.em)); xs.forEach(e=>_bip.add(e._id+e.cham.em)); if(!novos.length||!_ac||_ac.state!=='running') return;
+    try{ let t=_ac.currentTime+.05; for(let i=0;i<3;i++){ const o=_ac.createOscillator(), g=_ac.createGain(); o.type='square'; o.frequency.value=i%2?660:880; g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.35,t+.02); g.gain.exponentialRampToValueAtTime(.0001,t+.28); o.connect(g); g.connect(_ac.destination); o.start(t); o.stop(t+.3); t+=.36; } }catch(e){ console.warn('[bordo] bipe',e); } }
+  window.__bdBip=_bip;
   function mtCabe(){ try{ if(!MTV()) return; tvCabeTopo(); const tb=document.querySelector('.bd-tvb .mt-tab'); if(!tb) return; const ft=document.querySelector('.bd-tvf');
       const alt=()=>window.innerHeight-tb.getBoundingClientRect().top-(ft?ft.offsetHeight:0)-14; tb.querySelectorAll('tbody tr.tvx').forEach(r=>{ r.classList.remove('tvx'); r.hidden=false; });
       let fs=1.9; tb.style.fontSize=fs+'em'; semCorte(tb); while(tb.offsetHeight>alt()&&fs>0.45){ fs=Math.round((fs-0.05)*100)/100; tb.style.fontSize=fs+'em'; } semCorte(tb);
@@ -398,7 +431,7 @@
     if(!vs.length) return {k,h:'<p class="bd-tvvz">Nenhum caminhão chegou ainda hoje.</p>',f:''};
     const cel=(e,kk,st)=>{ const t=(e.et||{})[kk]; if(e.des) return '<td></td>'; if(t) return `<td>${esc(hm(t))}</td>`; if(st.k==='pend'&&st.etapa===kk) return `<td class="${st.atr?'atr':'pend'}">${st.atr?'⚠ ':''}${esc(dur(st.min))}</td>`; return '<td class="nx"></td>'; };
     const linha=e=>{ const st=estado(e), cls=st.k==='fim'?'fim':st.k==='des'?'des':st.atr?'al':'';
-      return `<tr class="${cls}"><td class="b">${e.ord}</td><td class="l b" title="${esc(e.mot)}">${esc(e.mot)}</td><td class="l" title="${esc(e.cli||'')}">${esc(abrev(e.cli||''))}</td><td class="l" title="${esc(e.repNome||'')}">${esc(abrev(e.repNome||''))}</td><td class="b pl">${esc(e.placa)}</td><td>${esc(hm(e.cheg))}</td><td class="ag ${e.agKind||'sem'}">${esc(e.agKind==='antecipado'?'Antec. · '+br(e.agData):e.agKind==='atrasado'?'Atras. · '+br(e.agData):e.agKind==='agendado'?'Agendado':'Sem agenda')}</td><td class="b"${e.des?` title="${esc('Desistente · '+e.des.motivo)}"`:''}>${e.des?'Desist. · '+esc(e.des.motivo):e.tipo==='pit'?'PIT':'Carrega'}</td>${ETAPAS.map(([kk])=>cel(e,kk,st)).join('')}<td class="l">${esc(veicN(e.veic))}</td>${demCel(e,st)}</tr>`; };
+      return `<tr class="${cls}"><td class="b">${e.ord}</td><td class="l b" title="${esc(e.mot)}">${esc(e.mot)}</td><td class="l" title="${esc(e.cli||'')}">${esc(abrev(e.cli||''))}</td><td class="l" title="${esc(e.repNome||'')}">${esc(abrev(e.repNome||''))}</td><td class="b pl">${esc(e.placa)}</td><td>${diaDe(e.cheg)!==B.diaLive?esc(br(diaDe(e.cheg)))+' ':''}${esc(hm(e.cheg))}</td><td class="ag ${e.agKind||'sem'}">${esc(e.agKind==='antecipado'?'Antec. · '+br(e.agData):e.agKind==='atrasado'?'Atras. · '+br(e.agData):e.agKind==='agendado'?'Agendado':'Sem agenda')}</td><td class="b"${e.des?` title="${esc('Desistente · '+e.des.motivo)}"`:''}>${e.des?'Desist. · '+esc(e.des.motivo):e.tipo==='pit'?'PIT':'Carrega'}</td>${ETAPAS.map(([kk])=>cel(e,kk,st)).join('')}<td class="l">${esc(veicN(e.veic))}</td>${demCel(e,st)}</tr>`; };
     /* 28/11/2026 ("o motivo da demora tem que aparecer aqui"): coluna Motivo da demora na TV; atrasado sem motivo marcado aparece em vermelho */
     const demCel=(e,st)=>{ if(e.dem&&e.dem.motivo){ const t=e.dem.motivo+(e.dem.obs?' · '+e.dem.obs:''); return `<td class="l dem" title="${esc(t)}">${esc(t)}</td>`; } if(st.k==='pend'&&st.atr) return '<td class="l demsem">⚠ Sem motivo</td>'; return '<td></td>'; };
     const cg='<colgroup><col style="width:3.5%"><col style="width:12%"><col style="width:11%"><col style="width:8%"><col style="width:7%"><col style="width:5%"><col style="width:8%"><col style="width:6%"><col style="width:5%"><col style="width:5.5%"><col style="width:6%"><col style="width:5.5%"><col style="width:5%"><col style="width:12.5%"></colgroup>';
@@ -418,11 +451,12 @@
       else prox+=xs.length;
       blocos.push({d,i,xs}); n+=xs.length; });
     const k=`<span>Agendados hoje <b>${hoje_}</b></span><span>Já chegaram <b>${cheg}</b></span><span>Faltam chegar <b>${Math.max(0,hoje_-cheg)}</b></span><span>Peso do dia <b>${esc(fT(kg))}</b></span><span>Próximos dias <b>${prox}</b></span>`;
-    const linha=(x,d)=>{ const s=sit(x,d), fa=faltaAg(x), peso=pesoAg(x);
-      return `<tr class="${s[2]}"><td class="b">${esc(x.carga||'—')}</td><td class="l b">${esc(x.cliente||'')}</td><td class="l">${esc(repDoAg(x))}</td><td class="l">${esc(pedsDe(x).join(' · '))}</td><td>${peso?esc(fT(peso)):'—'}</td><td class="l">${esc(veicN(x.veiculo)||'')}</td><td>${esc(x.hora||'—')}</td><td class="${fa&&fa.length?'atr':'okt'}">${fa==null?'—':fa.length?'falta '+fa.length+' ite'+(fa.length>1?'ns':'m'):'✓ ok'}</td><td class="st ${s[1]}">${esc(s[0])}</td></tr>`; };
+    /* 28/11/2026: coluna Material ("falta X itens") saiu da TV a pedido */
+    const linha=(x,d)=>{ const s=sit(x,d), peso=pesoAg(x);
+      return `<tr class="${s[2]}"><td class="b">${esc(x.carga||'—')}</td><td class="l b">${esc(x.cliente||'')}</td><td class="l">${esc(repDoAg(x))}</td><td class="l">${esc(pedsDe(x).join(' · '))}</td><td>${peso?esc(fT(peso)):'—'}</td><td class="l">${esc(veicN(x.veiculo)||'')}</td><td>${esc(x.hora||'—')}</td><td class="st ${s[1]}">${esc(s[0])}</td></tr>`; };
     const nomeDia=(d,i)=>(i===0?'Hoje · ':'')+DSL[new Date(d+'T12:00:00').getDay()]+', '+br(d)+(i===0&&esc_?' · '+esc_+' finalizado'+(esc_>1?'s':'')+' escondido'+(esc_>1?'s':''):'');
-    const h=`<table class="bd-tvtab ag fixa"><colgroup><col style="width:8%"><col style="width:18%"><col style="width:12%"><col style="width:12%"><col style="width:7%"><col style="width:9%"><col style="width:8%"><col style="width:12%"><col style="width:14%"></colgroup><thead><tr><th>Carga</th><th class="l">Cliente</th><th class="l">Representante</th><th class="l">Pedidos</th><th>Peso</th><th class="l">Veículo</th><th>Horário</th><th>Material</th><th>Situação</th></tr></thead><tbody>${blocos.map(b=>`<tr class="dia"><td colspan="9" class="l">${esc(nomeDia(b.d,b.i))}</td></tr>`+(b.xs.length?b.xs.map(x=>linha(x,b.d)).join(''):'<tr><td colspan="9" class="l mut">Nenhuma carga agendada.</td></tr>')).join('')}</tbody></table>`;
-    return {k,h,f:lg('#c9ecd6','Já chegou')+lg('#fdecd6','Faturado, falta carregar')+lg('#e64640','Falta material no saldo')+lg('#8f1d19','Passou do horário e não chegou')}; }
+    const h=`<table class="bd-tvtab ag fixa"><colgroup><col style="width:8%"><col style="width:22%"><col style="width:14%"><col style="width:14%"><col style="width:8%"><col style="width:11%"><col style="width:9%"><col style="width:14%"></colgroup><thead><tr><th>Carga</th><th class="l">Cliente</th><th class="l">Representante</th><th class="l">Pedidos</th><th>Peso</th><th class="l">Veículo</th><th>Horário</th><th>Situação</th></tr></thead><tbody>${blocos.map(b=>`<tr class="dia"><td colspan="8" class="l">${esc(nomeDia(b.d,b.i))}</td></tr>`+(b.xs.length?b.xs.map(x=>linha(x,b.d)).join(''):'<tr><td colspan="8" class="l mut">Nenhuma carga agendada.</td></tr>')).join('')}</tbody></table>`;
+    return {k,h,f:lg('#c9ecd6','Já chegou')+lg('#fdecd6','Faturado, falta carregar')+lg('#8f1d19','Passou do horário e não chegou')}; }
 
   /* ---------- tela: Solicitações (faturamento) ---------- */
   function vSol(){ iniciar(); const ab=B.solAba;
@@ -651,12 +685,13 @@
     if(Fd) return `<section class="bd-pf" role="status"><span class="bd-pfok" aria-hidden="true">✓</span><h1>Chegada registrada</h1><p class="bd-pfn">Nº <b>${Fd.ord}</b> no diário de bordo</p>${placaMini(Fd.placa)}<dl><div><dt>Motorista</dt><dd>${esc(Fd.mot)}</dd></div><div><dt>Hora</dt><dd>${esc(hm(Fd.cheg))}</dd></div><div><dt>Agenda</dt><dd>${esc(agTxt(Fd))}</dd></div>${Fd.cli?`<div><dt>Cliente</dt><dd>${esc(Fd.cli)}</dd></div>`:''}</dl><button type="button" class="bd-b1" data-act="bd-p-ok">Voltar</button><p class="bd-hint">Volta sozinho em alguns segundos</p></section>`;
     if(B.f) return `<section class="bd-pcard"><div class="bd-ph"><button type="button" class="bd-lk" data-act="bd-p-x">‹ Caminhões</button><h1>${B.f.edit?'Corrigir registro':'Registrar chegada'}</h1></div>${formChegada(true)}</section>`;
     if(B.ov&&B.ov.des){ const e=entDe(B.ov.des.id); if(e) return `<section class="bd-pcard">${desHtml(e)}</section>`; }
-    const vs=ordena(vivos(B.ent)), pat=vs.filter(e=>estado(e).k==='pend'), out=vs.filter(e=>estado(e).k!=='pend');
+    const vs=ordena(vivos(B.ent)), pat0=vs.filter(e=>estado(e).k==='pend'), chs=pat0.filter(e=>e.cham&&!e.entrou), pat=pat0.filter(e=>!(e.cham&&!e.entrou)), out=vs.filter(e=>estado(e).k!=='pend');
     const card=e=>{ const st=estado(e); return `<li class="bd-pi2 ${st.k==='fim'?'fim':st.k==='des'?'des':st.atr?'atr':''}"><span class="bd-po">${e.ord}</span><span class="bd-pt2"><b>${esc(e.mot)}</b><small>${esc(e.placa)} · ${esc(veicN(e.veic))}${e.cli?' · '+esc(e.cli):''}</small>${e.obs?`<small class="bd-obs">Obs.: ${esc(e.obs)}</small>`:''}
-      <small>${st.k==='pend'?'Chegou '+esc(hm(e.cheg))+' · esperando '+esc(ETN[st.etapa].toLowerCase())+' há '+esc(dur(st.min)):st.k==='fim'?'Finalizado '+esc(hm(e.et.fim)):'Desistiu '+esc(hm(e.des.em))+' · '+esc(e.des.motivo)}</small></span>
-      ${pode()?`<span class="bd-pa">${st.k==='pend'?`<button type="button" class="bd-b0 sm" data-act="bd-et" data-v="${esc(e._id)}|fim">Saiu</button><button type="button" class="bd-lk" data-act="bd-des" data-v="${esc(e._id)}">Desistiu</button>`:''}<button type="button" class="bd-lk" data-act="bd-ed" data-v="${esc(e._id)}">Corrigir</button></span>`:''}</li>`; };
-    return `<div class="bd-ptl"><section class="bd-phero"><div><p class="bd-eb">${esc(DSL[new Date().getDay()])}, ${esc(br(hoje()))}</p><h1>Caminhões</h1></div><div class="bd-pcnt"><div><b>${pat.length}</b><span>no pátio</span></div><div><b>${out.filter(e=>!e.des).length}</b><span>saíram</span></div></div>
+      ${ficou(e)?`<small class="bd-ficou">Ficou de ${esc(br(ficou(e)))}</small>`:''}${e.cham&&!e.entrou&&st.k==='pend'?`<small class="bd-pchm">📣 Chamado às ${esc(hm(e.cham.em))} · pode entrar</small>`:e.entrou&&st.k==='pend'?`<small>Entrou às ${esc(hm(e.entrou.em))} · carregando</small>`:''}<small>${st.k==='pend'?'Chegou '+esc(hm(e.cheg))+' · esperando '+esc(ETN[st.etapa].toLowerCase())+' há '+esc(dur(st.min)):st.k==='fim'?'Finalizado '+esc(hm(e.et.fim)):'Desistiu '+esc(hm(e.des.em))+' · '+esc(e.des.motivo)}</small></span>
+      ${pode()?`<span class="bd-pa">${st.k==='pend'&&!e.entrou?`<button type="button" class="${e.cham?'bd-b1 ok':'bd-b0'} sm" data-act="bd-entrou" data-v="${esc(e._id)}">Entrou</button>`:''}${st.k==='pend'?`<button type="button" class="bd-b0 sm" data-act="bd-et" data-v="${esc(e._id)}|fim">Saiu</button><button type="button" class="bd-lk" data-act="bd-des" data-v="${esc(e._id)}">Desistiu</button>`:''}<button type="button" class="bd-lk" data-act="bd-ed" data-v="${esc(e._id)}">Corrigir</button></span>`:''}</li>`; };
+    return `<div class="bd-ptl"><section class="bd-phero"><div><p class="bd-eb">${esc(DSL[new Date().getDay()])}, ${esc(br(hoje()))}</p><h1>Caminhões</h1></div><div class="bd-pcnt"><div><b>${pat0.length}</b><span>no pátio</span></div><div><b>${out.filter(e=>!e.des).length}</b><span>saíram</span></div></div>
       ${pode()?'<button type="button" class="bd-pbig" data-act="bd-nova"><span aria-hidden="true">+</span>Registrar chegada</button>':''}</section>
+      ${chs.length?`<div class="bd-psec chm"><h2>Chamados para entrar <span>${chs.length}</span></h2><ul class="bd-pl2">${chs.map(card).join('')}</ul></div>`:''}
       <div class="bd-psec"><h2>No pátio <span>${pat.length}</span></h2>${pat.length?`<ul class="bd-pl2">${pat.map(card).join('')}</ul>`:'<p class="bd-hint">Nenhum caminhão no pátio.</p>'}</div>
       ${out.length?`<div class="bd-psec"><h2>Já saíram hoje <span>${out.length}</span></h2><ul class="bd-pl2">${out.slice().reverse().map(card).join('')}</ul></div>`:''}</div>`; }
   P.bordoPort=vPort;
@@ -703,6 +738,9 @@
   document.addEventListener('click',async ev=>{ const b=ev.target.closest&&ev.target.closest('[data-act^="bd-"]'); if(!b) return; const a=b.dataset.act, v=b.dataset.v; if(b.tagName!=='A') ev.preventDefault();
     if(a==='bd-nova'){ if(!pode()) return P.toast('Seu acesso é só para ver.'); B.f=novoForm(); B.port.feito=null; if(S.view!=='bdport') B.ov={f:1}; P.render(); setTimeout(()=>{ const i=document.getElementById('bd-f-placa'); i&&i.focus(); },60); return; }
     if(a==='bd-ed'){ const e=entDe(v); if(!e) return; B.f=novoForm({placa:e.placa,mot:e.mot,peds:(e.peds||[]).slice(),repId:e.repId||'',veic:e.veic||'',tipo:e.tipo||'carrega',cli:e.cli||'',edit:e._id,obs:e.obs||'',hora:hm(e.cheg),ets:Object.fromEntries(ETAPAS.map(([k])=>[k,hm((e.et||{})[k])]))}); B.ov={f:1}; P.render(); return; }
+    if(a==='bd-cham') return chamar(v);
+    if(a==='bd-entrou') return entrou(v);
+    if(a==='bd-ped'){ const [id,k]=String(v).split('|'); return pedSt(id,k); }
     if(a==='bd-dem'){ const e=entDe(v); if(!e) return; B.ov={dem:{id:v,motivo:(e.dem||{}).motivo||'',obs:(e.dem||{}).obs||''}}; P.render(); return; }
     if(a==='bd-demm'&&B.ov&&B.ov.dem){ const t=document.getElementById('bd-dem-obs'); if(t) B.ov.dem.obs=t.value; B.ov.dem.motivo=v; B.ov.dem.err=null; P.render(); return; }
     if((a==='bd-demok'||a==='bd-demx')&&B.ov&&B.ov.dem){ const e=entDe(v); if(!e) return; const D=B.ov.dem, t=document.getElementById('bd-dem-obs'); if(t) D.obs=t.value;
@@ -932,6 +970,10 @@
   /* 27/11/2026 · "mais visual, tem que chamar atenção, pode ficar piscando" */
   .mt-st b.mt-bd{display:inline-block}.mt-p{font-size:.5em!important}
   .mt-bd{display:inline-block;padding:.08em .5em;border-radius:.3em;font-size:.82em!important;color:#fff}
+  .mt-bd.m-ag{background:#5a6b75}.mt-bd.m-cham{background:#d4a000;color:#1d2b33;animation:mtnv 1s steps(2,end) infinite}.mt-bd.m-carr{background:#1f5f99}.mt-tab tr.chm{background:#fff6cc}
+  .mt-pd{font-size:.75em;font-weight:800;white-space:normal!important;line-height:1.1}.mt-pd.ok{color:#17694a}.mt-pd.rep{color:#a35a00}.mt-cham.ent{background:#d4a000;color:#1d2b33;animation:mtchent 1s steps(2,end) infinite}@keyframes mtchent{50%{background:#ffd84d}}
+  .bd-ficou{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;color:#8a4a08;background:#fdecd6;border-radius:999px;padding:1px 8px}.bd-cham.on{color:#8a5a00;font-weight:700}.bd-ped.ok{color:#17694a;font-weight:700}.bd-ped.rep{color:#a35a00;font-weight:700}
+  .bd-psec.chm h2{color:#8a5a00}.bd-pchm{color:#8a5a00!important;font-weight:700}
   .mt-bd.s-mix{background:#5a6b75}.mt-bd.s-fat{background:#c77a12}.mt-bd.s-carr{background:#1f5f99}.mt-bd.s-fim{background:#6b4e9b}
   .mt-bd.lib{background:#12804f;animation:mtlib 1.2s linear infinite}
   @keyframes mtlib{0%,49%{background:#12804f;color:#fff}50%,100%{background:#ffd400;color:#1d2b33}}

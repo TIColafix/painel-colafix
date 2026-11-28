@@ -171,6 +171,7 @@ const TOK='a1b2c3d4e5f60718293a4b5c6d7e8f90';
  await shot(pt,'tv-diario');
  await pt.click('[data-act="bd-tvaba"][data-v="agend"]'); await H.dorme(600);
  const ta=await pt.evaluate(()=>[...document.querySelectorAll('.bd-tvtab tbody tr')].map(r=>r.className+'='+r.innerText.replace(/\s+/g,' ')));
+ ok('Aba Agendados sem a coluna Material (falta itens)', !ta.some(r=>/falta \d+ ite/.test(r))&&await pt.evaluate(()=>![...document.querySelectorAll('.bd-tvtab thead th')].some(t=>/Material/.test(t.textContent))));
  ok('Aba Agendados: hoje + 2 próximos dias úteis, com cliente, representante, horário, peso e situação (o antecipado já aparece no pátio)', ta.some(r=>/^dia=/.test(r)&&/Hoje · quinta, 26\/11/.test(r))&&ta.some(r=>/^dia=/.test(r)&&/sexta, 27\/11/.test(r))&&ta.some(r=>/^dia=/.test(r)&&/segunda, 30\/11/.test(r))&&ta.some(r=>/Revest Sul/.test(r)&&/13:30/.test(r)&&/26 t/.test(r)&&/No pátio · chegou/.test(r))&&ta.some(r=>/Pisos Vale do Sinos/.test(r)&&/Marina Duarte/.test(r)&&/Agendado/.test(r))&&ta.some(r=>/Construmais/.test(r)&&/10:00/.test(r)), JSON.stringify(ta).slice(0,500));
  await shot(pt,'tv-agendados');
  await pt.evaluate(()=>{ __bordo.tv.fixo=0; __bordo.tv.troca=0; }); await H.dorme(1600);
